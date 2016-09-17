@@ -1,0 +1,53 @@
+smooth v1.4.3 (Release date: 2016-09-16)
+==============
+
+Changes:
+
+* Removed "TFL" as a cost function type and "asymmetric" as intervals type. The functions still accept these parameters, but the parameters are now hidden, because currently they are not ready for wide audience.
+* Changed how number of parameters is calculated when initials are provided. They should be counted in. Only backcasting now excludes initials in calculation of number of parameters.
+* Prepared vignette for es(), ces(), ssarima(), ges(), sma() and sim.es(). This now includes examples with some comments.
+* Uploaded documentation for the package to github (https://github.com/config-i1/smooth/smooth.pdf). This will be published as working paper and will be available via ResearchGate.
+
+Bugfixes:
+
+* Fixed a bug with intervalsType="s" not working for auto functions.
+* data provided to auto functions is now checked.
+
+
+smooth v1.4.2 (Release date: 2016-09-15)
+==============
+
+Changes:
+
+* We now use vignettes, explaining how to work with functions and what they return. This is just a start of the work. Vignettes will be updated. There is also a work on documentation for models underlying smooth package. This is currently reviewed and will be available as a working paper soon.
+* New function - sma() - Simple Moving Average. It fits one as a state-space model. So, apparantely there is a model underlying simple moving average method...
+* Named transitionX and persistenceX are now returned, when using exogenous variables are used with updateX=TRUE. This should simplify the analysis of these matrices.
+
+Bugfixes:
+
+* A fix for plot(es(...)) in case of inclusion of exogenous variables leading to states containing more than 10 columns.
+* Warnings are now always printed out for unstable SSARIMA.
+
+
+smooth v1.4.1 (Release date: 2016-09-09)
+==============
+
+Changes:
+
+* We now suggest testthat package and do more extensive tests in order to make sure that everything works as it should.
+* Introduced parameters A and B in ces() function.
+* Got rid of parameter C in ces() function.
+
+Bugfixes:
+
+* ssarima() could not construct ARIMA(0,1,0) without constant. Fixed that.
+
+
+smooth v1.4.0 (Release date: 2016-09-08)
+==============
+
+Changes:
+
+* Started this NEWS file.
+* Fixed a bug with ssarima() not accepting previously estimated models in cases with constant=TRUE.
+* Removed NUS and sim.ces. They will return when they are in a better condition.

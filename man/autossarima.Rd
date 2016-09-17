@@ -1,0 +1,134 @@
+\name{auto.ssarima}
+\alias{auto.ssarima}
+%- Also NEED an '\alias' for EACH other topic documented here.
+\title{
+State-Space ARIMA
+}
+\description{
+Function selects the best State-Space ARIMA based on information criteria, using fancy branch and bound mechanism. The resulting model can be not optimal in IC meaning, but it is usually reasonable.
+}
+\usage{
+auto.ssarima(data, ar.max=c(3,3), i.max=c(2,1), ma.max=c(3,3), lags=c(1,frequency(data)),
+        initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC"),
+        cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
+        h=10, holdout=FALSE, intervals=FALSE, level=0.95,
+        intervalsType=c("parametric","semiparametric","nonparametric"),
+        intermittent=c("none","auto","fixed","croston","tsb"),
+        bounds=c("admissible","none"),
+        silent=c("none","all","graph","legend","output"),
+        xreg=NULL, updateX=FALSE, ...)
+}
+%- maybe also 'usage' for other objects documented here.
+\arguments{
+
+  \item{data}{
+    Data that needs to be forecasted.
+  }
+  \item{ar.max}{
+    Maximum order of AR term. Can be vector, defining max orders of AR, SAR etc.
+  }
+  \item{i.max}{
+    Maximum order of I. Can be vector, defining max orders of I, SI etc.
+  }
+  \item{ma.max}{
+    Maximum order of MA term. Can be vector, defining max orders of MA, SMA etc.
+  }
+  \item{lags}{
+    Defines lags for the corresponding orders (see examples). The length of \code{lags} must correspond to the length of either \code{ar.orders} or \code{i.orders} or \code{ma.orders}. There is no restrictions on the length of \code{lags} vector.
+  }
+  \item{initial}{
+    Character value which defines how the model is initialised: it can be \code{"optimal"}, meaning that the initial states are optimised, or \code{"backcasting"}, meaning that the initials are produced using backcasting procedure.
+  }
+  \item{ic}{
+    Information criterion to use in model selection.
+  }
+  \item{cfType}{
+    Type of Cost Function used in optimization. \code{cfType} can be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error), \code{HAM} (Half Absolute Moment), \code{MLSTFE} - Mean Log Squared Trace Forecast Error, \code{MSTFE} - Mean Squared Trace Forecast Error and \code{MSEh} - optimisation using only h-steps ahead error. If \code{cfType!="MSE"}, then likelihood and model selection is done based on equivalent \code{MSE}. Model selection in this cases becomes not optimal.
+
+    There are also available analytical approximations for multistep functions: \code{aMSEh}, \code{aMSTFE} and \code{aMLSTFE}. These can be useful in cases of small samples.
+  }
+  \item{h}{
+    The forecasting horizon.
+  }
+  \item{holdout}{
+    If \code{TRUE}, the holdout sample of size h will be taken from the data. If \code{FALSE}, no holdout is defined.
+  }
+  \item{intervals}{
+    If \code{TRUE}, the prediction intervals are constructed.
+  }
+  \item{level}{
+    Confidence level. Defines width of prediction interval.
+  }
+  \item{intervalsType}{
+    Type of intervals to construct. First letter can be used instead of the whole word. This can be:
+
+    \itemize{
+        \item \code{parametric} use state-space structure of ETS. For multiplicative models they are approximated using the same function as for additive. As a result they are a bit wider than should be but are still efficient. In case of mixed models this is done using simulations, which may take longer time than for the pure additive and pure multiplicative models.
+
+        \item \code{semiparametric} are based on covariance matrix of 1 to h steps ahead errors and assumption of normal distribution.
+
+        \item \code{nonparametric} intervals use values from a quantile regression on error matrix (see Taylor and Bunn, 1999). The model used in this process is e[j] = a j^b, where j={1,..,h}.
+
+        %\item Finally \code{asymmetric} are based on half moment of distribution.
+    }
+  }
+  \item{intermittent}{
+    Defines type of intermittent model used. Can be: 1. \code{none}, meaning that the data should be considered as non-intermittent; 2. \code{fixed}, taking into account constant Bernoulli distribution of demand occurancies; 3. \code{croston}, based on Croston, 1972 method with SBA correction; 4. \code{tsb}, based on Teunter et al., 2011 method. 5. \code{auto} - automatic selection of intermittency type based on data. The first letter can be used instead of the full words.
+  }
+  \item{bounds}{
+    What type of bounds to use for the smoothing parameters. The first letter can be used instead of the whole word.
+  }
+  \item{silent}{
+    If \code{silent="none"}, then nothing is silent, everything is printed out and drawn. \code{silent="all"} means that nothing is produced or drawn (except for warnings). In case of \code{silent="graph"}, no graph is produced. If \code{silent="legend"}, then legend of the graph is skipped. And finally \code{silent="output"} means that nothing is printed out in the console, but the graph is produced. \code{silent} also accepts \code{TRUE} and \code{FALSE}. In this case \code{silent=TRUE} is equivalent to \code{silent="all"}, while \code{silent=FALSE} is equivalent to \code{silent="none"}. The parameter also accepts first letter of words ("n", "a", "g", "l", "o").
+  }
+  \item{xreg}{
+    Vector (either numeric or time series) or matrix (or data.frame) of exogenous variables that should be included in the model. If matrix included than columns should contain variables and rows - observations. Note that \code{xreg} should have number of observations equal either to in-sample or to the whole series. If the number of observations in \code{xreg} is equal to in-sample, then values for the holdout sample are produced using Naive.
+  }
+  \item{updateX}{
+    If \code{TRUE}, transition matrix for exogenous variables is estimated, introducing non-linear interractions between parameters. Prerequisite - non-NULL \code{xreg}.
+  }
+  \item{...}{
+    Other non-documented parameters. For example \code{FI=TRUE} will make the function also produce Fisher Information matrix, which then can be used to calculated variances of parameters of the model.
+  }
+}
+\details{
+    The function constructs bunch of ARIMAs in Single Source of Error State-space form (see \link[smooth]{ssarima} documentation) and selects the best one based on information criterion.
+
+    Due to the flexibility of the model, multiple seasonalities can be used. For example, something crazy like this can be constructed: SARIMA(1,1,1)(0,1,1)[24](2,0,1)[24*7](0,0,1)[24*30], but the estimation may take a lot of time...
+}
+\value{
+  Object of class "smooth" is returned. See \link[smooth]{ssarima} for details.
+}
+\references{
+    \enumerate{
+        \item{Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008) Forecasting with exponential smoothing: the state space approach, Springer-Verlag. \url{http://www.exponentialsmoothing.net}.}
+    }
+}
+\author{
+    Ivan Svetunkov
+}
+
+\seealso{
+    \code{\link[forecast]{ets}, \link[smooth]{es}, \link[smooth]{ces}, \link[smooth]{sim.es}, \link[smooth]{ges}, \link[smooth]{ssarima}}
+}
+
+\examples{
+x <- rnorm(118,100,3)
+
+# The best ARIMA for the data
+test <- auto.ssarima(x,ar.max=c(2,1),i.max=c(1,1),ma.max=c(2,1),lags=c(1,12),
+                     h=18,holdout=TRUE)
+
+# The other one using optimised states
+\dontrun{auto.ssarima(x,ar.max=c(3,2),i.max=c(2,1),ma.max=c(3,2),lags=c(1,12),
+                     initial="o",h=18,holdout=TRUE)}
+
+summary(test)
+forecast(test)
+plot(forecast(test))
+
+}
+% Add one or more standard keywords, see file 'KEYWORDS' in the
+% R documentation directory.
+\keyword{ SARIMA }
+\keyword{ ARIMA }% __ONLY ONE__ keyword per line
