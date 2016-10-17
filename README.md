@@ -21,7 +21,7 @@ Future works:
 10. sim.ces, sim.ges, sim.ssarima - simulation functions for CES, GES and SSARIMA respectively.
 11. cma - Centred Moving Average. This should be based on sma(), but would be available for time series decomposition.
 12. auto.ges - Automatic selection of the most appropriate GES model.
-13. nus - Non-uniform Smoothing. The estimation method used in order to update parameters of a regression model.
+13. nus - Non-uniform Smoothing. The estimation method used in order to update parameters of regression models.
 14. sofa.ts - Survival of the fittest algorithm applied to state-space models.
 
 ## Installation
@@ -41,4 +41,4 @@ The package depends on Rcpp and RcppArmadillo, which will be installed automatic
 
 However Mac OS users may need to install gfortran libraries in order to use Rcpp. Follow the link for the instructions: http://www.thecoatlessprofessor.com/programming/rcpp-rcpparmadillo-and-os-x-mavericks-lgfortran-and-lquadmath-error/
 
-Sometimes after upgrade of smooth from previous versions some functions stop working. This is because C++ functions are occasionally stored in depper unknown coners of R's mind. Restarting R usually solves the problem.
+Sometimes after upgrade of smooth from previous versions some functions stop working. This is because C++ functions are occasionally stored in deeper unknown coners of R's mind. Restarting R usually solves the problem.

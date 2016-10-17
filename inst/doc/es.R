@@ -16,7 +16,7 @@ es(M3$N2457$x, h=18, holdout=TRUE, intervals=TRUE)
 ourModel <- es(M3$N2457$x, h=18, holdout=TRUE, silent="all")
 
 ## ----es_N2457_reuse_model------------------------------------------------
-es(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, intervals=TRUE, intervalsType="n", level=0.93)
+es(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, intervals="np", level=0.93)
 
 ## ----es_N2457_reuse_model_parts------------------------------------------
 es(M3$N2457$x, model="MNN", h=18, holdout=FALSE, initial=ourModel$initial, silent="graph")

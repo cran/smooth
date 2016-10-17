@@ -6,8 +6,8 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)),
                 persistence=NULL, transition=NULL, measurement=NULL,
                 initial=c("optimal","backcasting"),
                 cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
-                h=10, holdout=FALSE, intervals=FALSE, level=0.95,
-                intervalsType=c("parametric","semiparametric","nonparametric"),
+                h=10, holdout=FALSE,
+                intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                 intermittent=c("none","auto","fixed","croston","tsb"),
                 bounds=c("admissible","none"),
                 silent=c("none","all","graph","legend","output"),
@@ -230,6 +230,8 @@ CreatorGES <- function(silentText=FALSE,...){
             C <- c(C,rep(1,n.components));
         }
         if(transitionEstimate){
+            #C <- c(C,as.vector(test$transition));
+            #C <- c(C,rep(1,n.components^2 - length(test$transition)))
             C <- c(C,rep(1,n.components^2));
             #C <- c(C,c(diag(1,n.components)));
         }
@@ -480,7 +482,7 @@ CreatorGES <- function(silentText=FALSE,...){
                   initialType=initialType,initial=initialValue,
                   nParam=n.param,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
-                  errors=errors.mat,s2=s2,intervalsType=intervalsType,level=level,
+                  errors=errors.mat,s2=s2,intervals=intervalsType,level=level,
                   actuals=data,holdout=y.holdout,iprob=pt,intermittent=intermittent,
                   xreg=xreg,updateX=updateX,initialX=initialX,persistenceX=vecgX,transitionX=matFX,
                   ICs=ICs,cf=cfObjective,cfType=cfType,FI=FI,accuracy=errormeasures);

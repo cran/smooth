@@ -10,17 +10,17 @@ require(Mcomp)
 ces(M3$N2457$x, h=18, holdout=TRUE)
 
 ## ----auto_ces_N2457------------------------------------------------------
-auto.ces(M3$N2457$x, h=18, holdout=TRUE, intervals=TRUE)
+auto.ces(M3$N2457$x, h=18, holdout=TRUE, intervals="p")
 
 ## ----auto_ces_N2457_optimal----------------------------------------------
-auto.ces(M3$N2457$x, h=18, holdout=TRUE, initial="o", intervals=TRUE, intervalsType="s")
+auto.ces(M3$N2457$x, h=18, holdout=TRUE, initial="o", intervals="sp")
 
 ## ----es_N2457_xreg_create------------------------------------------------
 x <- cbind(rnorm(length(M3$N2457$x),50,3),rnorm(length(M3$N2457$x),100,7))
 
 ## ----auto_ces_N2457_xreg_simple------------------------------------------
-auto.ces(M3$N2457$x, h=18, holdout=TRUE, xreg=x, intervals=TRUE)
+auto.ces(M3$N2457$x, h=18, holdout=TRUE, xreg=x, intervals="p")
 
 ## ----auto_ces_N2457_xreg_update------------------------------------------
-auto.ces(M3$N2457$x, h=18, holdout=TRUE, xreg=x, updateX=TRUE, intervals=TRUE)
+auto.ces(M3$N2457$x, h=18, holdout=TRUE, xreg=x, updateX=TRUE, intervals="p")
 
