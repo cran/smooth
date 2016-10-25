@@ -8,20 +8,23 @@ require(smooth)
 ## ----sim_es_ANN----------------------------------------------------------
 ourSimulation <- sim.es("ANN", frequency=12, obs=120)
 
-## ----sim_es_ANN_plot-----------------------------------------------------
+## ----sim_es_ANN_plot_data------------------------------------------------
 plot(ourSimulation$data)
+
+## ----sim_es_ANN_plot-----------------------------------------------------
+plot(ourSimulation)
 
 ## ----sim_es_MAdM---------------------------------------------------------
 ourSimulation <- sim.es("MAdM", frequency=12, obs=120, phi=0.95, persistence=c(0.1,0.05,0.01))
-plot(ourSimulation$data)
+plot(ourSimulation)
 
 ## ----sim_es_MAdM_lnorm---------------------------------------------------
 ourSimulation <- sim.es("MAdM", frequency=12, obs=120, phi=0.95, persistence=c(0.1,0.05,0.01), randomizer="rlnorm", meanlog=0, sdlog=0.015)
-plot(ourSimulation$data)
+plot(ourSimulation)
 
 ## ----sim_es_iMNN---------------------------------------------------------
 ourSimulation <- sim.es("MNN", frequency=12, obs=120, iprob=0.2, initial=10, persistence=0.1)
-plot(ourSimulation$data)
+plot(ourSimulation)
 
 ## ----sim_es_iMNN_50------------------------------------------------------
 ourSimulation <- sim.es("MNN", frequency=12, obs=120, iprob=0.2, initial=10, persistence=0.1, nsim=50)
@@ -29,11 +32,46 @@ ourSimulation <- sim.es("MNN", frequency=12, obs=120, iprob=0.2, initial=10, per
 ## ----simulate_smooth_es--------------------------------------------------
 x <- ts(rnorm(100,120,15),frequency=12)
 ourModel <- es(x, h=18, silent=TRUE)
-ourData <- simulate(ourModel,nsim=50,obs=100)
+ourData <- simulate(ourModel, nsim=50, obs=100)
 
 ## ----simulate_smooth_es_compare------------------------------------------
 par(mfcol=c(1,2))
 plot(x)
 plot(ourData$data[,1])
+par(mfcol=c(1,1))
+
+## ----sim_ssarima_(0,1,1)-------------------------------------------------
+ourSimulation <- sim.ssarima(frequency=12, obs=120, nsim=10)
+
+## ----sim_ssarima_(0,1,1)_plot--------------------------------------------
+plot(ourSimulation$data[,5])
+
+## ----sim_ssarima_(0,1,1)(1,0,2)_12_drift---------------------------------
+ourSimulation <- sim.ssarima(ar.orders=c(0,1), i.orders=c(1,0), ma.orders=c(1,2), lags=c(1,12), constant=TRUE, obs=120)
+plot(ourSimulation)
+
+## ----sim_ssarima_(0,1,1)(1,0,2)_12_drift_predefined----------------------
+ourSimulation <- sim.ssarima(ar.orders=c(0,1), i.orders=c(1,0), ma.orders=c(1,2), lags=c(1,12), constant=TRUE, MA=c(0.5,0.2,0.3), obs=120)
+ourSimulation
+
+## ----sim_ssarima_(1,0,2)_1(0,1,1)_7(1,0,1)_30----------------------------
+ourSimulation <- sim.ssarima(ar.orders=c(1,0,1), i.orders=c(0,1,0), ma.orders=c(2,1,1), lags=c(1,7,30), obs=360)
+ourSimulation
+plot(ourSimulation)
+
+## ----sim_ssarima_(1,0,2)_1(0,1,1)_7intermittent--------------------------
+ourSimulation <- sim.ssarima(ar.orders=c(1,0), i.orders=c(0,1), ma.orders=c(2,1), lags=c(1,7), obs=120, iprob=0.2)
+ourSimulation
+plot(ourSimulation)
+
+## ----simulate_smooth_ssarima---------------------------------------------
+x <- ts(100 + c(1:100) + rnorm(100,0,15),frequency=12)
+ourModel <- auto.ssarima(x, h=18, silent=TRUE)
+ourData <- simulate(ourModel, nsim=50, obs=100)
+
+## ----simulate_smooth_ssarima_compare-------------------------------------
+par(mfcol=c(1,2))
+plot(x)
+plot(ourData)
 par(mfcol=c(1,1))
 

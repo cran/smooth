@@ -50,6 +50,32 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         silentLegend <- FALSE;
     }
 
+    ##### data #####
+    if(!is.numeric(data)){
+        stop("The provided data is not a vector or ts object! Can't build any model!", call.=FALSE);
+    }
+    # Check the data for NAs
+    if(any(is.na(data))){
+        if(!silentText){
+            warning("Data contains NAs. These observations will be substituted by zeroes.",call.=FALSE);
+        }
+        data[is.na(data)] <- 0;
+    }
+
+    # Define obs, the number of observations of in-sample
+    obsInsample <- length(data) - holdout*h;
+
+    # Define obsAll, the overal number of observations (in-sample + holdout)
+    obsAll <- length(data) + (1 - holdout)*h;
+
+    # If obsInsample is negative, this means that we can't do anything...
+    if(obsInsample<=0){
+        stop("Not enough observations in sample.",call.=FALSE);
+    }
+    # Define the actual values
+    y <- matrix(data[1:obsInsample],obsInsample,1);
+    datafreq <- frequency(data);
+
     if(modelType=="es"){
         ##### model for ES #####
         if(!is.character(model)){
@@ -137,11 +163,69 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                     Stype <- "Z";
                 }
             }
-            else if(any(unlist(strsplit(model,""))=="Z")){
+            else if(any(unlist(strsplit(model,""))=="Z") |
+                    any(unlist(strsplit(model,""))=="X") |
+                    any(unlist(strsplit(model,""))=="Y")){
                 modelDo <- "select";
             }
             else{
                 modelDo <- "estimate";
+            }
+
+            if(any(unlist(strsplit(model,""))=="X") | any(unlist(strsplit(model,""))=="Y")){
+                models.pool <- c("ANN","MNN","AAN","AMN","MAN","MMN","AAdN","AMdN","MAdN","MMdN","ANA","ANM","MNA","MNM",
+                                 "AAA","AAM","AMA","AMM","MAA","MAM","MMA","MMM",
+                                 "AAdA","AAdM","AMdA","AMdM","MAdA","MAdM","MMdA","MMdM");
+                if(datafreq==1){
+                    Stype <- "N";
+                }
+                # Restrict error types in the pool
+                if(Etype=="X"){
+                    models.pool <- models.pool[substr(models.pool,1,1)=="A"];
+                    Etype <- "Z";
+                }
+                else if(Etype=="Y"){
+                    models.pool <- models.pool[substr(models.pool,1,1)=="M"];
+                    Etype <- "Z";
+                }
+                else{
+                    if(Etype!="Z"){
+                        models.pool <- models.pool[substr(models.pool,1,1)==Etype];
+                    }
+                }
+                # Restrict trend types in the pool
+                if(Ttype=="X"){
+                    models.pool <- models.pool[substr(models.pool,2,2)=="A" | substr(models.pool,2,2)=="N"];
+                    Ttype <- "Z";
+                }
+                else if(Ttype=="Y"){
+                    models.pool <- models.pool[substr(models.pool,2,2)=="M" | substr(models.pool,2,2)=="N"];
+                    Ttype <- "Z";
+                }
+                else{
+                    if(Ttype!="Z"){
+                        models.pool <- models.pool[substr(models.pool,2,2)==Ttype];
+                        if(damped){
+                            models.pool <- models.pool[nchar(models.pool)==4];
+                        }
+                    }
+                }
+                # Restrict season types in the pool
+                if(Stype=="X"){
+                    models.pool <- models.pool[substr(models.pool,nchar(models.pool),nchar(models.pool))=="A" |
+                                               substr(models.pool,nchar(models.pool),nchar(models.pool))=="N" ];
+                    Stype <- "Z";
+                }
+                else if(Stype=="Y"){
+                    models.pool <- models.pool[substr(models.pool,nchar(models.pool),nchar(models.pool))=="M" |
+                                               substr(models.pool,nchar(models.pool),nchar(models.pool))=="N" ];
+                    Stype <- "Z";
+                }
+                else{
+                    if(Stype!="Z"){
+                        models.pool <- models.pool[substr(models.pool,nchar(models.pool),nchar(models.pool))==Stype];
+                    }
+                }
             }
         }
         else{
@@ -149,15 +233,15 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         }
 
         ### Check error type
-        if(all(Etype!=c("Z","A","M"))){
-            warning(paste0("Wrong error type: ",Etype,". Should be 'Z', 'A' or 'M'.\n",
+        if(all(Etype!=c("Z","X","Y","A","M"))){
+            warning(paste0("Wrong error type: ",Etype,". Should be 'Z', 'X', 'Y', 'A' or 'M'.\n",
                            "Changing to 'Z'"),call.=FALSE);
             Etype <- "Z";
         }
 
         ### Check trend type
-        if(all(Ttype!=c("Z","N","A","M"))){
-            warning(paste0("Wrong trend type: ",Ttype,". Should be 'Z', 'A' or 'M'.\n",
+        if(all(Ttype!=c("Z","X","Y","N","A","M"))){
+            warning(paste0("Wrong trend type: ",Ttype,". Should be 'Z', 'X', 'Y', 'N', 'A' or 'M'.\n",
                            "Changing to 'Z'"),call.=FALSE);
             Ttype <- "Z";
         }
@@ -325,32 +409,6 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         seasonality <- substring(seasonality[1],1,1);
     }
 
-    ##### data #####
-    if(!is.numeric(data)){
-        stop("The provided data is not a vector or ts object! Can't build any model!", call.=FALSE);
-    }
-    # Check the data for NAs
-    if(any(is.na(data))){
-        if(!silentText){
-            warning("Data contains NAs. These observations will be substituted by zeroes.",call.=FALSE);
-        }
-        data[is.na(data)] <- 0;
-    }
-
-    # Define obs, the number of observations of in-sample
-    obsInsample <- length(data) - holdout*h;
-
-    # Define obsAll, the overal number of observations (in-sample + holdout)
-    obsAll <- length(data) + (1 - holdout)*h;
-
-    # If obsInsample is negative, this means that we can't do anything...
-    if(obsInsample<=0){
-        stop("Not enough observations in sample.",call.=FALSE);
-    }
-    # Define the actual values
-    y <- matrix(data[1:obsInsample],obsInsample,1);
-    datafreq <- frequency(data);
-
     if(modelType=="es"){
         # Check if the data is ts-object
         if(!is.ts(data) & Stype!="N"){
@@ -361,8 +419,8 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         }
 
         ### Check seasonality type
-        if(all(Stype!=c("Z","N","A","M"))){
-            warning(paste0("Wrong seasonality type: ",Stype,". Should be 'Z', 'N', 'A' or 'M'.",
+        if(all(Stype!=c("Z","X","Y","N","A","M"))){
+            warning(paste0("Wrong seasonality type: ",Stype,". Should be 'Z', 'X', 'Y', 'N', 'A' or 'M'.",
                            "Setting to 'Z'."),call.=FALSE);
             if(datafreq==1){
                 Stype <- "N";
@@ -372,7 +430,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             }
         }
         if(all(Stype!="N",datafreq==1)){
-            if(Stype!="Z"){
+            if(all(Stype!=c("Z","X","Y"))){
                 warning(paste0("Cannot build the seasonal model on data with frequency 1.\n",
                                "Switching to non-seasonal model: ETS(",substring(model,1,nchar(model)-1),"N)"));
             }
@@ -858,13 +916,15 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         # Check the length of the provided data. Say bad words if:
         # 1. Seasonal model, <=2 seasons of data and no initial seasonals.
         # 2. Seasonal model, <=1 season of data, no initial seasonals and no persistence.
-        if((Stype!="N" & (obsInsample <= 2*datafreq) & is.null(initialSeason)) |
-           (Stype!="N" & (obsInsample <= datafreq) & is.null(initialSeason) & is.null(persistence))){
-            if(is.null(initialSeason)){
-                warning(paste0("Are you out of your mind?! We don't have enough observations for the seasonal model!\n",
-                               "Switching to non-seasonal."),call.=FALSE);
-                Stype <- "N";
-                initialSeasonEstimate <- FALSE;
+        if(is.null(models.pool)){
+            if((Stype!="N" & (obsInsample <= 2*datafreq) & is.null(initialSeason)) |
+               (Stype!="N" & (obsInsample <= datafreq) & is.null(initialSeason) & is.null(persistence))){
+                if(is.null(initialSeason)){
+                    warning(paste0("Sorry, but we don't have enough observations for the seasonal model!\n",
+                                   "Switching to non-seasonal."),call.=FALSE);
+                    Stype <- "N";
+                    initialSeasonEstimate <- FALSE;
+                }
             }
         }
 
@@ -1729,7 +1789,8 @@ ssForecaster <- function(...){
                 matot <- matrix(1,h,n.samples);
             }
 
-            y.simulated <- simulateETSwrap(arrvt,materrors,matot,matF,matw,matg,Etype,Ttype,Stype,modellags)$matyt;
+            y.simulated <- simulatorwrap(arrvt,materrors,matot,array(matF,c(dim(matF),n.samples)),matw,matg,
+                                           Etype,Ttype,Stype,modellags)$matyt;
             if(!is.null(xreg)){
                 y.exo.for <- c(y.for) - forecasterwrap(matrix(matvt[(obsInsample+1):(obsInsample+maxlag),],nrow=maxlag),
                                                        matF, matw, h, Ttype, Stype, modellags,
@@ -2093,7 +2154,8 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
 ### Stuff for ETS
     if(any(model==c("ETS","GES"))){
         if(!is.null(persistence)){
-            cat(paste0("Persistence vector g: ", paste(round(persistence,3),collapse=", "),"\n"));
+            cat(paste0("Persistence vector g:\n"));
+            print(t(round(persistence,3)));
         }
         if(!is.null(phi)){
             if(phi!=1){

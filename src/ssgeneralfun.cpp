@@ -17,6 +17,16 @@ arma::mat matrixPower(arma::mat A, int power){
     return B;
 }
 
+// [[Rcpp::export]]
+RcppExport SEXP matrixPowerWrap(SEXP matA, SEXP power){
+    NumericMatrix matA_n(matA);
+    arma::mat matrixA(matA_n.begin(), matA_n.nrow(), matA_n.ncol(), false);
+
+    int pow = as<int>(power);
+
+    return wrap(matrixPower(matrixA, pow));
+}
+
 /* # Function allows to multiply polinomails */
 arma::vec polyMult(arma::vec poly1, arma::vec poly2){
 
@@ -604,14 +614,12 @@ RcppExport SEXP etsmatrices(SEXP matvt, SEXP vecg, SEXP phi, SEXP Cvalues, SEXP 
 # and then in matF and other things.
 # Cvalues includes AR, MA, initials, constant, matrixAt, transitionX and persistenceX.
 */
-List polysos(arma::uvec arOrders, arma::uvec maOrders, arma::uvec iOrders, arma::uvec lags, int nComponents,
+List polysos(arma::uvec arOrders, arma::uvec maOrders, arma::uvec iOrders, arma::uvec lags, unsigned int nComponents,
              arma::vec arValues, arma::vec maValues, double constValue, arma::vec C,
              arma::mat matrixVt, arma::vec vecG, arma::mat matrixF,
              char fitterType, int nexo, arma::mat matrixAt, arma::mat matrixFX, arma::vec vecGX,
              bool arEstimate, bool maEstimate, bool constRequired, bool constEstimate,
              bool xregEstimate, bool wild, bool fXEstimate, bool gXEstimate, bool initialXEstimate){
-
-    bool initialEstimate = (fitterType=='o');
 
 // Form matrices with parameters, that are then used for polynomial multiplication
     arma::mat arParameters(max(arOrders % lags)+1, arOrders.n_elem, arma::fill::zeros);
@@ -625,9 +633,9 @@ List polysos(arma::uvec arOrders, arma::uvec maOrders, arma::uvec iOrders, arma:
     int nParam = 0;
     int arnParam = 0;
     int manParam = 0;
-    for(int i=0; i<lags.n_rows; i++){
+    for(unsigned int i=0; i<lags.n_rows; i++){
         if(arOrders(i) * lags(i) != 0){
-            for(int j=0; j<arOrders(i); j++){
+            for(unsigned int j=0; j<arOrders(i); j++){
                 if(arEstimate){
                     arParameters((j+1)*lags(i),i) = -C(nParam);
                     nParam += 1;
@@ -644,7 +652,7 @@ List polysos(arma::uvec arOrders, arma::uvec maOrders, arma::uvec iOrders, arma:
         }
 
         if(maOrders(i) * lags(i) != 0){
-            for(int j=0; j<maOrders(i); j++){
+            for(unsigned int j=0; j<maOrders(i); j++){
                 if(maEstimate){
                     maParameters((j+1)*lags(i),i) = C(nParam);
                     nParam += 1;
@@ -667,12 +675,12 @@ List polysos(arma::uvec arOrders, arma::uvec maOrders, arma::uvec iOrders, arma:
     iPolynomial.rows(0,iOrders(0)*lags(0)) = iParameters.submat(0,0,iOrders(0)*lags(0),0);
     maPolynomial.rows(0,maOrders(0)*lags(0)) = maParameters.submat(0,0,maOrders(0)*lags(0),0);
 
-    for(int i=1; i<lags.n_rows; i++){
+    for(unsigned int i=1; i<lags.n_rows; i++){
 // Form polynomials
         arPolynomial = polyMult(arPolynomial, arParameters.col(i));
         maPolynomial = polyMult(maPolynomial, maParameters.col(i));
         if(iOrders(i)>1){
-            for(int j=1; j<iOrders(i); j++){
+            for(unsigned int j=1; j<iOrders(i); j++){
                 iParameters.col(i) = polyMult(iParameters.col(i), iParameters.col(i));
             }
         }
@@ -761,7 +769,7 @@ RcppExport SEXP polysoswrap(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP ARI
     IntegerVector ARIMAlags_n(ARIMAlags);
     arma::uvec lags = as<arma::uvec>(ARIMAlags_n);
 
-    int nComponents = as<int>(nComp);
+    unsigned int nComponents = as<int>(nComp);
 
     NumericVector AR_n;
     if(!Rf_isNull(AR)){
@@ -775,7 +783,7 @@ RcppExport SEXP polysoswrap(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP ARI
     }
     arma::vec maValues(MA_n.begin(), MA_n.size(), false);
 
-    double constValue;
+    double constValue = 0;
     if(!Rf_isNull(constant)){
         constValue = as<double>(constant);
     }
@@ -812,7 +820,6 @@ RcppExport SEXP polysoswrap(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP ARI
     bool maEstimate = as<bool>(estimMA);
     bool constRequired = as<bool>(requireConst);
     bool constEstimate = as<bool>(estimConst);
-    bool initialEstimate = (fitterType=='o');
     bool xregEstimate = as<bool>(estimxreg);
     bool wild = as<bool>(gowild);
     bool fXEstimate = as<bool>(estimFX);
@@ -1788,9 +1795,9 @@ RcppExport SEXP costfunc(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP vecg,
 # autoets - function estimates all the necessary ETS models and returns the one with the smallest chosen IC.
 */
 
-// ##### Script for sim.ets function
-List simulateETS(arma::cube arrayVt, arma::mat matrixerrors, arma::mat matrixot,
-                 arma::mat matrixF, arma::rowvec rowvecW, arma::mat matrixG,
+// ##### Script for simulate functions
+List simulator(arma::cube arrayVt, arma::mat matrixerrors, arma::mat matrixot,
+                 arma::cube arrayF, arma::rowvec rowvecW, arma::mat matrixG,
                  unsigned int obs, unsigned int nseries,
                  char E, char T, char S, arma::uvec lags) {
 
@@ -1808,9 +1815,11 @@ List simulateETS(arma::cube arrayVt, arma::mat matrixerrors, arma::mat matrixot,
 
     arma::uvec lagrows(lagslength, arma::fill::zeros);
     arma::mat matrixVt(obsall, lagslength, arma::fill::zeros);
+    arma::mat matrixF(arrayF.n_rows, arrayF.n_cols, arma::fill::zeros);
 
     for(unsigned int i=0; i<nseries; i=i+1){
         matrixVt = arrayVt.slice(i);
+        matrixF = arrayF.slice(i);
         for (int j=maxlag; j<obsall; j=j+1) {
 
             lagrows = lags - maxlag + j;
@@ -1839,9 +1848,9 @@ List simulateETS(arma::cube arrayVt, arma::mat matrixerrors, arma::mat matrixot,
     return List::create(Named("arrvt") = arrayVt, Named("matyt") = matY);
 }
 
-/* # Wrapper for simulateETS */
+/* # Wrapper for simulator */
 // [[Rcpp::export]]
-RcppExport SEXP simulateETSwrap(SEXP arrvt, SEXP materrors, SEXP matot, SEXP matF, SEXP matw, SEXP matg,
+RcppExport SEXP simulatorwrap(SEXP arrvt, SEXP materrors, SEXP matot, SEXP matF, SEXP matw, SEXP matg,
                                 SEXP Etype, SEXP Ttype, SEXP Stype, SEXP modellags) {
 
 // ### arrvt should contain array of obs x ncomponents x nseries elements.
@@ -1855,8 +1864,9 @@ RcppExport SEXP simulateETSwrap(SEXP arrvt, SEXP materrors, SEXP matot, SEXP mat
     NumericMatrix matot_n(matot);
     arma::mat matrixot(matot_n.begin(), matot_n.nrow(), matot_n.ncol(), false);
 
-    NumericMatrix matF_n(matF);
-    arma::mat matrixF(matF_n.begin(), matF_n.nrow(), matF_n.ncol(), false);
+    NumericVector arrF_n(matF);
+    IntegerVector arrF_dim = arrF_n.attr("dim");
+    arma::cube arrayF(arrF_n.begin(),arrF_dim[0], arrF_dim[1], arrF_dim[2], false);
 
     NumericMatrix matw_n(matw);
     arma::rowvec rowvecW(matw_n.begin(), matw_n.ncol(), false);
@@ -1874,6 +1884,6 @@ RcppExport SEXP simulateETSwrap(SEXP arrvt, SEXP materrors, SEXP matot, SEXP mat
     IntegerVector modellags_n(modellags);
     arma::uvec lags = as<arma::uvec>(modellags_n);
 
-    return wrap(simulateETS(arrayVt, matrixerrors, matrixot, matrixF, rowvecW, matrixG,
+    return wrap(simulator(arrayVt, matrixerrors, matrixot, arrayF, rowvecW, matrixG,
                             obs, nseries, E, T, S, lags));
 }
