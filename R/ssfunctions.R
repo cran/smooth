@@ -509,13 +509,11 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             B$estimate <- FALSE;
         }
 
-        # Define "w" matrix, seasonal complex smoothing parameter, seasonality lag (if it is present).
-        # lags is the lags used in pt matrix.
+        # Define lags, number of components and number of parameters
         if(seasonality=="n"){
             # No seasonality
             maxlag <- 1;
             modellags <- c(1,1);
-            ces.name <- "Complex Exponential Smoothing";
             # Define the number of all the parameters (smoothing parameters + initial states). Used in AIC mainly!
             n.components <- 2;
             A$number <- 2;
@@ -525,7 +523,6 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             # Simple seasonality, lagged CES
             maxlag <- datafreq;
             modellags <- c(maxlag,maxlag);
-            ces.name <- "Lagged Complex Exponential Smoothing (Simple seasonality)";
             n.components <- 2;
             A$number <- 2;
             B$number <- 0;
@@ -534,7 +531,6 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             # Partial seasonality with a real part only
             maxlag <- datafreq;
             modellags <- c(1,1,maxlag);
-            ces.name <- "Complex Exponential Smoothing with a partial (real) seasonality";
             n.components <- 3;
             A$number <- 2;
             B$number <- 1;
@@ -543,7 +539,6 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             # Full seasonality with both real and imaginary parts
             maxlag <- datafreq;
             modellags <- c(1,1,maxlag,maxlag);
-            ces.name <- "Complex Exponential Smoothing with a full (complex) seasonality";
             n.components <- 4;
             A$number <- 2;
             B$number <- 2;
@@ -861,7 +856,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             }
             else if(modelType=="ces"){
                 if(length(initialValue) != maxlag*n.components){
-                    warning(paste0("Wrong length of initial vector. Should be ",n.components,
+                    warning(paste0("Wrong length of initial vector. Should be ",maxlag*n.components,
                                    " instead of ",length(initial),".\n",
                                    "Values of initial vector will be estimated."),call.=FALSE);
                     initialValue <- NULL;
@@ -1106,7 +1101,6 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     }
     else if(modelType=="ces"){
         assign("seasonality",seasonality,ParentEnvironment);
-        assign("ces.name",ces.name,ParentEnvironment);
         assign("A",A,ParentEnvironment);
         assign("B",B,ParentEnvironment);
     }
@@ -1851,25 +1845,37 @@ ssXreg <- function(data, xreg=NULL, updateX=FALSE,
             warning("The exogenous variables contain NAs! This may lead to problems during estimation and forecast.",
                     call.=FALSE);
         }
+        if(!is.null(dim(xreg))){
+            if(ncol(xreg)==1){
+                xreg <- as.vector(xreg);
+            }
+            if(length(dim(xreg))>2){
+                stop(paste0("Sorry, but we don't deal with multidimensional arrays as exogenous variables here.\n",
+                     "Pleas think of your behaviour and come back with matrix!"),call.=FALSE);
+            }
+        }
 ##### The case with vectors and ts objects, but not matrices
         if(is.vector(xreg) | (is.ts(xreg) & !is.matrix(xreg))){
 # Check if xreg contains something meaningful
-            if(all(xreg[1:obsInsample]==xreg[1])){
-                warning("The exogenous variable has no variability. Cannot do anything with that, so dropping out xreg.",
-                        call.=FALSE);
-                xreg <- NULL;
+            if(is.null(initialX)){
+                if(all(xreg[1:obsInsample]==xreg[1])){
+                    warning("The exogenous variable has no variability. Cannot do anything with that, so dropping out xreg.",
+                            call.=FALSE);
+                    xreg <- NULL;
+                }
             }
-            else{
-                if(length(xreg)!=obsInsample & length(xreg)!=obsAll){
-                    stop("Length of xreg does not correspond to either in-sample or the whole series lengths. Aborting!",
-                         call.=FALSE);
-                }
-                if(length(xreg)==obsInsample){
-                    warning("No exogenous variable provided for the holdout sample. es() was used in order to forecast it.",call.=FALSE);
-                    xregForecast <- es(xreg,h=h,intermittent="auto",ic="AICc",silent=TRUE)$forecast;
+
+            if(!is.null(xreg)){
+                if(any(length(xreg) < obsAll)){
+                    warning("xreg did not contain values for the holdout, so we had to predict missing values.", call.=FALSE);
+                    xregForecast <- es(xreg,h=obsAll-length(xreg),intermittent="auto",ic="AICc",silent=TRUE)$forecast;
                     xreg <- c(as.vector(xreg),as.vector(xregForecast));
-#                    xreg <- c(as.vector(xreg),rep(xreg[obsInsample],h));
                 }
+                else if(any(length(xreg) > obsAll)){
+                    warning("xreg contained too many observations, so we had to cut off some of them.", call.=FALSE);
+                    xreg <- xreg[1:obsAll];
+                }
+
 # Number of exogenous variables
                 n.exovars <- 1;
 # Define matrix w for exogenous variables
@@ -1877,7 +1883,9 @@ ssXreg <- function(data, xreg=NULL, updateX=FALSE,
 # Define the second matat to fill in the coefs of the exogenous vars
                 matat <- matrix(NA,obsStates,1);
 # Fill in the initial values for exogenous coefs using OLS
-                matat[1:maxlag,] <- cov(data[1:obsInsample],xreg[1:obsInsample])/var(xreg[1:obsInsample]);
+                if(is.null(initialX)){
+                    matat[1:maxlag,] <- cov(data[1:obsInsample],xreg[1:obsInsample])/var(xreg[1:obsInsample]);
+                }
                 if(is.null(names(xreg))){
                     colnames(matat) <- "x";
                 }
@@ -1888,56 +1896,67 @@ ssXreg <- function(data, xreg=NULL, updateX=FALSE,
         }
 ##### The case with matrices and data frames
         else if(is.matrix(xreg) | is.data.frame(xreg)){
-            checkvariability <- apply(xreg[1:obsInsample,]==rep(xreg[1,],each=obsInsample),2,all);
-            if(any(checkvariability)){
-                if(all(checkvariability)){
-                    warning("None of exogenous variables has variability. Cannot do anything with that, so dropping out xreg.",
-                            call.=FALSE);
-                    xreg <- NULL;
+            if(!is.matrix(xreg)){
+                xreg <- as.matrix(xreg);
+            }
+
+            n.exovars <- ncol(xreg);
+            if(nrow(xreg) < obsAll){
+                warning("xreg did not contain values for the holdout, so we had to predict missing values.", call.=FALSE);
+                xregForecast <- matrix(NA,nrow=obsAll-nrow(xreg),ncol=n.exovars);
+                if(!silent){
+                    message("Producing forecasts for xreg variable...");
                 }
-                else{
-                    warning("Some exogenous variables do not have any variability. Dropping them out.",
-                            call.=FALSE);
-                    xreg <- as.matrix(xreg[,!checkvariability]);
+                for(j in 1:n.exovars){
+                    if(!silent){
+                        cat(paste0(rep("\b",nchar(round((j-1)/n.exovars,2)*100)+1),collapse=""));
+                        cat(paste0(round(j/n.exovars,2)*100,"%"));
+                    }
+                    xregForecast[,j] <- es(xreg[,j],h=obsAll-nrow(xreg),intermittent="auto",ic="AICc",silent=TRUE)$forecast;
+                }
+                xreg <- rbind(xreg,xregForecast);
+                if(!silent){
+                    cat("\b\b\b\bDone!\n");
+                }
+            }
+            else if(nrow(xreg) > obsAll){
+                warning("xreg contained too many observations, so we had to cut off some of them.", call.=FALSE);
+                xreg <- xreg[1:obsAll,];
+            }
+            n.exovars <- ncol(xreg);
+
+# If initialX is provided, then probably we don't need to check the xreg on variability and multicollinearity
+            if(is.null(initialX)){
+                checkvariability <- apply(xreg[1:obsInsample,]==rep(xreg[1,],each=obsInsample),2,all);
+                if(any(checkvariability)){
+                    if(all(checkvariability)){
+                        warning("None of exogenous variables has variability. Cannot do anything with that, so dropping out xreg.",
+                                call.=FALSE);
+                        xreg <- NULL;
+                        n.exovars <- 0;
+                    }
+                    else{
+                        warning("Some exogenous variables do not have any variability. Dropping them out.",
+                                call.=FALSE);
+                        xreg <- as.matrix(xreg[,!checkvariability]);
+                        n.exovars <- ncol(xreg);
+                    }
+                }
+
+                if(!is.null(xreg)){
+# Check for multicollinearity and drop something if there is a perfect one
+                    corMatrix <- cor(xreg);
+                    corCheck <- upper.tri(corMatrix) & corMatrix==1;
+                    if(any(corCheck)){
+                        removexreg <- unique(which(corCheck,arr.ind=TRUE)[,1]);
+                        xreg <- matrix(xreg[,-removexreg],ncol=ncol(xreg)-length(removexreg));
+                        warning("Some exogenous variables were perfectly correlated. We've dropped them out.",
+                                call.=FALSE);
+                    }
                 }
             }
 
             if(!is.null(xreg)){
-                # Check for multicollinearity and drop something if there is a perfect one
-                corMatrix <- cor(xreg);
-                corCheck <- upper.tri(corMatrix) & corMatrix==1;
-                if(any(corCheck)){
-                    removexreg <- unique(which(corCheck,arr.ind=TRUE)[,1]);
-                    xreg <- matrix(xreg[,-removexreg],ncol=ncol(xreg)-length(removexreg));
-                    warning("Some exogenous variables were perfectly correlated. We've dropped them out.",
-                            call.=FALSE);
-                }
-
-                if(nrow(xreg)!=obsInsample & nrow(xreg)!=obsAll){
-                    stop("Length of xreg does not correspond to either in-sample or the whole series lengths. Aborting!",
-                         call.=FALSE);
-                }
-                n.exovars <- ncol(xreg);
-                if(nrow(xreg)==obsInsample){
-                    warning("No exogenous are provided for the holdout sample. es() was used in order to forecast them.",
-                            call.=FALSE);
-                    xregForecast <- matrix(NA,nrow=h,ncol=n.exovars);
-                    if(!silent){
-                        message("Producing forecasts for xreg variable...");
-                    }
-                    for(j in 1:n.exovars){
-                        if(!silent){
-                            cat(paste0(rep("\b",nchar(round((j-1)/n.exovars,2)*100)+1),collapse=""));
-                            cat(paste0(round(j/n.exovars,2)*100,"%"));
-                        }
-                        xregForecast[,j] <- es(xreg[,j],h=h,intermittent="auto",ic="AICc",silent=TRUE)$forecast;
-                        #xreg <- rbind(xreg,xreg[obsInsample,]);
-                    }
-                    xreg <- rbind(xreg,xregForecast);
-                    if(!silent){
-                        cat("\b\b\b\bDone!\n");
-                    }
-                }
 # mat.x is needed for the initial values of coefs estimation using OLS
                 mat.x <- as.matrix(cbind(rep(1,obsAll),xreg));
 # Define the second matat to fill in the coefs of the exogenous vars
@@ -1945,9 +1964,11 @@ ssXreg <- function(data, xreg=NULL, updateX=FALSE,
 # Define matrix w for exogenous variables
                 matxt <- as.matrix(xreg);
 # Fill in the initial values for exogenous coefs using OLS
-                matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,]) %*% mat.x[1:obsInsample,],tol=1e-50) %*%
+                if(is.null(initialX)){
+                    matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,]) %*% mat.x[1:obsInsample,],tol=1e-50) %*%
                                                   t(mat.x[1:obsInsample,]) %*% data[1:obsInsample])[2:(n.exovars+1)],
-                                          each=maxlag);
+                                            each=maxlag);
+                }
                 if(is.null(colnames(xreg))){
                     colnames(matat) <- paste0("x",c(1:n.exovars));
                 }
@@ -2155,7 +2176,12 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
     if(any(model==c("ETS","GES"))){
         if(!is.null(persistence)){
             cat(paste0("Persistence vector g:\n"));
-            print(t(round(persistence,3)));
+            if(is.matrix(persistence)){
+                print(round(t(persistence),3));
+            }
+            else{
+                print(round(persistence,3));
+            }
         }
         if(!is.null(phi)){
             if(phi!=1){
@@ -2249,7 +2275,6 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
 
     cat("\nInformation criteria:\n");
     print(ICs);
-    cat("\n");
 
     if(intervals){
         if(intervalsType=="p"){

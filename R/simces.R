@@ -1,343 +1,324 @@
-sim.ces <- function(seasonality=c("N","S","P","F"), seas.freq=1,
-             persistence=NULL, initial=NULL, initial.season=NULL,
-             obs=10, nseries=1,silent=FALSE,
-             randomizer=c("rnorm","runif","rbeta","rt"),
-             ...){
+sim.ces <- function(seasonality=c("none","simple","partial","full"),
+                    frequency=1, A=NULL, B=NULL,
+                    initial=NULL,
+                    obs=10, nsim=1, silent=FALSE,
+                    randomizer=c("rnorm","runif","rbeta","rt"),
+                    iprob=1, ...){
 # Function simulates the data using CES state-space framework
 #
 # seasonality - the type of seasonality to produce.
-# seas.freq - the frequency of the data. In the case of seasonal models must be >1.
-# persistence - is the persistence vector, that includes the smoothing parameters.
-#    If NULL it will be generated.
+# frequency - the frequency of the data. In the case of seasonal models must be > 1.
+# A, B - complex smoothing parameters.
 # initial - the vector of initial states,
 #    If NULL it will be generated.
-# initial.season - the vector of initial states for seasonal coefficients (first m - real, the other m - imaginary).
-#    If NULL it will be generated.
 # obs - the number of observations in each time series.
-# nseries - the number of series needed to be generated.
+# nsim - the number of series needed to be generated.
 # silent - if TRUE no output is given.
 # randomizer - the type of the random number generator function
 # ... - the parameters passed to the randomizer.
 
-    randomizer <- randomizer[1]
-    seasonality <- seasonality[1]
+    randomizer <- randomizer[1];
 
-# In the case of wrong nseries, make it natural number. The same is for obs and seas.freq.
-    nseries <- abs(round(nseries,0))
-    obs <- abs(round(obs,0))
-    seas.freq <- abs(round(seas.freq,0))
-    
-# Check the used model and estimate the length of needed persistence vector.
-    if(seasonality!="N" & seasonality!="S" & seasonality!="P" & seasonality!="F"){
-        stop("Wrong seasonality type!",call.=FALSE)
+    AGenerator <- function(nsim=nsim){
+        AValue <- matrix(NA,2,nsim);
+        ANonStable <- rep(TRUE,nsim);
+        for(i in 1:nsim){
+            while(ANonStable[i]){
+                AValue[1,i] <- runif(1,0.9,2.5);
+                AValue[2,i] <- runif(1,0.9,1.1);
+
+                if(((AValue[1,i]-2.5)^2 + AValue[2,i]^2 > 1.25) &
+                   ((AValue[1,i]-0.5)^2 + (AValue[2,i]-1)^2 > 0.25) &
+                   (AValue[1,i]-1.5)^2 + (AValue[2,i]-0.5)^2 < 1.5){
+                    ANonStable[i] <- FALSE;
+                }
+            }
+        }
+        return(AValue);
+    }
+
+#### Check values and preset parameters ####
+# If the user typed wrong seasonality, use "none" instead
+    if(all(seasonality!=c("n","s","p","f","none","simple","partial","full"))){
+        warning(paste0("Wrong seasonality type: '",seasonality, "'. Changing to 'none'"), call.=FALSE);
+        seasonality <- "n";
+    }
+    seasonality <- substring(seasonality[1],1,1);
+
+    if(seasonality!="n" & frequency==1){
+        stop("Can't simulate seasonal data with frequency=1!",call.=FALSE)
+    }
+
+    A <- list(value=A);
+    B <- list(value=B);
+
+    if(is.null(A$value)){
+        A$generate <- TRUE;
     }
     else{
-      if(seasonality!="N" & seas.freq==1){
-        stop("Can't simulate seasonal data with seas.freq=1!",call.=FALSE)
-      }
-    }
-
-    if(seasonality=="N"){
-# number of smoothing parameters
-        persistence.length <- 2
-# number of non-seasonal components
-        n.components <- 2
-# w matrix
-        mat.w <- diag(1,2)
-# lag vector for the components of the model
-        lags <- c(1,1)
-# names of the components
-        component.names <- c("level","potential")
-# the inner frequency of the model
-        model.freq <- 1
-# number of seasonal components
-        n.seas.components <- 0
-    }
-    else if(seasonality=="S"){
-        persistence.length <- 2
-        n.components <- 0
-        mat.w <- diag(1,2)
-        lags <- c(seas.freq,seas.freq)
-        component.names <- c("level.s","potential.s")
-        model.freq <- seas.freq
-        n.seas.components <- 2
-    }
-    else if(seasonality=="P"){
-        persistence.length <- 3
-        n.components <- 2
-        mat.w <- cbind(diag(1,2),c(1,0))
-        lags <- c(1,1,seas.freq)
-        component.names <- c("level","potential","seasonal")
-        model.freq <- seas.freq
-        n.seas.components <- 1
-    }
-    else if(seasonality=="F"){
-        persistence.length <- 4
-        n.components <- 2
-        mat.w <- cbind(diag(1,2),diag(1,2))
-        lags <- c(1,1,seas.freq,seas.freq)
-        component.names <- c("level","potential","level.s","potential.s")
-        model.freq <- seas.freq
-        n.seas.components <- 2
-    }
-
-# If the chosen randomizer is not rnorm, rt and runif and no parameters are provided, change to rnorm.
-    if(randomizer!="rnorm" & randomizer!="rt" & randomizer!="runif" & (any(names(match.call(expand.dots=FALSE)[-1]) == "...")==FALSE)){
-      warning(paste0("The chosen randomizer - ",randomizer," - needs some arbitrary parameters! Changing to 'rnorm' now."),call.=FALSE)
-      randomizer = "rnorm"
-    }
-
-# Check the persistence vector length
-    if(!is.null(persistence)){
-        if(persistence.length != length(persistence)){
-            message("The length of persistence vector does not correspond to the chosen model!")
-            message("Falling back to random number generator in... now!")
-            persistence <- NULL
-        }
-        if(((persistence[1]-2.5)^2 + persistence[2]^2 <= 1.25) |
-                  ((persistence[1]-0.5)^2 + (persistence[2]-1)^2 <= 0.25) |
-                  ((persistence[1]-1.5)^2 + (persistence[2]-0.5)^2 >= 1.5)){
-            message("ATTENTION! The model is unstable with the defined persistence vector!")
+        A$generate <- FALSE;
+        if(!(((Re(A$value)-2.5)^2 + Im(A$value)^2 > 1.25) &
+                   ((Re(A$value)-0.5)^2 + (Im(A$value)-1)^2 > 0.25) &
+                   (Re(A$value)-1.5)^2 + (Im(A$value)-0.5)^2 < 1.5)){
+            warning("The provided complex smoothing parameter A leads to non-stable model!",call.=FALSE);
         }
     }
 
-# Check the inital vector length
-    if(!is.null(initial)){
-        if(length(initial)>2){
-            message("The length of the initial value is wrong! It should not be greater than 2.")
-            message("The initials will be chosen randomly!")
-            initial <- NULL
-        }
+    if(all(is.null(B$value),any(seasonality==c("p","f")))){
+        B$generate <- TRUE;
     }
-
-# Check the initial seasonal vector length
-    if(seasonality!="N" & !is.null(initial.season)){
-        if(model.freq!=(length(initial.season)/n.seas.components)){
-            message("The length of seasonal initial states does not correspond to the chosen frequency!")
-            message("Falling back to random number generator in... now!")
-            initial.season <- NULL
+    else{
+        B$generate <- FALSE;
+        if(seasonality=="f"){
+            if(!(((Re(B$value)-2.5)^2 + Im(B$value)^2 > 1.25) &
+                 ((Re(B$value)-0.5)^2 + (Im(B$value)-1)^2 > 0.25) &
+                 (Re(B$value)-1.5)^2 + (Im(B$value)-0.5)^2 < 1.5)){
+                warning("The provided complex smoothing parameter B leads to non-stable model!",call.=FALSE);
+            }
         }
-    }
-
-##### Start filling in the matrices #####
-# Create vector for the whole series
-    z <- rep(NA,obs)
-# Create vector for the real series
-    y <- rep(NA,obs)
-# Create vector for the imaginary series
-    p <- rep(NA,obs)
-
-# Create the matrix of state vectors
-    mat.xt <- matrix(NA,nrow=(obs+model.freq),ncol=persistence.length)
-    colnames(mat.xt) <- component.names
-
-# If the initials are provided, write them down
-    if(seasonality!="S" & !is.null(initial)){
-        mat.xt[1:model.freq,1:n.components] <- rep(initial,each=model.freq)
-    }
-
-# If the seasonal model is chosen, fill in the first "seas.freq" values of seasonal component.
-    if(seasonality!="N" & !is.null(initial.season)){
-        mat.xt[1:model.freq,(n.components+1):(n.components+n.seas.components)] <- initial.season
-    }
-
-    if(nseries > 1){
-# The array of the components
-        arr.xt <- array(NA,c(obs+model.freq,persistence.length,nseries))
-        dimnames(arr.xt)[[2]] <- c(component.names)
-# The matrix of the final data
-        mat.yt <- matrix(NA,obs,nseries)
-# The matrix of the final imaginary data
-        mat.pt <- matrix(NA,obs,nseries)
-# The matrix of the error term
-        mat.errors <- matrix(NA,obs,nseries)
-# The matrix of smoothing parameters
-        mat.g <- matrix(NA,nseries,persistence.length)
-        colnames(mat.g) <- c(component.names)
-# The vector of likelihoods
-        vec.likelihood <- rep(NA,nseries)
-
-        if(silent == FALSE){
-          cat("Series simulated:  ")
-        }
-    }
-
-##### Start the loop #####
-for(k in 1:nseries){
-
-# If the persistence is NULL or was of the wrong length, generate the values
-    if(is.null(persistence)){
-# Generate persistence values using batmanplot
-        vec.g <- rep(NA,persistence.length);
-        vec.g <- runif(persistence.length,1.5-sqrt(1.25),1.5+sqrt(1.25))
-        while(((vec.g[1]-2.5)^2 + vec.g[2]^2 <= 1.25) |
-                ((vec.g[1]-0.5)^2 + (vec.g[2]-1)^2 <= 0.25) |
-                ((vec.g[1]-1.5)^2 + (vec.g[2]-0.5)^2 >= 1.5)){
-            vec.g[2] <- runif(1,0.5-sqrt(1.5-(vec.g[1]-1.5)^2),0.5+sqrt(1.5-(vec.g[1]-1.5)^2))
-        }
-
-        if(persistence.length==3){
-          vec.g[3] <- runif(1,0,1)
-        }
-        else if(persistence.length>3){
-            while(((vec.g[3]-2.5)^2 + vec.g[4]^2 <= 1.25) |
-                  ((vec.g[3]-0.5)^2 + (vec.g[4]-1)^2 <= 0.25) |
-                  ((vec.g[3]-1.5)^2 + (vec.g[4]-0.5)^2 >= 1.5)){
-                vec.g[4] <- runif(1,0.5-sqrt(1.5-(vec.g[3]-1.5)^2),0.5+sqrt(1.5-(vec.g[3]-1.5)^2))
+        else if(seasonality=="p"){
+            if((B$value<0) | (B$value>1)){
+                warning("Be careful with the provided B parameter - the model can be unstable.",call.=FALSE);
             }
         }
     }
+
+    A$number <- 2;
+# Define lags, number of components and number of parameters
+    if(seasonality=="n"){
+        # No seasonality
+        maxlag <- 1;
+        modellags <- c(1,1);
+        # Define the number of all the parameters (smoothing parameters + initial states). Used in AIC mainly!
+        componentsNumber <- 2;
+        B$number <- 0;
+        componentsNames <- c("level","potential");
+        matw <- matrix(c(1,0),1,2);
+    }
+    else if(seasonality=="s"){
+        # Simple seasonality, lagged CES
+        maxlag <- frequency;
+        modellags <- c(maxlag,maxlag);
+        componentsNumber <- 2;
+        B$number <- 0;
+        componentsNames <- c("seasonal level","seasonal potential");
+        matw <- matrix(c(1,0),1,2);
+    }
+    else if(seasonality=="p"){
+        # Partial seasonality with a real part only
+        maxlag <- frequency;
+        modellags <- c(1,1,maxlag);
+        componentsNumber <- 3;
+        B$number <- 1;
+        componentsNames <- c("level","potential","seasonal");
+        matw <- matrix(c(1,0,1),1,3);
+    }
+    else if(seasonality=="f"){
+        # Full seasonality with both real and imaginary parts
+        maxlag <- frequency;
+        modellags <- c(1,1,maxlag,maxlag);
+        componentsNumber <- 4;
+        B$number <- 2;
+        componentsNames <- c("level","potential","seasonal level","seasonal potential");
+        matw <- matrix(c(1,0,1,0),1,4);
+    }
+
+    initialValue <- initial;
+# Initial values
+    if(!is.null(initialValue)){
+        if(length(initialValue) != maxlag*componentsNumber){
+            warning(paste0("Wrong length of initial vector. Should be ",maxlag*componentsNumber,
+                           " instead of ",length(initial),".\n",
+                           "Values of initial vector will be generated"),call.=FALSE);
+            initialValue <- NULL;
+            initialGenerate <- TRUE;
+        }
+        else{
+            initialGenerate <- FALSE;
+            initialValue <- initial;
+        }
+    }
     else{
-        vec.g <- persistence
+        initialGenerate <- TRUE;
     }
 
-# Define transition matrix F
-    mat.F <- matrix(c(1,1,-(1-vec.g[2]),(1-vec.g[1])),2,2)
+# In the case of wrong nsim, make it natural number. The same is for obs and frequency.
+    nsim <- abs(round(nsim,0));
+    obs <- abs(round(obs,0));
+    obsStates <- obs + maxlag;
+    frequency <- abs(round(frequency,0));
 
-    if(seasonality=="P"){
-        mat.F <- cbind(mat.F,c(0,0))
-        mat.F <- rbind(mat.F,c(0,0,1))
-    }
-    else if(seasonality=="F"){
-        mat.F <- cbind(mat.F,c(0,0),c(0,0))
-        mat.F <- rbind(mat.F,c(0,0,1,-(1-vec.g[4])),c(0,0,1,(1-vec.g[3])))
-    }
+# Define arrays
+    arrvt <- array(NA,c(obsStates,componentsNumber,nsim),dimnames=list(NULL,componentsNames,NULL));
+    arrF <- array(0,c(componentsNumber,componentsNumber,nsim));
+    matg <- matrix(0,componentsNumber,nsim);
 
-# Generate initial states of level and trend if they were not supplied
-    if(is.null(initial) & seasonality!="S"){
-        mat.xt[1:model.freq,1] <- runif(1,-1000,1000)
-        mat.xt[1:model.freq,2] <- mat.xt[1,1] / ((vec.g[1]!=0)*vec.g[1] + (vec.g[1]==0)*1)
-    }
+    materrors <- matrix(NA,obs,nsim);
+    matyt <- matrix(NA,obs,nsim);
+    matot <- matrix(NA,obs,nsim);
+    matInitialValue <- array(NA,c(maxlag,componentsNumber,nsim));
+    AValue <- matrix(NA,2,nsim);
+    BValue <- matrix(NA,B$number,nsim);
 
-# Generate seasonal states if they were not supplied
-    if(is.null(initial.season) & seasonality!="N"){
-        if(seasonality=="S"){
-            mat.xt[1:model.freq,1] <- runif(model.freq,-500,500)
-            mat.xt[1:model.freq,1] <- mat.xt[1:model.freq,1] - mean(mat.xt[1:model.freq,1])
-            mat.xt[1:model.freq,2] <- mat.xt[1:model.freq,1] / ((vec.g[1]!=0)*vec.g[1] + (vec.g[1]==0)*1)
-        }
-        else if(seasonality=="P"){
-            mat.xt[1:model.freq,3] <- runif(model.freq,-500,500)
-            mat.xt[1:model.freq,3] <- mat.xt[1:model.freq,3] - mean(mat.xt[1:model.freq,3])
-        }
-        else if(seasonality=="F"){
-            mat.xt[1:model.freq,3] <- runif(model.freq,-500,500)
-            mat.xt[1:model.freq,3] <- mat.xt[1:model.freq,3] - mean(mat.xt[1:model.freq,3])
-            mat.xt[1:model.freq,4] <- mat.xt[1:model.freq,3] / ((vec.g[3]!=0)*vec.g[3] + (vec.g[3]==0)*1)
+#### Generate stuff if needed ####
+# First deal with initials
+    if(initialGenerate){
+        matInitialValue[,,] <- runif(componentsNumber*nsim*maxlag,0,1000);
+        if(all(seasonality!=c("n","s"))){
+            matInitialValue[1:maxlag,1:2,] <- rep(matInitialValue[maxlag,1:2,],each=maxlag);
         }
     }
+    else{
+        matInitialValue[1:maxlag,,] <- rep(initialValue,nsim);
+    }
+    arrvt[1:maxlag,,] <- matInitialValue;
 
-# Check if any argument was passed in dots
+# Now let's do parameters with transition + persistence
+    if(A$generate){
+        AValue[,] <- AGenerator(nsim);
+    }
+    else{
+        AValue[1,] <- Re(A$value);
+        AValue[2,] <- Im(A$value);
+    }
+
+    if(B$number!=0){
+        if(B$generate){
+            if(seasonality=="f"){
+                BValue[,] <- AGenerator(nsim);
+            }
+            else{
+                BValue[,] <- runif(nsim,0,1);
+            }
+        }
+        else{
+            if(seasonality=="f"){
+                BValue[1,] <- Re(B$value);
+                BValue[2,] <- Im(B$value);
+            }
+            else{
+                BValue[1,] <- B$value;
+            }
+        }
+    }
+
+    arrF[1:2,1,] <- 1;
+    for(i in 1:nsim){
+        arrF[1:2,2,i] <- c(AValue[2,i]-1,1-AValue[1,i]);
+        matg[1:2,i] <- c(AValue[1,i]-AValue[2,i],AValue[1,i]+AValue[2,i]);
+    }
+
+    if(seasonality=="p"){
+        arrF[3,3,] <- 1;
+        matg[3,] <- BValue[1,];
+    }
+    else if(seasonality=="f"){
+        arrF[3:4,3,] <- 1;
+        for(i in 1:nsim){
+            arrF[3:4,4,i] <- c(BValue[2,i]-1,1-BValue[1,i]);
+            matg[3:4,i] <- c(BValue[1,i]-BValue[2,i],BValue[1,i]+BValue[2,i]);
+        }
+    }
+
+# If the chosen randomizer is not rnorm, rt and runif and no parameters are provided, change to rnorm.
+    if(all(randomizer!=c("rnorm","rlnorm","rt","runif")) & (any(names(match.call(expand.dots=FALSE)[-1]) == "...")==FALSE)){
+        if(silent == FALSE){
+            warning(paste0("The chosen randomizer - ",randomizer," - needs some arbitrary parameters! Changing to 'rnorm' now."),call.=FALSE);
+        }
+        randomizer = "rnorm";
+    }
+
+# Check if no argument was passed in dots
     if(any(names(match.call(expand.dots=FALSE)[-1]) == "...")==FALSE){
 # Create vector of the errors
-        if(randomizer=="rnorm" | randomizer=="runif"){
-          errors <- eval(parse(text=paste0(randomizer,"(n=",obs,")")))
+        if(any(randomizer==c("rnorm","runif"))){
+            materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,")")));
+        }
+        else if(randomizer=="rlnorm"){
+            materrors[,] <- rlnorm(n=nsim*obs,0,0.01+(1-iprob));
+            materrors <- materrors - 1;
         }
         else if(randomizer=="rt"){
 # The degrees of freedom are df = n - k.
-          errors <- rt(obs,obs-(persistence.length + n.components + model.freq*n.seas.components))
+            materrors[,] <- rt(nsim*obs,obs-(componentsNumber + maxlag));
         }
 
+        if(randomizer!="rlnorm"){
 # Center errors just in case
-        errors <- errors - mean(errors)
+            materrors <- materrors - colMeans(materrors);
 # Change variance to make some sense. Errors should not be rediculously high and not too low.
-        errors <- errors * sqrt(abs(mat.xt[1,1]))
+            materrors <- materrors * sqrt(abs(colMeans(as.matrix(arrvt[1:maxlag,1,]))));
+        }
     }
-# If arguments are passed, use them.
+# If arguments are passed, use them. WE ASSUME HERE THAT USER KNOWS WHAT HE'S DOING!
     else{
-        errors <- eval(parse(text=paste0(randomizer,"(n=",obs,",", toString(as.character(list(...))),")")))
-
+        materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,",", toString(as.character(list(...))),")")));
         if(randomizer=="rbeta"){
-# Center the errors around 0.5
-          errors <- errors - 0.5
+# Center the errors around 0
+            materrors <- materrors - 0.5;
 # Make a meaningful variance of data. Something resembling to var=1.
-          errors <- errors / sqrt(var(errors)) * sqrt(abs(mat.xt[1,1]))
+            materrors <- materrors / rep(sqrt(colMeans(materrors^2)) * sqrt(abs(arrvt[1,1,])),each=obs);
         }
         else if(randomizer=="rt"){
 # Make a meaningful variance of data.
-          errors <- errors * sqrt(abs(mat.xt[1,1]))
+            materrors <- materrors * rep(sqrt(abs(colMeans(as.matrix(arrvt[1:maxlag,1,])))),each=obs);
         }
-
-# Center errors in case all of them are positive or negative to get rid of systematic bias.
-        if(all(errors>0) | all(errors<0)){
-            errors <- errors - mean(errors)
+        else if(randomizer=="rlnorm"){
+            materrors <- materrors - 1;
         }
     }
 
-###### Simulate the data #####
-    j <- model.freq+1
-    while(j<=(obs+model.freq)){
-        z.mid <- mat.w %*% mat.xt[cbind((j-lags),c(1:persistence.length))] + errors[j-model.freq]
-        z[j-model.freq] <- complex(real=z.mid[1],imaginary=z.mid[2])
-        mat.xt[j,] <- mat.F %*% mat.xt[cbind((j-lags),c(1:persistence.length))] + vec.g * errors[j-model.freq]
-        j <- j + 1
-    }
+    veclikelihood <- -obs/2 *(log(2*pi*exp(1)) + log(colMeans(materrors^2)));
 
-    y <- Re(z)
-    p <- Im(z)
-
-    likelihood <- -obs/2 *(log(2*pi*exp(1)) + log(mean(errors^2)))
-
-    if(nseries > 1){
-        mat.yt[,k] <- y
-        mat.pt[,k] <- p
-        mat.errors[,k] <- errors
-        arr.xt[,,k] <- mat.xt
-        mat.g[k,] <- vec.g
-        vec.likelihood[k] <- likelihood
-
-# Print the number of processed series
-        if (silent == FALSE){
-          if(k<=10){
-              cat("\b")
-          }
-          else if(k>10 & k<=100){
-              cat("\b")
-              cat("\b")
-          }
-          else if(k>100 & k<=1000){
-              cat("\b")
-              cat("\b")
-              cat("\b")
-          }
-          else if(k>1000 & k<=10000){
-              cat("\b")
-              cat("\b")
-              cat("\b")
-              cat("\b")
-          }
-          else if(k>10000 & k<=100000){
-              cat("\b")
-              cat("\b")
-              cat("\b")
-              cat("\b")
-              cat("\b")
-          }
-          else{
-              cat("\b")
-              cat("\b")
-              cat("\b")
-              cat("\b")
-              cat("\b")
-              cat("\b")            
-          }
-          cat(k)
-        }
-    }
-}
-
-    if(nseries==1){
-        y <- ts(y,frequency=seas.freq)
-        p <- ts(p,frequency=seas.freq)
-        errors <- ts(errors,frequency=seas.freq)
-        mat.xt <- ts(mat.xt,frequency=seas.freq,start=c(0,seas.freq-model.freq+1))
-
-        return(list(data=y,ip=p,states=mat.xt,persistence=vec.g,residuals=errors,model=seasonality,likelihood=likelihood))
+# Generate ones for the possible intermittency
+    if((iprob < 1) & (iprob > 0)){
+        matot[,] <- rbinom(obs*nsim,1,iprob);
     }
     else{
-        mat.yt <- ts(mat.yt,frequency=seas.freq)
-        mat.pt <- ts(mat.yt,frequency=seas.freq)
-        mat.errors <- ts(mat.errors,frequency=seas.freq)
-        return(list(data=mat.yt,ip=mat.pt,states=arr.xt,persistence=mat.g,residuals=mat.errors,model=seasonality,likelihood=vec.likelihood))
+        matot[,] <- 1;
     }
+
+#### Simulate the data ####
+    simulateddata <- simulatorwrap(arrvt,materrors,matot,arrF,matw,matg,"A","N","N",modellags);
+
+    if((iprob < 1) & (iprob > 0)){
+        matyt <- round(simulateddata$matyt,0);
+    }
+    else{
+        matyt <- simulateddata$matyt;
+    }
+    arrvt <- simulateddata$arrvt;
+    dimnames(arrvt) <- list(NULL,componentsNames,NULL);
+
+    if(nsim==1){
+        matyt <- ts(matyt[,1],frequency=frequency);
+        materrors <- ts(materrors[,1],frequency=frequency);
+        arrvt <- ts(arrvt[,,1],frequency=frequency,start=c(0,frequency-maxlag+1));
+        matot <- ts(matot[,1],frequency=frequency);
+        matInitialValue <- matInitialValue[,,1];
+    }
+    else{
+        matyt <- ts(matyt,frequency=frequency);
+        materrors <- ts(materrors,frequency=frequency);
+        matot <- ts(matot,frequency=frequency);
+    }
+
+    modelname <- paste0("CES(",seasonality,")");
+    if(iprob!=1){
+        modelname <- paste0("i",modelname);
+    }
+
+    AValue <- complex(real=AValue[1,],imaginary=AValue[2,]);
+    if(any(seasonality==c("n","s"))){
+        BValue <- NULL;
+    }
+    else if(seasonality=="f"){
+        BValue <- complex(real=BValue[1,],imaginary=BValue[2,]);
+    }
+
+    model <- list(model=modelname,
+                  A=AValue, B=BValue, initial=matInitialValue,
+                  data=matyt, states=arrvt, residuals=materrors,
+                  occurrences=matot, likelihood=veclikelihood);
+    return(structure(model,class="smooth.sim"));
 }

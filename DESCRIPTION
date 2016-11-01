@@ -1,7 +1,7 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using Smoothing Functions
-Version: 1.4.6
+Version: 1.4.7
 Date: 2016-11-01
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Research Associate at Lancaster Centre for Forecasting, UK")
@@ -17,9 +17,9 @@ LinkingTo: Rcpp, RcppArmadillo (>= 0.6.500.0.0)
 Suggests: Mcomp, forecast, numDeriv, testthat, knitr, rmarkdown
 VignetteBuilder: knitr
 NeedsCompilation: yes
-Packaged: 2016-10-25 08:18:54 UTC; config
+Packaged: 2016-11-01 02:22:11 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Research Associate at Lancaster Centre for
     Forecasting, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2016-10-25 20:32:24
+Date/Publication: 2016-11-01 11:07:30

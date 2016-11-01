@@ -75,3 +75,40 @@ plot(x)
 plot(ourData)
 par(mfcol=c(1,1))
 
+## ----sim_ces_(n)---------------------------------------------------------
+ourSimulation <- sim.ces(frequency=12, obs=120, nsim=1)
+
+## ----sim_ces_(n)_plot----------------------------------------------------
+plot(ourSimulation)
+
+## ----sim_ces_(n)_summary-------------------------------------------------
+ourSimulation
+
+## ----sim_ces_(s)---------------------------------------------------------
+ourSimulation <- sim.ces("s",frequency=24, obs=240, nsim=1)
+plot(ourSimulation)
+
+## ----sim_ces_(s)_messing_arround-----------------------------------------
+ourSimulation$initial[c(1:5,20:24),] <- 0
+ourSimulation <- sim.ces("s",frequency=24, obs=120, nsim=1, initial=ourSimulation$initial, randomizer="rt", df=4)
+plot(ourSimulation)
+
+## ----sim_ces_(p)---------------------------------------------------------
+ourSimulation <- sim.ces("p",B=0.2,frequency=12, obs=240, nsim=10)
+plot(ourSimulation)
+
+## ----sim_ces_(f)---------------------------------------------------------
+ourSimulation <- sim.ces("f",frequency=12, obs=240, nsim=10)
+plot(ourSimulation)
+
+## ----simulate_smooth_ces-------------------------------------------------
+x <- ts(rnorm(120,0,5) + rep(runif(12,-50,50),10)*rep(c(1:10),each=12) ,frequency=12)
+ourModel <- ces(x, seasonality="s", h=18, silent=TRUE)
+ourData <- simulate(ourModel, nsim=50, obs=100)
+
+## ----simulate_smooth_ces_compare-----------------------------------------
+par(mfcol=c(1,2))
+plot(x)
+plot(ourData)
+par(mfcol=c(1,1))
+

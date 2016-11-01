@@ -1,4 +1,4 @@
-sim.es <- function(model="ANN",frequency=1, persistence=NULL, phi=1,
+sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
                    initial=NULL, initialSeason=NULL,
                    bounds=c("usual","admissible","restricted"),
                    obs=10, nsim=1, silent=FALSE,
@@ -364,6 +364,7 @@ sim.es <- function(model="ANN",frequency=1, persistence=NULL, phi=1,
         matot[,] <- 1;
     }
 
+#### Simulate the data ####
     simulateddata <- simulatorwrap(arrvt,materrors,matot,arrF,matw,matg,Etype,Ttype,Stype,modellags);
 
     if((iprob < 1) & (iprob > 0)){
