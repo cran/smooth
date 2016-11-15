@@ -1,7 +1,7 @@
 utils::globalVariables(c("normalizer","constantValue","constantRequired","constantEstimate","C",
                          "ARValue","ARRequired","AREstimate","MAValue","MARequired","MAEstimate"));
 
-ssarima <- function(data, ar.orders=c(0), i.orders=c(1), ma.orders=c(1), lags=c(1),
+ssarima <- function(data, orders=list(ar=0,i=c(1),ma=c(1)), lags=c(1),
                     constant=FALSE, AR=NULL, MA=NULL,
                     initial=c("backcasting","optimal"),
                     cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
@@ -23,48 +23,86 @@ ssarima <- function(data, ar.orders=c(0), i.orders=c(1), ma.orders=c(1), lags=c(
     list2env(list(...),environment());
 
     # If a previous model provided as a model, write down the variables
-    if(exists("model")){
+    if(exists("model",inherits=FALSE)){
         if(is.null(model$model)){
             stop("The provided model is not ARIMA.",call.=FALSE);
         }
         else if(gregexpr("ARIMA",model$model)==-1){
             stop("The provided model is not ARIMA.",call.=FALSE);
         }
-        intermittent <- model$intermittent;
-        if(any(intermittent==c("p","provided"))){
-            warning("The provided model had predefined values of occurences for the holdout. We don't have them.",call.=FALSE);
-            warning("Switching to intermittent='auto'.",call.=FALSE);
-            intermittent <- "a";
-        }
-        if(!is.null(model$initial)){
-            initial <- model$initial;
-        }
-        if(is.null(xreg)){
-            xreg <- model$xreg;
-        }
-        initialX <- model$initialX;
-        persistenceX <- model$persistenceX;
-        transitionX <- model$transitionX;
-        if(any(c(persistenceX)!=0) | any((transitionX!=0)&(transitionX!=1))){
-            updateX <- TRUE;
-        }
-        AR <- model$AR;
-        MA <- model$MA;
-        constant <- model$constant;
-        model <- model$model;
-        arima.orders <- paste0(c("",substring(model,unlist(gregexpr("\\(",model))+1,unlist(gregexpr("\\)",model))-1),"")
-                               ,collapse=";");
-        comas <- unlist(gregexpr("\\,",arima.orders));
-        semicolons <- unlist(gregexpr("\\;",arima.orders));
-        ar.orders <- as.numeric(substring(arima.orders,semicolons[-length(semicolons)]+1,comas[2*(1:(length(comas)/2))-1]-1));
-        i.orders <- as.numeric(substring(arima.orders,comas[2*(1:(length(comas)/2))-1]+1,comas[2*(1:(length(comas)/2))-1]+1));
-        ma.orders <- as.numeric(substring(arima.orders,comas[2*(1:(length(comas)/2))]+1,semicolons[-1]-1));
-        if(any(unlist(gregexpr("\\[",model))!=-1)){
-            lags <- as.numeric(substring(model,unlist(gregexpr("\\[",model))+1,unlist(gregexpr("\\]",model))-1));
+
+# If this is a normal ARIMA, do things
+        if(any(unlist(gregexpr("combine",model$model))==-1)){
+            intermittent <- model$intermittent;
+            if(any(intermittent==c("p","provided"))){
+                warning("The provided model had predefined values of occurences for the holdout. We don't have them.",call.=FALSE);
+                warning("Switching to intermittent='auto'.",call.=FALSE);
+                intermittent <- "a";
+            }
+            if(!is.null(model$initial)){
+                initial <- model$initial;
+            }
+            if(is.null(xreg)){
+                xreg <- model$xreg;
+            }
+            initialX <- model$initialX;
+            persistenceX <- model$persistenceX;
+            transitionX <- model$transitionX;
+            if(any(c(persistenceX)!=0) | any((transitionX!=0)&(transitionX!=1))){
+                updateX <- TRUE;
+            }
+            AR <- model$AR;
+            MA <- model$MA;
+            constant <- model$constant;
+            model <- model$model;
+            arima.orders <- paste0(c("",substring(model,unlist(gregexpr("\\(",model))+1,unlist(gregexpr("\\)",model))-1),"")
+                                   ,collapse=";");
+            comas <- unlist(gregexpr("\\,",arima.orders));
+            semicolons <- unlist(gregexpr("\\;",arima.orders));
+            ar.orders <- as.numeric(substring(arima.orders,semicolons[-length(semicolons)]+1,comas[2*(1:(length(comas)/2))-1]-1));
+            i.orders <- as.numeric(substring(arima.orders,comas[2*(1:(length(comas)/2))-1]+1,comas[2*(1:(length(comas)/2))-1]+1));
+            ma.orders <- as.numeric(substring(arima.orders,comas[2*(1:(length(comas)/2))]+1,semicolons[-1]-1));
+            if(any(unlist(gregexpr("\\[",model))!=-1)){
+                lags <- as.numeric(substring(model,unlist(gregexpr("\\[",model))+1,unlist(gregexpr("\\]",model))-1));
+            }
+            else{
+                lags <- 1;
+            }
         }
         else{
-            lags <- 1;
+            stop("The provided model is a combination of ARIMAs. We cannot fit that.",call.=FALSE);
         }
+    }
+    else if(!is.null(orders)){
+        ar.orders <- orders$ar;
+        i.orders <- orders$i;
+        ma.orders <- orders$ma;
+    }
+
+# If orders are provided in ellipsis via ar.orders, write them down.
+    if(exists("ar.orders",inherits=FALSE)){
+        if(is.null(ar.orders)){
+            ar.orders <- 0;
+        }
+    }
+    else{
+        ar.orders <- 0;
+    }
+    if(exists("i.orders",inherits=FALSE)){
+        if(is.null(i.orders)){
+            i.orders <- 0;
+        }
+    }
+    else{
+        i.orders <- 0;
+    }
+    if(exists("ma.orders",inherits=FALSE)){
+        if(is.null(ma.orders)){
+            ma.orders <- 0;
+        }
+    }
+    else{
+        ma.orders <- 0;
     }
 
 ##### Set environment for ssInput and make all the checks #####
@@ -93,10 +131,12 @@ ssarima <- function(data, ar.orders=c(0), i.orders=c(1), ma.orders=c(1), lags=c(
             matvt[1,1:n.components] <- initialValue;
         }
         else{
-            slope <- cov(yot[1:min(12,obsNonzero),],c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero)));
-            intercept <- sum(yot[1:min(12,obsNonzero),])/min(12,obsNonzero) - slope * (sum(c(1:min(12,obsNonzero)))/min(12,obsNonzero) - 1);
-            initialStuff <- c(intercept,-intercept,rep(slope,n.components));
-            matvt[1,1:n.components] <- initialStuff[1:n.components];
+            if(obsInsample<(n.components+datafreq)){
+                matvt[1:n.components,] <- y[1:n.components] + diff(y[1:(n.components+1)]);
+            }
+            else{
+                matvt[1:n.components,] <- (y[1:n.components]+y[1:n.components+datafreq])/2;
+            }
         }
     }
     else{
@@ -216,10 +256,11 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
 
 # initial values of state vector and the constant term
             if(initialType=="o"){
-                slope <- cov(yot[1:min(12,obsNonzero),],c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero)));
-                intercept <- sum(yot[1:min(12,obsNonzero),])/min(12,obsNonzero) - slope * (sum(c(1:min(12,obsNonzero)))/min(12,obsNonzero) - 1);
-                initialStuff <- c(rep(intercept,n.components));
-                C <- c(C,initialStuff[1:n.components]);
+                # slope <- cov(yot[1:min(12,obsNonzero),],c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero)));
+                # intercept <- sum(yot[1:min(12,obsNonzero),])/min(12,obsNonzero) - slope * (sum(c(1:min(12,obsNonzero)))/min(12,obsNonzero) - 1);
+                # initialStuff <- c(rep(intercept,n.components));
+                # C <- c(C,initialStuff[1:n.components]);
+                C <- c(C,matvt[1:n.components,1]);
             }
         }
 
@@ -357,18 +398,6 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     list2env(ssarimaValues,environment());
 
 # Prepare for fitting
-    # elements <- polyroots(C);
-    # matF <- elements$matF;
-    # vecg <- elements$vecg;
-    # matvt[1:maxlag,] <- elements$vt;
-    # matat[1:maxlag,] <- elements$at;
-    # matFX <- elements$matFX;
-    # vecgX <- elements$vecgX;
-    # polysos.ar <- elements$polysos.ar;
-    # polysos.ma <- elements$polysos.ma;
-    # arroots <- abs(polyroot(polysos.ar));
-    # maroots <- abs(polyroot(polysos.ma));
-
     elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, n.components,
                             ARValue, MAValue, constantValue, C,
                             matvt, vecg, matF,
@@ -458,7 +487,7 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
                                         paste0("Lag ",lags[ar.orders!=0])));
     }
     else{
-        ARterms <- matrix(0,1,1);
+        ARterms <- NULL;
     }
 # Differences
     if(any(i.orders!=0)){
@@ -476,7 +505,7 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
                                         paste0("Lag ",lags[ma.orders!=0])));
     }
     else{
-        MAterms <- matrix(0,1,1);
+        MAterms <- NULL;
     }
 
     n.coef <- ar.coef <- ma.coef <- 0;

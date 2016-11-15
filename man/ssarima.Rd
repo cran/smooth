@@ -8,7 +8,7 @@ State-Space ARIMA
 Function constructs State-Space ARIMA, estimating AR, MA terms and initial states.
 }
 \usage{
-ssarima(data, ar.orders=c(0), i.orders=c(1), ma.orders=c(1), lags=c(1),
+ssarima(data, orders=list(ar=0,i=c(1),ma=c(1)), lags=c(1),
   constant=FALSE, AR=NULL, MA=NULL,
   initial=c("backcasting","optimal"),
   cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
@@ -25,17 +25,11 @@ ssarima(data, ar.orders=c(0), i.orders=c(1), ma.orders=c(1), lags=c(1),
   \item{data}{
     Data that needs to be forecasted.
   }
-  \item{ar.orders}{
-    Vector of autoregressive orders, corresponding to seasonal lags. For example \code{ar.orders=c(1,1)} with \code{lags=c(1,12)} will lead to model with AR(1), SAR(1).
-  }
-  \item{i.orders}{
-    Vector of differences, corresponding to seasonal lags. For example \code{i.orders=c(0,1)} with \code{lags=c(1,12)} will lead to model with I(0), SI(1).
-  }
-  \item{ma.orders}{
-    Vector of moving average orders, corresponding to seasonal lags. For example \code{i.orders=c(1,2)} with \code{lags=c(1,12)} will lead to model with MA(1), SMA(2).
+  \item{orders}{
+    List of orders, containing vector variables \code{ar}, \code{i} and \code{ma}. Example: \code{orders=list(ar=c(1,2),i=c(1),ma=c(1,1,1))}. If a variable is not provided in the list, then it is assumed to be equal to zero. At least one variable should have the same length as \code{lags}.
   }
   \item{lags}{
-    Defines lags for the corresponding orders (see examples above). The length of \code{lags} must correspond to the length of either \code{ar.orders} or \code{i.orders} or \code{ma.orders}. There is no restrictions on the length of \code{lags} vector. It is recommended to order \code{lags} ascending.
+    Defines lags for the corresponding orders (see examples above). The length of \code{lags} must correspond to the length of either \code{ar}, \code{i} or \code{ma} in \code{orders} variable. There is no restrictions on the length of \code{lags} vector. It is recommended to order \code{lags} ascending.
   }
   \item{constant}{
     If \code{TRUE}, constant term is included in the model. Can also be a number (constant value).
@@ -104,20 +98,24 @@ ssarima(data, ar.orders=c(0), i.orders=c(1), ma.orders=c(1), lags=c(1),
   }
   \item{...}{
     Other non-documented parameters.
-    For example parameter \code{model} can accept a previously estimated SSARIMA model and use all its parameters.
+
+    Vectors of orders can be passed here using \code{ar.orders}, \code{i.orders} and \code{ma.orders}. \code{orders} variable needs to be NULL in this case.
+
+    Parameter \code{model} can accept a previously estimated SSARIMA model and use all its parameters.
+
     \code{FI=TRUE} will make the function produce Fisher Information matrix, which then can be used to calculated variances of parameters of the model.
   }
 }
 \details{
-The function constructs ARIMA in the Single Source of Error State-space form (first proposed in Snyder, 1985):
+The basic ARIMA(p,d,q) used in the function has the following form:
+\eqn{(1 - B)^d (1 - a_1 B - a_2 B^2 - ... - a_p B^p) y_[t] = (1 - b_1 B - b_2 B^2 - ... - b_q B^q) \epsilon_[t] + c}
+where \eqn{y_[t]} is actual values,  \eqn{\epsilon_[t]} is error term, \eqn{a_i, b_j} are parameters for AR and MA respectively and \eqn{c} is constant. In case of non-zero differences \eqn{c} starts acting as drift.
 
+This model is then transformed into ARIMA in the Single Source of Error State-space form (proposed in Snyder, 1985):
 \eqn{y_[t] = o_[t] (w' v_[t-l] + x_t a_[t-1] + \epsilon_[t])}
-
 \eqn{v_[t] = F v_[t-1] + g \epsilon_[t]}
-
 \eqn{a_[t] = F_[X] a_[t-1] + g_[X] \epsilon_[t] / x_[t]}
-
-Where \eqn{o_[t]} is Bernoulli distributed random variable (in case of normal data equals to 1 for all observations), \eqn{v_[t]} is a state vector (defined using \code{ar.orders} and \code{i.orders}), \eqn{x_t} vector of exogenous parameters.
+where \eqn{o_[t]} is Bernoulli distributed random variable (in case of normal data equals to 1 for all observations), \eqn{v_[t]} is a state vector (defined using \code{ar.orders} and \code{i.orders}), \eqn{x_t} vector of exogenous parameters.
 
 Due to the flexibility of the model, multiple seasonalities can be used. For example, something crazy like this can be constructed: SARIMA(1,1,1)(0,1,1)[24](2,0,1)[24*7](0,0,1)[24*30], but the estimation may take a lot of time...
 }
@@ -173,42 +171,51 @@ Due to the flexibility of the model, multiple seasonalities can be used. For exa
 }
 
 \seealso{
-\code{\link[forecast]{ets}, \link[smooth]{es}, \link[smooth]{ces}, \link[smooth]{sim.es}, \link[smooth]{ges}}
+\code{\link[forecast]{auto.arima}, \link[smooth]{orders}, \link[smooth]{lags}, \link[smooth]{sim.ssarima}}
 }
 
 \examples{
-# ARIMA(1,1,1)
-test <- ssarima(rnorm(118,100,3),ar.orders=c(1),lags=c(1),h=18,holdout=TRUE,intervals="p")
+# ARIMA(1,1,1) fitted to some data
+ourModel <- ssarima(rnorm(118,100,3),orders=list(ar=c(1),i=c(1),ma=c(1)),lags=c(1),h=18,
+                             holdout=TRUE,intervals="p")
+
+# The previous one is equivalent to:
+\dontrun{ourModel <- ssarima(rnorm(118,100,3),ar.orders=c(1),i.orders=c(1),ma.orders=c(1),lags=c(1),h=18,
+                    holdout=TRUE,intervals="p")}
+
+# Model with the same lags and orders, applied to a different data
+ssarima(rnorm(118,100,3),orders=orders(ourModel),lags=lags(ourModel),h=18,holdout=TRUE)
 
 # The same model applied to a different data
-ssarima(rnorm(118,100,3),model=test,h=18,holdout=TRUE)
+ssarima(rnorm(118,100,3),model=ourModel,h=18,holdout=TRUE)
 
-# SARIMA(1,0,0)(1,0,0)[4]
-\dontrun{ssarima(rnorm(118,100,3),ar.orders=c(2,1),lags=c(1,4),h=18,holdout=TRUE)}
+# Example of SARIMA(2,0,0)(1,0,0)[4]
+\dontrun{ssarima(rnorm(118,100,3),orders=list(ar=c(2,1)),lags=c(1,4),h=18,holdout=TRUE)}
 
-# SARIMA(1,1,1)(0,0,1)[4]
-\dontrun{ssarima(rnorm(118,100,3),ar.orders=c(1),i.orders=c(1),ma.orders=c(1,1),
+# SARIMA(1,1,1)(0,0,1)[4] with different initialisations
+\dontrun{ssarima(rnorm(118,100,3),orders=list(ar=c(1),i=c(1),ma=c(1,1)),
         lags=c(1,4),h=18,holdout=TRUE)
-ssarima(rnorm(118,100,3),ar.orders=c(1),i.orders=c(1),ma.orders=c(1,1),
+ssarima(rnorm(118,100,3),orders=list(ar=c(1),i=c(1),ma=c(1,1)),
         lags=c(1,4),h=18,holdout=TRUE,initial="o")}
 
 # SARIMA of a perculiar order on AirPassengers data
-\dontrun{ssarima(AirPassengers,ar.orders=c(1,0,3),i.orders=c(1,0,1),ma.orders=c(0,1,2),lags=c(1,6,12),
+\dontrun{ssarima(AirPassengers,orders=list(ar=c(1,0,3),i=c(1,0,1),ma=c(0,1,2)),lags=c(1,6,12),
         h=10,holdout=TRUE)}
 
 # ARIMA(1,1,1) with Mean Squared Trace Forecast Error
-\dontrun{ssarima(rnorm(118,100,3),ar.orders=1,lags=1,h=18,holdout=TRUE,cfType="MSTFE")
-ssarima(rnorm(118,100,3),ar.orders=1,lags=1,h=18,holdout=TRUE,cfType="aMSTFE")}
+\dontrun{ssarima(rnorm(118,100,3),orders=list(ar=1,i=1,ma=1),lags=1,h=18,holdout=TRUE,cfType="MSTFE")
+ssarima(rnorm(118,100,3),orders=list(ar=1,i=1,ma=1),lags=1,h=18,holdout=TRUE,cfType="aMSTFE")}
 
 # SARIMA(0,1,1) with exogenous variables
-ssarima(rnorm(118,100,3),ar.orders=c(1),h=18,holdout=TRUE,xreg=c(1:118))
+ssarima(rnorm(118,100,3),orders=list(i=1,ma=1),h=18,holdout=TRUE,xreg=c(1:118))
 
 # SARIMA(0,1,1) with exogenous variables with crazy estimation of xreg
-test <- ssarima(rnorm(118,100,3),ar.orders=c(1),h=18,holdout=TRUE,xreg=c(1:118),updateX=TRUE)
+ourModel <- ssarima(rnorm(118,100,3),orders=list(i=1,ma=1),h=18,holdout=TRUE,
+                    xreg=c(1:118),updateX=TRUE)
 
-summary(test)
-forecast(test)
-plot(forecast(test))
+summary(ourModel)
+forecast(ourModel)
+plot(forecast(ourModel))
 }
 % Add one or more standard keywords, see file 'KEYWORDS' in the
 % R documentation directory.

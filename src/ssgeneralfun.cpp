@@ -44,6 +44,18 @@ arma::vec polyMult(arma::vec poly1, arma::vec poly2){
     return poly3;
 }
 
+/* # Function allows to multiply polinomails */
+// [[Rcpp::export]]
+RcppExport SEXP polyMultwrap(SEXP polyVec1, SEXP polyVec2){
+    NumericVector polyVec1_n(polyVec1);
+    arma::vec poly1(polyVec1_n.begin(), polyVec1_n.size(), false);
+
+    NumericVector polyVec2_n(polyVec2);
+    arma::vec poly2(polyVec2_n.begin(), polyVec2_n.size(), false);
+
+    return wrap(polyMult(poly1, poly2));
+}
+
 /* # Function returns multiplicative or additive error for scalar */
 double errorf(double yact, double yfit, char Etype){
     if(Etype=='A'){
@@ -378,7 +390,7 @@ RcppExport SEXP initparams(SEXP Ttype, SEXP Stype, SEXP datafreq, SEXP obsR, SEX
 // # Define the initial states for level and trend components
     switch(T){
     case 'N':
-        matrixVt.submat(0,0,maxlag-1,0).each_row() = initial.submat(0,2,0,2);
+        matrixVt.submat(0,0,maxlag-1,0).each_row() = initial.submat(0,0,0,0);
     break;
     case 'A':
         matrixVt.submat(0,0,maxlag-1,1).each_row() = initial.submat(0,0,0,1);
@@ -670,21 +682,31 @@ List polysos(arma::uvec arOrders, arma::uvec maOrders, arma::uvec iOrders, arma:
     arma::vec iPolynomial(sum(iOrders % lags)+1, arma::fill::zeros);
     arma::vec maPolynomial(sum(maOrders % lags)+1, arma::fill::zeros);
     arma::vec ariPolynomial(sum(arOrders % lags)+sum(iOrders % lags)+1, arma::fill::zeros);
+    arma::vec buferPolynomial;
 
     arPolynomial.rows(0,arOrders(0)*lags(0)) = arParameters.submat(0,0,arOrders(0)*lags(0),0);
     iPolynomial.rows(0,iOrders(0)*lags(0)) = iParameters.submat(0,0,iOrders(0)*lags(0),0);
     maPolynomial.rows(0,maOrders(0)*lags(0)) = maParameters.submat(0,0,maOrders(0)*lags(0),0);
 
-    for(unsigned int i=1; i<lags.n_rows; i++){
+    for(unsigned int i=0; i<lags.n_rows; i++){
 // Form polynomials
-        arPolynomial = polyMult(arPolynomial, arParameters.col(i));
-        maPolynomial = polyMult(maPolynomial, maParameters.col(i));
+        if(i!=0){
+            buferPolynomial = polyMult(arPolynomial, arParameters.col(i));
+            arPolynomial.rows(0,buferPolynomial.n_rows-1) = buferPolynomial;
+
+            buferPolynomial = polyMult(maPolynomial, maParameters.col(i));
+            maPolynomial.rows(0,buferPolynomial.n_rows-1) = buferPolynomial;
+
+            buferPolynomial = polyMult(iPolynomial, iParameters.col(i));
+            iPolynomial.rows(0,buferPolynomial.n_rows-1) = buferPolynomial;
+        }
         if(iOrders(i)>1){
             for(unsigned int j=1; j<iOrders(i); j++){
-                iParameters.col(i) = polyMult(iParameters.col(i), iParameters.col(i));
+                buferPolynomial = polyMult(iPolynomial, iParameters.col(i));
+                iPolynomial.rows(0,buferPolynomial.n_rows-1) = buferPolynomial;
             }
         }
-        iPolynomial = polyMult(iPolynomial, iParameters.col(i));
+
     }
     ariPolynomial = polyMult(arPolynomial, iPolynomial);
 
@@ -708,6 +730,12 @@ List polysos(arma::uvec arOrders, arma::uvec maOrders, arma::uvec iOrders, arma:
         if(fitterType=='o'){
             matrixVt.submat(0,0,0,nComponents-1) = C.rows(nParam,nParam+nComponents-1).t();
             nParam += nComponents;
+        }
+        else if(fitterType=='b'){
+            for(unsigned int i=1; i < nComponents; i=i+1){
+                matrixVt.submat(0,i,nComponents-i-1,i) = matrixVt.submat(1,i-1,nComponents-i,i-1) -
+                                                         matrixVt.submat(0,0,nComponents-i-1,0) * matrixF.submat(i-1,0,i-1,0);
+            }
         }
     }
 
@@ -914,8 +942,8 @@ List fitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arma::v
 }
 
 List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arma::vec vecYt, arma::vec vecG,
-             arma::uvec lags, char E, char T, char S,
-             arma::mat matrixXt, arma::mat matrixAt, arma::mat matrixFX, arma::vec vecGX, arma::vec vecOt) {
+                arma::uvec lags, char E, char T, char S,
+                arma::mat matrixXt, arma::mat matrixAt, arma::mat matrixFX, arma::vec vecGX, arma::vec vecOt) {
     /* # matrixVt should have a length of obs + maxlag.
     * # rowvecW should have 1 row.
     * # matgt should be a vector
@@ -924,7 +952,7 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
     * # matrixAt is the matrix with the parameters for the exogenous
     */
 
-    int nloops = 5;
+    int nloops = 1;
 
     int obs = vecYt.n_rows;
     int obsall = matrixVt.n_rows;
@@ -948,6 +976,13 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
     arma::vec matyfit(obs, arma::fill::zeros);
     arma::vec materrors(obs, arma::fill::zeros);
     arma::rowvec bufferforat(vecGX.n_rows);
+
+    arma::mat matrixFInverted(matrixF);
+    if(maxlag != minlag){
+        if(!inv(matrixFInverted, matrixF)){
+            matrixFInverted = matrixF.t();
+        }
+    }
 
     for(int j=0; j<=nloops; j=j+1){
 /* ### Go forward ### */
@@ -1011,8 +1046,8 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
             materrors(i-maxlag) = errorf(vecYt(i-maxlag), matyfit(i-maxlag), E);
 
 /* # Transition equation */
-            matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S) +
-                                          gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % vecG * materrors(i-maxlag));
+            matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixFInverted, T, S) +
+                                          gvalue(matrixVt(lagrows), matrixFInverted, rowvecW, E, T, S) % vecG * materrors(i-maxlag));
 
 /* Failsafe for cases when unreasonable value for state vector was produced */
             if(!matrixVt.row(i).is_finite()){
@@ -1036,9 +1071,9 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
             matrixAt.row(i) = matrixAt.row(i+1) * matrixFX + bufferforat;
         }
 /* # Fill in the head of the matrices */
-        for (int i=maxlag-1; i>=0; i=i-1) {
+        for (int i=maxlag-1; i>0; i=i-1) {
             lagrows = backlags + i + 1;
-            matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S));
+            matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixFInverted, T, S));
             matrixAt.row(i) = matrixAt.row(i+1) * matrixFX;
         }
     }

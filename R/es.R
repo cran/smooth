@@ -256,10 +256,13 @@ BasicInitialiserES <- function(...){
         if(initialType!="p"){
             initialstates <- matrix(NA,1,4);
 # "-1" is needed, so the level would correspond to the values before the in-sample
+            #min(max(12,datafreq),obsNonzero)
             initialstates[1,2] <- cov(yot[1:min(12,obsNonzero)],c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero)));
-            initialstates[1,1] <- mean(yot[1:min(12,obsNonzero)]) - initialstates[1,2] * (mean(c(1:min(12,obsNonzero))) - 1);
-            initialstates[1,3] <- mean(yot[1:min(12,obsNonzero)]);
-            initialstates[1,4] <- 1;
+            initialstates[1,1] <- mean(yot[1:min(12,obsNonzero)]) - initialstates[1,2] * mean(c(1:min(12,obsNonzero)));
+            if(allowMultiplicative){
+                initialstates[1,4] <- exp(cov(log(yot[1:min(12,obsNonzero)]),c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero))));
+                initialstates[1,3] <- exp(mean(log(yot[1:min(12,obsNonzero)])) - log(initialstates[1,4]) * mean(c(1:min(12,obsNonzero))));
+            }
         }
         else{
             initialstates <- matrix(rep(initialValue,2),nrow=1);
@@ -433,9 +436,10 @@ BasicInitialiserES <- function(...){
 
 ##### Define modelDo #####
     if(any(persistenceEstimate, (initialType=="o"), initialSeasonEstimate*(initialType=="o"),
-           FXEstimate, gXEstimate, initialXEstimate)){
+           phiEstimate, FXEstimate, gXEstimate, initialXEstimate)){
         if(all(modelDo!=c("select","combine"))){
             modelDo <- "estimate";
+            current.model <- model;
         }
     }
     else{

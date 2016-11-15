@@ -1,7 +1,7 @@
-sim.ssarima <- function(ar.orders=0, i.orders=1, ma.orders=1, lags=1,
+sim.ssarima <- function(orders=list(ar=0,i=1,ma=1), lags=1,
                         frequency=1, AR=NULL, MA=NULL, constant=FALSE,
                         initial=NULL, bounds=c("admissible","none"),
-                        obs=10, nsim=1, silent=FALSE,
+                        obs=10, nsim=1,
                         randomizer=c("rnorm","runif","rbeta","rt"),
                         iprob=1, ...){
 # Function generates data using SSARIMA in Single Source of Error as a data generating process.
@@ -9,13 +9,38 @@ sim.ssarima <- function(ar.orders=0, i.orders=1, ma.orders=1, lags=1,
 
     bounds <- substring(bounds[1],1,1);
     randomizer <- randomizer[1];
+    args <- list(...);
+
+    if(!is.null(orders)){
+        ar.orders <- orders$ar;
+        i.orders <- orders$i;
+        ma.orders <- orders$ma;
+    }
+    else{
+        ar.orders <- 0;
+        i.orders <- 0;
+        ma.orders <- 0;
+    }
+
+    if("ar.orders" %in% names(args)){
+        ar.orders <- args$ar.orders;
+        args$ar.orders <- NULL;
+    }
+    if("i.orders" %in% names(args)){
+        i.orders <- args$i.orders;
+        args$i.orders <- NULL;
+    }
+    if("ma.orders" %in% names(args)){
+        ma.orders <- args$ma.orders;
+        args$ma.orders <- NULL;
+    }
 
 #### Elements Generator for AR and MA ####
 elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders=i.orders,
                               ARValue=ARValue, MAValue=MAValue,
                               ARGenerate=FALSE, MAGenerate=FALSE){
     componentsNumber <- max(ar.orders %*% lags + i.orders %*% lags,ma.orders %*% lags);
-    matvt <- matrix(1,5,componentsNumber+constantRequired);
+    matvt <- matrix(1,componentsNumber+constantRequired,componentsNumber+constantRequired);
     vecg <- matrix(0,componentsNumber+constantRequired,1);
     matF <- diag(componentsNumber+constantRequired);
 
@@ -234,12 +259,6 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     }
     maxlag <- 1;
 
-# In the case of wrong nsim, make it natural number. The same is for obs and frequency.
-    nsim <- abs(round(nsim,0));
-    obs <- abs(round(obs,0));
-    obsStates <- obs + 1;
-    frequency <- abs(round(frequency,0));
-
 #### Initials ####
     initialValue <- initial;
     initialGenerate <- FALSE;
@@ -262,6 +281,48 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     }
     else{
         initialGenerate <- TRUE;
+    }
+
+# In the case of wrong nsim, make it natural number. The same is for obs and frequency.
+    nsim <- abs(round(nsim,0));
+    obs <- abs(round(obs,0));
+    obsStates <- obs + 1;
+    frequency <- abs(round(frequency,0));
+
+    if(initialGenerate){
+        burnInPeriod <- max(lags);
+        obs <- obs + burnInPeriod;
+        obsStates <- obsStates + burnInPeriod;
+    }
+
+    if((componentsNumber==0) & !constantRequired){
+        warning("You have not defined any model. So here's series generated from your distribution.", call.=FALSE);
+        matyt <- materrors <- matrix(NA,obs,nsim);
+        if(length(args)==0){
+            materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,")")));
+        }
+        else{
+            materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,",", toString(as.character(args)),")")));
+        }
+        matot <- matrix(NA,obs,nsim);
+        # Generate values for occurence variable
+        if((iprob < 1) & (iprob > 0)){
+            matot[,] <- rbinom(obs*nsim,1,iprob);
+        }
+        else{
+            matot[,] <- 1;
+        }
+        matot <- ts(matot,frequency=frequency);
+        materrors <- ts(materrors,frequency=frequency);
+        matyt <- materrors;
+
+        veclikelihood <- -obs/2 *(log(2*pi*exp(1)) + log(colMeans(materrors^2)));
+        modelname <- "ARIMA(0,0,0)";
+        model <- list(model=modelname,
+                      AR=NULL, MA=NULL, constant=NA, initial=NULL,
+                      data=matyt, states=NULL, residuals=materrors,
+                      occurrences=matot, likelihood=veclikelihood);
+        return(structure(model,class="smooth.sim"));
     }
 
 ##### Preset values of matvt and other matrices and arrays ######
@@ -295,13 +356,15 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
 
     orderPlaceholder <- rep(0,length(ar.orders));
 #### Generate stuff if needed ####
-    if(initialGenerate){
-        matInitialValue[1:componentsNumber,] <- runif(componentsNumber*nsim,0,1000);
+    if(componentsNumber>0){
+        if(initialGenerate){
+            matInitialValue[1:componentsNumber,] <- runif(componentsNumber*nsim,0,1000);
+        }
+        else{
+            matInitialValue[1:componentsNumber,] <- rep(initialValue,nsim);
+        }
+        arrvt[1:componentsNumber,1,] <- matInitialValue[1:componentsNumber,];
     }
-    else{
-        matInitialValue[1:componentsNumber,] <- rep(initialValue,nsim);
-    }
-    arrvt[1,,] <- matInitialValue;
 
     if(ARRequired){
         if(ARGenerate){
@@ -364,15 +427,13 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     }
 
 # If the chosen randomizer is not rnorm, rt and runif and no parameters are provided, change to rnorm.
-    if(all(randomizer!=c("rnorm","rlnorm","rt","runif")) & (any(names(match.call(expand.dots=FALSE)[-1]) == "...")==FALSE)){
-        if(silent == FALSE){
-            warning(paste0("The chosen randomizer - ",randomizer," - needs some arbitrary parameters! Changing to 'rnorm' now."),call.=FALSE);
-        }
+    if(all(randomizer!=c("rnorm","rlnorm","rt","runif")) & (length(args)==0)){
+        warning(paste0("The chosen randomizer - ",randomizer," - needs some arbitrary parameters! Changing to 'rnorm' now."),call.=FALSE);
         randomizer = "rnorm";
     }
 
 # Check if any argument was passed in dots
-    if(any(names(match.call(expand.dots=FALSE)[-1]) == "...")==FALSE){
+    if(length(args)==0){
 # Create vector of the errors
         if(any(randomizer==c("rnorm","runif"))){
             materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,")")));
@@ -395,7 +456,7 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     }
 # If arguments are passed, use them. WE ASSUME HERE THAT USER KNOWS WHAT HE'S DOING!
     else{
-        materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,",", toString(as.character(list(...))),")")));
+        materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,",", toString(as.character(args)),")")));
         if(randomizer=="rbeta"){
 # Center the errors around 0
             materrors <- materrors - 0.5;
@@ -433,11 +494,19 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     arrvt <- simulateddata$arrvt;
     dimnames(arrvt) <- list(NULL,componentsNames,NULL);
 
+    if(initialGenerate){
+        matInitialValue[,] <- arrvt[burnInPeriod+1,,];
+        arrvt <- arrvt[-c(1:burnInPeriod),,];
+        materrors <- materrors[-c(1:burnInPeriod),];
+        matyt <- matyt[-c(1:burnInPeriod),];
+        matot <- matot[-c(1:burnInPeriod),];
+    }
+
     if(nsim==1){
-        matyt <- ts(matyt[,1],frequency=frequency);
-        materrors <- ts(materrors[,1],frequency=frequency);
-        arrvt <- ts(arrvt[,,1],frequency=frequency,start=c(0,frequency-maxlag+1));
-        matot <- ts(matot[,1],frequency=frequency);
+        matyt <- ts(matyt,frequency=frequency);
+        materrors <- ts(materrors,frequency=frequency);
+        arrvt <- ts(arrvt,frequency=frequency,start=c(0,frequency-maxlag+1));
+        matot <- ts(matot,frequency=frequency);
     }
     else{
         matyt <- ts(matyt,frequency=frequency);

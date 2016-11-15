@@ -16,7 +16,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     silent <- silent[1];
     # Fix for cases with TRUE/FALSE.
     if(!is.logical(silent)){
-        if(all(silent!=c("none","all","graph","legend","output","n","a","g","l","o"))){
+        if(all(silent!=c("none","all","graph","legend","output","debugging","n","a","g","l","o","d"))){
             warning(paste0("Sorry, I have no idea what 'silent=",silent,"' means. Switching to 'none'."),call.=FALSE);
             silent <- "none";
         }
@@ -45,6 +45,11 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         silentLegend <- TRUE;
     }
     else if(silentValue=="o"){
+        silentText <- TRUE;
+        silentGraph <- FALSE;
+        silentLegend <- FALSE;
+    }
+    else if(silentValue=="d"){
         silentText <- TRUE;
         silentGraph <- FALSE;
         silentLegend <- FALSE;
@@ -260,10 +265,6 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             stop("Right! Why don't you try complex lags then, mister smart guy?",call.=FALSE);
         }
 
-        if(length(lags)!=length(ar.orders) & length(lags)!=length(i.orders) & length(lags)!=length(ma.orders)){
-            stop("Seasonal lags do not correspond to any element of SARIMA",call.=FALSE);
-        }
-
         # If there are zero lags, drop them
         if(any(lags==0)){
             ar.orders <- ar.orders[lags!=0];
@@ -282,6 +283,10 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         }
         if(length(ma.orders)!=maxorder){
             ma.orders <- c(ma.orders,rep(0,maxorder-length(ma.orders)));
+        }
+
+        if((length(lags)!=length(ar.orders)) & (length(lags)!=length(i.orders)) & (length(lags)!=length(ma.orders))){
+            stop("Seasonal lags do not correspond to any element of SARIMA",call.=FALSE);
         }
 
         # If zeroes are defined for some orders, drop them.
@@ -325,7 +330,13 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                 ARValue <- NULL;
             }
             else{
-                if(sum(ar.orders)!=length(ARValue[ARValue!=0])){
+                if(is.matrix(ARValue)){
+                    ARLength <- length(ARValue[ARValue!=0]);
+                }
+                else{
+                    ARLength <- length(ARValue);
+                }
+                if(sum(ar.orders)!=ARLength){
                     warning(paste0("Wrong number of non-zero elements of AR. Should be ",sum(ar.orders),
                                     " instead of ",length(ARValue[ARValue!=0]),".\n",
                                    "AR will be estimated."),call.=FALSE);
@@ -333,7 +344,9 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                     ARValue <- NULL;
                 }
                 else{
-                    ARValue <- ARValue[ARValue!=0];
+                    if(is.matrix(ARValue)){
+                        ARValue <- ARValue[ARValue!=0];
+                    }
                     AREstimate <- FALSE;
                     ARRequired <- TRUE;
                 }
@@ -358,7 +371,13 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                 MAValue <- NULL;
             }
             else{
-                if(sum(ma.orders)!=length(MAValue[MAValue!=0])){
+                if(is.matrix(MAValue)){
+                    MALength <- length(MAValue[MAValue!=0]);
+                }
+                else{
+                    MALength <- length(MAValue);
+                }
+                if(sum(ma.orders)!=MALength){
                     warning(paste0("Wrong number of non-zero elements of MA. Should be ",sum(ma.orders),
                                     " instead of ",length(MAValue[MAValue!=0]),".\n",
                                    "MA will be estimated."),call.=FALSE);
@@ -366,7 +385,9 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                     MAValue <- NULL;
                 }
                 else{
-                    MAValue <- MAValue[MAValue!=0];
+                    if(is.matrix(MAValue)){
+                        MAValue <- MAValue[MAValue!=0];
+                    }
                     MAEstimate <- FALSE;
                     MARequired <- TRUE;
                 }
@@ -740,22 +761,30 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             }
             else{
                 if(modelType=="es"){
-                    if(length(persistence)>3){
-                        warning(paste0("Length of persistence vector is wrong! It should not be greater than 3.\n",
+                    if(modelDo!="estimate"){
+                        warning(paste0("Predefined persistence vector can only be used with preselected ETS model.\n",
                                        "Changing to estimation of persistence vector values."),call.=FALSE);
                         persistence <- NULL;
                         persistenceEstimate <- TRUE;
                     }
                     else{
-                        if(length(persistence)!=(1 + (Ttype!="N") + (Stype!="N"))){
-                            warning(paste0("Wrong length of persistence vector. Should be ",(1 + (Ttype!="N") + (Stype!="N")),
-                                           " instead of ",length(persistence),".\n",
+                        if(length(persistence)>3){
+                            warning(paste0("Length of persistence vector is wrong! It should not be greater than 3.\n",
                                            "Changing to estimation of persistence vector values."),call.=FALSE);
                             persistence <- NULL;
                             persistenceEstimate <- TRUE;
                         }
                         else{
-                            persistenceEstimate <- FALSE;
+                            if(length(persistence)!=(1 + (Ttype!="N") + (Stype!="N"))){
+                                warning(paste0("Wrong length of persistence vector. Should be ",(1 + (Ttype!="N") + (Stype!="N")),
+                                               " instead of ",length(persistence),".\n",
+                                               "Changing to estimation of persistence vector values."),call.=FALSE);
+                                persistence <- NULL;
+                                persistenceEstimate <- TRUE;
+                            }
+                            else{
+                                persistenceEstimate <- FALSE;
+                            }
                         }
                     }
                 }
@@ -1075,6 +1104,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         assign("modelDo",modelDo,ParentEnvironment);
         assign("initialSeason",initialSeason,ParentEnvironment);
         assign("phi",phi,ParentEnvironment);
+        assign("phiEstimate",phiEstimate,ParentEnvironment);
         assign("allowMultiplicative",allowMultiplicative,ParentEnvironment);
         assign("ic",ic,ParentEnvironment);
     }
@@ -1128,7 +1158,7 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
     silent <- silent[1];
     # Fix for cases with TRUE/FALSE.
     if(!is.logical(silent)){
-        if(all(silent!=c("none","all","graph","legend","output","n","a","g","l","o"))){
+        if(all(silent!=c("none","all","graph","legend","output","debugging","n","a","g","l","o","d"))){
             message(paste0("Sorry, I have no idea what 'silent=",silent,"' means. Switching to 'none'."));
             silent <- "none";
         }
@@ -1161,6 +1191,11 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
         silentGraph <- FALSE;
         silentLegend <- FALSE;
     }
+    else if(silentValue=="d"){
+        silentText <- TRUE;
+        silentGraph <- FALSE;
+        silentLegend <- FALSE;
+    }
 
     ##### Fisher Information #####
     if(!exists("FI")){
@@ -1185,6 +1220,8 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
 
 # Define obsAll, the overal number of observations (in-sample + holdout)
     obsAll <- length(data) + (1 - holdout)*h;
+
+    y <- data[1:obsInsample];
 
 # This is the critical minimum needed in order to at least fit ARIMA(0,0,0) with constant
     if(obsInsample < 4){
@@ -1302,7 +1339,6 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
         }
     }
     else{
-        y <- data[1:obsInsample];
         obsNonzero <- sum((y!=0)*1);
         intermittent <- intermittent[1];
         if(all(intermittent!=c("n","f","c","t","a","none","fixed","croston","tsb","auto"))){
@@ -1346,6 +1382,7 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
     assign("intervals",intervals,ParentEnvironment);
     assign("intervalsType",intervalsType,ParentEnvironment);
     assign("intermittent",intermittent,ParentEnvironment);
+    assign("y",y,ParentEnvironment);
 }
 
 ##### *ssFitter function* #####
@@ -2203,11 +2240,11 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
 
 ### Stuff for ARIMA
     if(model=="ARIMA"){
-        if(all(!is.null(ARterms),any(ARterms!=0))){
+        if(all(!is.null(ARterms))){
             cat("Matrix of AR terms:\n");
             print(round(ARterms,3));
         }
-        if(all(!is.null(MAterms),any(MAterms!=0))){
+        if(all(!is.null(MAterms))){
             cat("Matrix of MA terms:\n");
             print(round(MAterms,3));
         }
