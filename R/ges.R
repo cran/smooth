@@ -86,7 +86,8 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)),
     Stype <- "N";
 
 # Check number of parameters vs data
-    n.param.max <- n.param.max + FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
+    n.param.exo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
+    n.param.max <- n.param.max + n.param.exo + (intermittent!="n");
 
 ##### Check number of observations vs number of max parameters #####
     if(obsNonzero <= n.param.max){
@@ -394,10 +395,6 @@ CreatorGES <- function(silentText=FALSE,...){
     ssForecaster(ParentEnvironment=environment());
 
 ##### Do final check and make some preparations for output #####
-    if(any(is.na(y.fit),is.na(y.for))){
-        warning("Something went wrong during the optimisation and NAs were produced!",call.=FALSE,immediate.=TRUE);
-        warning("Please check the input and report this error to the maintainer if it persists.",call.=FALSE,immediate.=TRUE);
-    }
 
 # Write down initials of states vector and exogenous
     if(initialType!="p"){

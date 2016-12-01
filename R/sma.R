@@ -82,7 +82,13 @@ CreatorSMA <- function(silentText=FALSE,...){
     }
     vecg <- matrix(1/n.components,n.components);
     matvt <- matrix(NA,obsStates,n.components);
-    matvt[1,] <- rep(mean(y[1:order]),n.components);
+    matvt[1:n.components,1] <- rep(mean(y[1:n.components]),n.components);
+    if(n.components>1){
+        for(i in 2:n.components){
+            matvt[1:(n.components-i+1),i] <- matvt[1:(n.components-i+1)+1,i-1] - matvt[1:(n.components-i+1),1] * matF[i-1,1];
+        }
+    }
+
     modellags <- rep(1,n.components);
 
 ##### Prepare exogenous variables #####
@@ -133,10 +139,6 @@ CreatorSMA <- function(silentText=FALSE,...){
     ssForecaster(ParentEnvironment=environment());
 
 ##### Do final check and make some preparations for output #####
-    if(any(is.na(y.fit),is.na(y.for))){
-        warning("Something went wrong during the optimisation and NAs were produced!",call.=FALSE,immediate.=TRUE);
-        warning("Please check the input and report this error to the maintainer if it persists.",call.=FALSE,immediate.=TRUE);
-    }
 
     if(holdout==T){
         y.holdout <- ts(data[(obsInsample+1):obsAll],start=start(y.for),frequency=frequency(data));
