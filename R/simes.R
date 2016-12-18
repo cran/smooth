@@ -360,21 +360,21 @@ sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
     veclikelihood <- -obs/2 *(log(2*pi*exp(1)) + log(colMeans(materrors^2)));
 
 # Generate ones for the possible intermittency
-    if(all(iprob < 1) & all(iprob > 0)){
-        matot[,] <- rbinom(obs*nsim,1,iprob);
+    if(all(iprob == 1)){
+        matot[,] <- 1;
     }
     else{
-        matot[,] <- 1;
+        matot[,] <- rbinom(obs*nsim,1,iprob);
     }
 
 #### Simulate the data ####
     simulateddata <- simulatorwrap(arrvt,materrors,matot,arrF,matw,matg,Etype,Ttype,Stype,modellags);
 
-    if(all(iprob < 1) & all(iprob > 0)){
-        matyt <- round(simulateddata$matyt,0);
+    if(all(iprob == 1)){
+        matyt <- simulateddata$matyt;
     }
     else{
-        matyt <- simulateddata$matyt;
+        matyt <- round(simulateddata$matyt,0);
     }
     arrvt <- simulateddata$arrvt;
     dimnames(arrvt) <- list(NULL,componentsNames,NULL);
@@ -404,6 +404,6 @@ sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
     }
 
     model <- list(model=model, data=matyt, states=arrvt, persistence=matg, phi=phi,
-                residuals=materrors, occurrences=matot, likelihood=veclikelihood);
+                  residuals=materrors, occurrences=matot, logLik=veclikelihood);
     return(structure(model,class="smooth.sim"));
 }

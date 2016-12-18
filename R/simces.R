@@ -287,21 +287,21 @@ sim.ces <- function(seasonality=c("none","simple","partial","full"),
     veclikelihood <- -obs/2 *(log(2*pi*exp(1)) + log(colMeans(materrors^2)));
 
 # Generate ones for the possible intermittency
-    if(all(iprob < 1) & all(iprob > 0)){
-        matot[,] <- rbinom(obs*nsim,1,iprob);
+    if(all(iprob == 1)){
+        matot[,] <- 1;
     }
     else{
-        matot[,] <- 1;
+        matot[,] <- rbinom(obs*nsim,1,iprob);
     }
 
 #### Simulate the data ####
     simulateddata <- simulatorwrap(arrvt,materrors,matot,arrF,matw,matg,"A","N","N",modellags);
 
-    if(all(iprob < 1) & all(iprob > 0)){
-        matyt <- round(simulateddata$matyt,0);
+    if(all(iprob == 1)){
+        matyt <- simulateddata$matyt;
     }
     else{
-        matyt <- simulateddata$matyt;
+        matyt <- round(simulateddata$matyt,0);
     }
     arrvt <- simulateddata$arrvt;
     dimnames(arrvt) <- list(NULL,componentsNames,NULL);
@@ -335,6 +335,6 @@ sim.ces <- function(seasonality=c("none","simple","partial","full"),
     model <- list(model=modelname,
                   A=AValue, B=BValue, initial=matInitialValue,
                   data=matyt, states=arrvt, residuals=materrors,
-                  occurrences=matot, likelihood=veclikelihood);
+                  occurrences=matot, logLik=veclikelihood);
     return(structure(model,class="smooth.sim"));
 }

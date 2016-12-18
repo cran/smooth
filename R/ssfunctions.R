@@ -191,7 +191,11 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                                  "AAA","AAM","AMA","AMM","MAA","MAM","MMA","MMM",
                                  "AAdA","AAdM","AMdA","AMdM","MAdA","MAdM","MMdA","MMdM");
                 if(datafreq==1){
+                    if(!silentText){
+                        message("The provided data has frequency of 1. Only non-seasonal models are available.");
+                    }
                     Stype <- "N";
+                    substr(model,nchar(model),nchar(model)) <- "N";
                 }
                 # Restrict error types in the pool
                 if(Etype=="X"){
@@ -446,6 +450,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                 message("The provided data is not ts object. Only non-seasonal models are available.");
             }
             Stype <- "N";
+            substr(model,nchar(model),nchar(model)) <- "N";
         }
 
         ### Check seasonality type
@@ -708,7 +713,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     }
     else{
         intermittent <- intermittent[1];
-        if(all(intermittent!=c("n","f","c","t","a","none","fixed","croston","tsb","auto"))){
+        if(all(intermittent!=c("n","f","c","t","a","s","none","fixed","croston","tsb","auto","sba"))){
             warning(paste0("Strange type of intermittency defined: '",intermittent,"'. Switching to 'fixed'."),
                     call.=FALSE);
             intermittent <- "f";
@@ -735,7 +740,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     }
 
     # If the data is not intermittent, let's assume that the parameter was switched unintentionally.
-    if(pt[1,]==1 & all(intermittent!=c("n","p"))){
+    if(all(pt==1) & all(intermittent!=c("n","p"))){
         intermittent <- "n";
     }
 
@@ -1361,7 +1366,7 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
     else{
         obsNonzero <- sum((y!=0)*1);
         intermittent <- intermittent[1];
-        if(all(intermittent!=c("n","f","c","t","a","none","fixed","croston","tsb","auto"))){
+        if(all(intermittent!=c("n","f","c","t","a","s","none","fixed","croston","tsb","auto","sba"))){
             warning(paste0("Strange type of intermittency defined: '",intermittent,"'. Switching to 'fixed'."),
                     call.=FALSE);
             intermittent <- "f";
@@ -1654,8 +1659,8 @@ quantfunc <- function(A){
                     }
                 }
                 # Produce quantiles for log-normal dist with the specified variance
-                upperquant <- qlnorm(0.975,0,sqrt(vec.var));
-                lowerquant <- qlnorm(0.025,0,sqrt(vec.var));
+                upperquant <- qlnorm((1+level)/2,0,sqrt(vec.var));
+                lowerquant <- qlnorm((1-level)/2,0,sqrt(vec.var));
                 # These two allow to return mean instead of median...
                 #vec.mean <- exp((vec.var)/2);
                 #y.for <- exp(log(y.for) + (vec.var)/2);
@@ -2234,6 +2239,9 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
         }
         else if(any(intermittent==c("t","tsb"))){
             intermittent <- "TSB";
+        }
+        else if(any(intermittent==c("s","sba"))){
+            intermittent <- "Croston with SBA";
         }
         cat(paste0("Intermittent model type: ",intermittent));
         if(iprob!=1){

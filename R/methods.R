@@ -5,127 +5,45 @@ lags <- function(object, ...) UseMethod("lags")
 modelType <-  function(object, ...) UseMethod("modelType")
 
 ##### Likelihood function
-#logLik.smooth <- function(object,...)
-#{
-#  structure(object$logLik,df=length(coef(object)),class="logLik");
-#}
+logLik.smooth <- function(object,...){
+    structure(object$logLik,df=object$nParam,class="logLik");
+}
+logLik.smooth.sim <- function(object,...){
+    structure(object$logLik,df=0,class="logLik");
+}
+logLik.iss <- function(object,...){
+    structure(object$logLik,df=object$nParam,class="logLik");
+}
+
+nobs.smooth <- function(object, ...){
+    return(length(object$fitted));
+}
+nobs.smooth.sim <- function(object, ...){
+    if(is.null(dim(object$data))){
+        return(length(object$data));
+    }
+    else{
+        return(nrow(object$data));
+    }
+}
+nobs.iss <- function(object, ...){
+    return(length(object$fitted));
+}
 
 ##### IC functions #####
-AIC.smooth <- function(object, ...){
-    if(gregexpr("ETS",object$model)!=-1){
-        if(any(unlist(gregexpr("C",object$model))==-1)){
-            IC <- object$ICs["AIC"];
-        }
-        else{
-            if(substring(names(object$ICs),10,nchar(names(object$ICs)))=="AIC"){
-                IC <- object$ICs;
-            }
-            else{
-                message("ICs were combined during the model construction. Nothing to return.");
-                IC <- NA;
-            }
-        }
-    }
-    else if(gregexpr("ARIMA",object$model)!=-1){
-        if(any(unlist(gregexpr("combine",object$model))==-1)){
-            IC <- object$ICs["AIC"];
-        }
-        else{
-            if(substring(names(object$ICs),10,nchar(names(object$ICs)))=="AIC"){
-                IC <- object$ICs;
-            }
-            else{
-                message("ICs were combined during the model construction. Nothing to return.");
-                IC <- NA;
-            }
-        }
-    }
-    else{
-        IC <- object$ICs["AIC"];
-    }
-
-    return(IC);
-}
-
 AICc.default <- function(object, ...){
-    if(!is.null(object$model)){
-        if(gregexpr("ETS",object$model)!=-1){
-            if(any(unlist(gregexpr("C",object$model))==-1)){
-                IC <- object$ICs["AICc"];
-            }
-            else{
-                if(substring(names(object$ICs),10,nchar(names(object$ICs)))=="AICc"){
-                    IC <- object$ICs;
-                }
-                else{
-                    message("ICs were combined during the model construction. Nothing to return.");
-                    IC <- NA;
-                }
-            }
-        }
-        else{
-            IC <- object$ICs["AICc"];
-        }
-    }
-    else if(gregexpr("ARIMA",object$model)!=-1){
-        if(any(unlist(gregexpr("combine",object$model))==-1)){
-            IC <- object$ICs["AICc"];
-        }
-        else{
-            if(substring(names(object$ICs),10,nchar(names(object$ICs)))=="AICc"){
-                IC <- object$ICs;
-            }
-            else{
-                message("ICs were combined during the model construction. Nothing to return.");
-                IC <- NA;
-            }
-        }
+    if(!is.null(object$x)){
+        obs <- length(object$x);
     }
     else{
-        if(any(gregexpr("ets",object$call)!=-1)){
-            IC <- object$aicc;
-        }
-        else{
-            message("AICc is not available for the provided class.");
-            IC <- NA;
-        }
+        obs <- nobs(object);
     }
 
-    return(IC);
-}
+    llikelihood <- logLik(object);
+    nParam <- attributes(llikelihood)$df;
+    llikelihood <- llikelihood[1:length(llikelihood)];
 
-BIC.smooth <- function(object, ...){
-    if(gregexpr("ETS",object$model)!=-1){
-        if(any(unlist(gregexpr("C",object$model))==-1)){
-            IC <- object$ICs["BIC"];
-        }
-        else{
-            if(substring(names(object$ICs),10,nchar(names(object$ICs)))=="BIC"){
-                IC <- object$ICs;
-            }
-            else{
-                message("ICs were combined during the model construction. Nothing to return.");
-                IC <- NULL;
-            }
-        }
-    }
-    else if(gregexpr("ARIMA",object$model)!=-1){
-        if(any(unlist(gregexpr("combine",object$model))==-1)){
-            IC <- object$ICs["BIC"];
-        }
-        else{
-            if(substring(names(object$ICs),10,nchar(names(object$ICs)))=="BIC"){
-                IC <- object$ICs;
-            }
-            else{
-                message("ICs were combined during the model construction. Nothing to return.");
-                IC <- NA;
-            }
-        }
-    }
-    else{
-        IC <- object$ICs["BIC"];
-    }
+    IC <- 2*nParam - 2*llikelihood + 2 * nParam * (nParam + 1) / (obs - nParam - 1);
 
     return(IC);
 }
@@ -463,7 +381,7 @@ print.smooth.sim <- function(x, ...){
             if(x$phi!=1){
                 cat(paste0("Phi: ",x$phi,"\n"));
             }
-            cat(paste0("True likelihood: ",round(x$likelihood,3),"\n"));
+            cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
         }
         else if(gregexpr("ARIMA",x$model)!=-1){
             ar.orders <- orders(x)$ar;
@@ -524,7 +442,7 @@ print.smooth.sim <- function(x, ...){
             if(!is.na(x$constant)){
                 cat(paste0("Constant value: ",round(x$constant,3),"\n"));
             }
-            cat(paste0("True likelihood: ",round(x$likelihood,3),"\n"));
+            cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
         }
         else if(gregexpr("CES",x$model)!=-1){
             cat(paste0("Smoothing parameter A: ",round(x$A,3),"\n"));
@@ -536,7 +454,7 @@ print.smooth.sim <- function(x, ...){
                     cat(paste0("Smoothing parameter b: ",round(x$B,3),"\n"));
                 }
             }
-            cat(paste0("True likelihood: ",round(x$likelihood,3),"\n"));
+            cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
         }
     }
 }
@@ -570,10 +488,14 @@ print.iss <- function(x, ...){
     else{
         intermittent <- "None";
     }
+    ICs <- round(c(AIC(x),AICc(x),BIC(x)),4);
+    names(ICs) <- c("AIC","AICc","BIC");
     cat(paste0("Intermittent State-Space model estimated: ",intermittent,"\n"));
     cat(paste0("Smoothing parameter: ",round(x$C[1],3),"\n"));
     cat(paste0("Initial value: ",round(x$states[1],3),"\n"));
     cat(paste0("Probability forecast: ",round(x$forecast[1],3),"\n"));
+    cat("Information criteria: \n");
+    print(ICs);
 }
 
 #### Simulate data using provided object ####

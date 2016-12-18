@@ -1,3 +1,20 @@
+smooth v1.5.2 (Release date: 2016-12-18)
+==============
+
+Changes:
+
+* Instead of having dozens of methods based on AIC and BIC, we now have logLik, nobs and AICc.default. The latter should also work with other, non smooth, classes (e.g. "ets","lm").
+* sim functions now return likelihood via logLik value rather than "likelihood". This allows using logLik, AIC and other functions.
+* iss function now also does the same...
+* Introduced "SBA" as a separate method for intermittent demand.
+
+Bugfixes:
+
+* Parametric prediction intervals for iSS models always had width of 95%. This is now fixed.
+* Corrected bug in Croston's iSS, where the last observation of data was included as non-zero demand.
+* Fixed a bug when MNN was fit to intermittent data without intermittency.
+
+
 smooth v1.5.1 (Release date: 2016-11-30)
 ==============
 
