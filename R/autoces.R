@@ -1,6 +1,6 @@
 utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"));
 
-auto.ces <- function(data, C=c(1.1, 1), models=c("none","simple","full"),
+auto.ces <- function(data, models=c("none","simple","full"),
                 initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC"),
                 cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
                 h=10, holdout=FALSE,
@@ -8,7 +8,8 @@ auto.ces <- function(data, C=c(1.1, 1), models=c("none","simple","full"),
                 intermittent=c("none","auto","fixed","croston","tsb","sba"),
                 bounds=c("admissible","none"),
                 silent=c("none","all","graph","legend","output"),
-                xreg=NULL, updateX=FALSE, ...){
+                xreg=NULL, xregDo=c("use","select"), initialX=NULL,
+                updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 # Function estimates several CES models in state-space form with sigma = error,
 #  chooses the one with the lowest ic value and returns complex smoothing parameter
 #  value, fitted values, residuals, point and interval forecasts, matrix of CES components
@@ -56,14 +57,15 @@ auto.ces <- function(data, C=c(1.1, 1), models=c("none","simple","full"),
         message("The data is not seasonal. Simple CES was the only solution here.");
         }
 
-        CESModel <- ces(data, C=C, seasonality="n",
-                        initial=initialType,
+        CESModel <- ces(data, seasonality="n",
+                        initial=initialType, ic=ic,
                         cfType=cfType,
                         h=h, holdout=holdout,
                         intervals=intervals, level=level,
                         intermittent=intermittent,
                         bounds=bounds, silent=silent,
-                        xreg=xreg, updateX=updateX, FI=FI);
+                        xreg=xreg, xregDo=xregDo, initialX=initialX,
+                        updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
         return(CESModel);
     }
 
@@ -96,14 +98,15 @@ auto.ces <- function(data, C=c(1.1, 1), models=c("none","simple","full"),
         if(silentText==FALSE){
             cat(paste0('"',i,'" '));
         }
-        CESModel[[j]] <- ces(data, C=C, seasonality=i,
-                             initial=initialType,
+        CESModel[[j]] <- ces(data, seasonality=i,
+                             initial=initialType, ic=ic,
                              cfType=cfType,
                              h=h, holdout=holdout,
                              intervals=intervals, level=level,
                              intermittent=intermittent,
                              bounds=bounds, silent=TRUE,
-                             xreg=xreg, updateX=updateX, FI=FI);
+                             xreg=xreg, xregDo=xregDo, initialX=initialX,
+                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
         IC.vector[j] <- CESModel[[j]]$ICs[ic];
         j <- j+1;
     }

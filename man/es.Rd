@@ -16,7 +16,8 @@ es(data, model="ZZZ", persistence=NULL, phi=NULL,
    intermittent=c("none","auto","fixed","croston","tsb","sba"),
    bounds=c("usual","admissible","none"),
    silent=c("none","all","graph","legend","output"),
-   xreg=NULL, initialX=NULL, updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...)
+   xreg=NULL, xregDo=c("use","select"), initialX=NULL,
+   updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
@@ -90,6 +91,9 @@ es(data, model="ZZZ", persistence=NULL, phi=NULL,
   \item{xreg}{
     Vector (either numeric or time series) or matrix (or data.frame) of exogenous variables that should be included in the model. If matrix included than columns should contain variables and rows - observations. Note that \code{xreg} should have number of observations equal either to in-sample or to the whole series. If the number of observations in \code{xreg} is equal to in-sample, then values for the holdout sample are produced using Naive.
   }
+  \item{xregDo}{
+    Variable defines what to do with the provided xreg: \code{"use"} means that all of the data should be used, whilie \code{"select"} means that a selection using \code{ic} should be done. \code{"combine"} will be available at some point in future...
+  }
   \item{initialX}{
     Vector of initial parameters for exogenous variables. Ignored if \code{xreg} is NULL.
   }
@@ -146,7 +150,7 @@ For the details see Hyndman et al.(2008).
     \item \code{holdout} - holdout part of the original data.
     \item \code{iprob} - fitted and forecasted values of the probability of demand occurrence.
     \item \code{intermittent} - type of intermittent model fitted to the data.
-    \item \code{xreg} - provided vector or matrix of exogenous variables.
+    \item \code{xreg} - provided vector or matrix of exogenous variables. If \code{xregDo="s"}, then this value will contain only selected exogenous variables.
     \item \code{updateX} - boolean, defining, if the states of exogenous variables were estimated as well.
     \item \code{initialX} - initial values for parameters of exogenous variables.
     \item \code{persistenceX} - persistence vector g for exogenous variables.
@@ -170,7 +174,7 @@ For the details see Hyndman et al.(2008).
     \item \code{lower},
     \item \code{upper},
     \item \code{residuals},
-    \item \code{s2},
+    \item \code{s2} - variance of additive error of combined one-step-ahead forecasts,
     \item \code{intervals},
     \item \code{level},
     \item \code{actuals},
@@ -228,7 +232,7 @@ ourModel <- es(M3$N1587$x,model=c("ANN","AAM","AMdA"),h=18)
 es(M3$N1587$x,model=ourModel,h=18,intervals="p")
 
 # Semiparametric intervals example
-es(M3$N1587$x,h=18,holdout=TRUE,intervals="sp")
+\dontrun{es(M3$N1587$x,h=18,holdout=TRUE,intervals="sp")}
 
 # Exogenous variables in ETS example
 \dontrun{x <- cbind(c(rep(0,25),1,rep(0,43)),c(rep(0,10),1,rep(0,58)))

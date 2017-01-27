@@ -10,14 +10,15 @@ Function constructs State-Space ARIMA, estimating AR, MA terms and initial state
 \usage{
 ssarima(data, orders=list(ar=0,i=c(1),ma=c(1)), lags=c(1),
   constant=FALSE, AR=NULL, MA=NULL,
-  initial=c("backcasting","optimal"),
+  initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC"),
   cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
   h=10, holdout=FALSE,
   intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
   intermittent=c("none","auto","fixed","croston","tsb","sba"),
   bounds=c("admissible","none"),
   silent=c("none","all","graph","legend","output"),
-  xreg=NULL, initialX=NULL, updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...)
+  xreg=NULL, xregDo=c("use","select"), initialX=NULL,
+  updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
@@ -42,6 +43,9 @@ ssarima(data, orders=list(ar=0,i=c(1),ma=c(1)), lags=c(1),
   }
   \item{initial}{
     Can be either character or a vector of initial states. If it is character, then it can be \code{"optimal"}, meaning that the initial states are optimised, or \code{"backcasting"}, meaning that the initials are produced using backcasting procedure (advised for data with high frequency). If character, then \code{initial.season} will be estimated in the way defined by \code{initial}.
+  }
+  \item{ic}{
+    Information criterion to use in model selection.
   }
   \item{cfType}{
     Type of Cost Function used in optimization. \code{cfType} can be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error), \code{HAM} (Half Absolute Moment), \code{MLSTFE} - Mean Log Squared Trace Forecast Error, \code{MSTFE} - Mean Squared Trace Forecast Error and \code{MSEh} - optimisation using only h-steps ahead error. If \code{cfType!="MSE"}, then likelihood and model selection is done based on equivalent \code{MSE}. Model selection in this cases becomes not optimal.
@@ -83,6 +87,9 @@ ssarima(data, orders=list(ar=0,i=c(1),ma=c(1)), lags=c(1),
   }
   \item{xreg}{
     Vector (either numeric or time series) or matrix (or data.frame) of exogenous variables that should be included in the model. If matrix included than columns should contain variables and rows - observations. Note that \code{xreg} should have number of observations equal either to in-sample or to the whole series. If the number of observations in \code{xreg} is equal to in-sample, then values for the holdout sample are produced using Naive.
+  }
+  \item{xregDo}{
+    Variable defines what to do with the provided xreg: \code{"use"} means that all of the data should be used, whilie \code{"select"} means that a selection using \code{ic} should be done. \code{"combine"} will be available at some point in future...
   }
   \item{initialX}{
     Vector of initial parameters for exogenous variables. Ignored if \code{xreg} is NULL.
@@ -148,7 +155,7 @@ Due to the flexibility of the model, multiple seasonalities can be used. For exa
     \item \code{holdout} - the holdout part of the original data.
     \item \code{iprob} - the fitted and forecasted values of the probability of demand occurrence.
     \item \code{intermittent} - type of intermittent model fitted to the data.
-    \item \code{xreg} - the provided vector or matrix of exogenous variables.
+    \item \code{xreg} - provided vector or matrix of exogenous variables. If \code{xregDo="s"}, then this value will contain only selected exogenous variables.
     \item \code{updateX} - boolean, defining, if the states of exogenous variables were estimated as well.
     \item \code{initialX} - initial values for parameters of exogenous variables.
     \item \code{persistenceX} - persistence vector g for exogenous variables.
@@ -214,8 +221,8 @@ ssarima(rnorm(118,100,3),orders=list(ar=1,i=1,ma=1),lags=1,h=18,holdout=TRUE,cfT
 ssarima(rnorm(118,100,3),orders=list(i=1,ma=1),h=18,holdout=TRUE,xreg=c(1:118))
 
 # SARIMA(0,1,1) with exogenous variables with crazy estimation of xreg
-ourModel <- ssarima(rnorm(118,100,3),orders=list(i=1,ma=1),h=18,holdout=TRUE,
-                    xreg=c(1:118),updateX=TRUE)
+\dontrun{ourModel <- ssarima(rnorm(118,100,3),orders=list(i=1,ma=1),h=18,holdout=TRUE,
+                    xreg=c(1:118),updateX=TRUE)}
 
 summary(ourModel)
 forecast(ourModel)

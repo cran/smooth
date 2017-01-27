@@ -9,7 +9,8 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                          intermittent=c("none","auto","fixed","croston","tsb","sba"),
                          bounds=c("admissible","none"),
                          silent=c("none","all","graph","legend","output"),
-                         xreg=NULL, updateX=FALSE, ...){
+                         xreg=NULL, xregDo=c("use","select"), initialX=NULL,
+                         updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 # Function estimates several ssarima models and selects the best one using the selected information criterion.
 #
 #    Copyright (C) 2015 - 2016  Ivan Svetunkov
@@ -140,29 +141,29 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
     }
 
 # 1 stands for constant, the other one stands for variance
-    n.param.max <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+    nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
 
 # Try to figure out if the number of parameters can be tuned in order to fit something smaller on small samples
 # Don't try to fix anything if the number of seasonalities is greater than 2
     if(length(lags)<=2){
-        if(obsInsample <= n.param.max){
+        if(obsInsample <= nParamMax){
             arma.length <- length(ar.max);
-            while(obsInsample <= n.param.max){
+            while(obsInsample <= nParamMax){
                 if(any(c(ar.max[arma.length],ma.max[arma.length])>0)){
                     ar.max[arma.length] <- max(0,ar.max[arma.length] - 1);
-                    n.param.max <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
-                    if(obsInsample <= n.param.max){
+                    nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+                    if(obsInsample <= nParamMax){
                         ma.max[arma.length] <- max(0,ma.max[arma.length] - 1);
-                        n.param.max <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+                        nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
                     }
                 }
                 else{
                     if(arma.length==2){
                         ar.max[1] <- ar.max[1] - 1;
-                        n.param.max <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
-                        if(obsInsample <= n.param.max){
+                        nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+                        if(obsInsample <= nParamMax){
                             ma.max[1] <- ma.max[1] - 1;
-                            n.param.max <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+                            nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
                         }
                     }
                     else{
@@ -172,12 +173,12 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                 if(all(c(ar.max,ma.max)==0)){
                     if(i.max[arma.length]>0){
                         i.max[arma.length] <- max(0,i.max[arma.length] - 1);
-                        n.param.max <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+                        nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
                     }
                     else if(i.max[1]>0){
-                        if(obsInsample <= n.param.max){
+                        if(obsInsample <= nParamMax){
                             i.max[1] <- max(0,i.max[1] - 1);
-                            n.param.max <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+                            nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
                         }
                     }
                     else{
@@ -186,13 +187,13 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                 }
 
             }
-                n.param.max <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+                nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
         }
     }
 
-    if(obsInsample <= n.param.max){
+    if(obsInsample <= nParamMax){
         message(paste0("Not enough observations for the reasonable fit. Number of possible parameters is ",
-                        n.param.max," while the number of observations is ",obsInsample,"!"));
+                        nParamMax," while the number of observations is ",obsInsample,"!"));
         stop("Redefine maximum orders and try again.",call.=FALSE)
     }
 
@@ -247,7 +248,8 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                              h=h,holdout=holdout,
                              intervals=intervals,level=level,
                              intermittent=intermittent,silent=TRUE,
-                             xreg=xreg,updateX=updateX,FI=FI);
+                             xreg=xreg, xregDo=xregDo, initialX=initialX,
+                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
         return(bestModel);
     }
 
@@ -280,7 +282,8 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                  h=h,holdout=holdout,
                                  intervals=intervals,level=level,
                                  intermittent=intermittent,silent=TRUE,
-                                 xreg=xreg,updateX=updateX,FI=FI);
+                                 xreg=xreg, xregDo=xregDo, initialX=initialX,
+                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
             ICValue <- testModel$ICs[ic];
             if(combine){
                 testForecasts[[m]] <- matrix(NA,h,3);
@@ -343,7 +346,8 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                                  h=h,holdout=FALSE,
                                                  intervals=intervals,level=level,
                                                  intermittent=intermittent,silent=TRUE,
-                                                 xreg=xreg,updateX=updateX,FI=FI);
+                                                 xreg=NULL, xregDo="use", initialX=initialX,
+                                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
                             ICValue <- icCorrector(testModel$ICs[ic], nParamMA, obsInsample, nParamNew);
                             if(combine){
                                 testForecasts[[m]] <- matrix(NA,h,3);
@@ -405,7 +409,8 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                                                  h=h,holdout=FALSE,
                                                                  intervals=intervals,level=level,
                                                                  intermittent=intermittent,silent=TRUE,
-                                                                 xreg=xreg,updateX=updateX,FI=FI);
+                                                                 xreg=NULL, xregDo="use", initialX=initialX,
+                                                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
                                             ICValue <- icCorrector(testModel$ICs[ic], nParamAR, obsInsample, nParamNew);
                                             if(combine){
                                                 testForecasts[[m]] <- matrix(NA,h,3);
@@ -467,7 +472,8 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                              h=h,holdout=holdout,
                              intervals=intervals,level=level,
                              intermittent=intermittent,silent=TRUE,
-                             xreg=xreg,updateX=updateX,FI=FI);
+                             xreg=NULL, xregDo="use", initialX=initialX,
+                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
         ICValue <- testModel$ICs[ic];
         if(combine){
             testForecasts[[m]] <- matrix(NA,h,3);
@@ -532,7 +538,8 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                           fitted=y.fit,forecast=y.for,
                           lower=y.low,upper=y.high,residuals=errors,s2=s2,intervals=intervals,level=level,
                           actuals=data,holdout=y.holdout,intermittent=intermittent,
-                          xreg=xreg,updateX=updateX,
+                          xreg=xreg, xregDo=xregDo, initialX=initialX,
+                          updateX=updateX, persistenceX=persistenceX, transitionX=transitionX,
                           ICs=ICs,ICw=icWeights,cf=NULL,cfType=cfType,accuracy=errormeasures);
 
         bestModel <- structure(bestModel,class="smooth");
@@ -545,7 +552,8 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                  h=h,holdout=holdout,
                                  intervals=intervals,level=level,
                                  intermittent=intermittent,silent=TRUE,
-                                 xreg=xreg,updateX=updateX,FI=FI);
+                                 xreg=xreg, xregDo=xregDo, initialX=initialX,
+                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
         }
 
         y.fit <- bestModel$fitted;

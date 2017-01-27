@@ -8,7 +8,7 @@
   Function estimates CES in state-space form with information potential equal to errors with different seasonality types and chooses the one with the lowest IC value.
 }
 \usage{
-auto.ces(data, C=c(1.1, 1), models=c("none","simple","full"),
+auto.ces(data, models=c("none","simple","full"),
          initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC"),
          cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
          h=10, holdout=FALSE,
@@ -16,15 +16,13 @@ auto.ces(data, C=c(1.1, 1), models=c("none","simple","full"),
          intermittent=c("none","auto","fixed","croston","tsb","sba"),
          bounds=c("admissible","none"),
          silent=c("none","all","graph","legend","output"),
-         xreg=NULL, updateX=FALSE, ...)
+         xreg=NULL, xregDo=c("use","select"), initialX=NULL,
+         updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
   \item{data}{
     Either numeric vector or time series vector.
-  }
-  \item{C}{
-    The initial value of complex smoothing parameter, where C[1] = a0, C[2] = a1.
   }
   \item{models}{
     The vector containing several types of seasonality that should be used in CES selection. See \link[smooth]{ces} for more details about the possible types of seasonal models.
@@ -78,11 +76,24 @@ auto.ces(data, C=c(1.1, 1), models=c("none","simple","full"),
   \item{xreg}{
     Vector (either numeric or time series) or matrix (or data.frame) of exogenous variables that should be included in the model. If matrix included than columns should contain variables and rows - observations. Note that \code{xreg} should have number of observations equal either to in-sample or to the whole series. If the number of observations in \code{xreg} is equal to in-sample, then values for the holdout sample are produced using Naive.
   }
+  \item{xregDo}{
+    Variable defines what to do with the provided xreg: \code{"nothing"} means that all of the data should be used, whilie \code{"select"} means that a selection using \code{ic} should be done. \code{"combine"} will be available at some point in future...
+  }
+  \item{initialX}{
+    Vector of initial parameters for exogenous variables. Ignored if \code{xreg} is NULL.
+  }
   \item{updateX}{
     If \code{TRUE}, transition matrix for exogenous variables is estimated, introducing non-linear interractions between parameters. Prerequisite - non-NULL \code{xreg}.
   }
+  \item{persistenceX}{
+    Persistence vector \eqn{g_X}, containing smoothing parameters for exogenous variables. If \code{NULL}, then estimated. Prerequisite - non-NULL \code{xreg}.
+  }
+  \item{transitionX}{
+    Transition matrix \eqn{F_x} for exogenous variables. Can be provided as a vector. Matrix will be formed using the default \code{matrix(transition,nc,nc)}, where \code{nc} is number of components in state vector. If \code{NULL}, then estimated. Prerequisite - non-NULL \code{xreg}.
+  }
   \item{...}{
-    Other non-documented parameters. For example \code{FI=TRUE} will make the function also produce Fisher Information matrix, which then can be used to calculated variances of parameters of the model.
+    Other non-documented parameters.
+    For example \code{FI=TRUE} will make the function produce Fisher Information matrix, which then can be used to calculated variances of parameters of the model.
   }
 }
 \details{

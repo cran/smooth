@@ -1,13 +1,14 @@
 utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"));
 
 ces <- function(data, seasonality=c("none","simple","partial","full"),
-                initial=c("backcasting","optimal"), A=NULL, B=NULL,
+                initial=c("backcasting","optimal"), A=NULL, B=NULL, ic=c("AICc","AIC","BIC"),
                 cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
                 h=10, holdout=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                 intermittent=c("none","auto","fixed","croston","tsb","sba"),
                 bounds=c("admissible","none"), silent=c("none","all","graph","legend","output"),
-                xreg=NULL, initialX=NULL, updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
+                xreg=NULL, xregDo=c("use","select"), initialX=NULL,
+                updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 # Function estimates CES in state-space form with sigma = error
 #  and returns complex smoothing parameter value, fitted values,
 #  residuals, point and interval forecasts, matrix of CES components and values of
@@ -54,95 +55,6 @@ ces <- function(data, seasonality=c("none","simple","partial","full"),
 ##### Set environment for ssInput and make all the checks #####
     environment(ssInput) <- environment();
     ssInput(modelType="ces",ParentEnvironment=environment());
-
-##### Preset y.fit, y.for, errors and basic parameters #####
-    matvt <- matrix(NA,nrow=obsStates,ncol=n.components);
-    y.fit <- rep(NA,obsInsample);
-    y.for <- rep(NA,h);
-    errors <- rep(NA,obsInsample);
-
-##### Define parameters for different seasonality types #####
-# Define "w" matrix, seasonal complex smoothing parameter, seasonality lag (if it is present).
-#   matvt - the matrix with the components, lags is the lags used in pt matrix.
-    if(seasonality=="n"){
-# No seasonality
-        matF <- matrix(1,2,2);
-        vecg <- matrix(0,2);
-        matw <- matrix(c(1,0),1,2);
-        matvt <- matrix(NA,obsStates,2);
-        colnames(matvt) <- c("level","potential");
-        matvt[1,] <- c(mean(yot[1:min(10,obsNonzero)]),mean(yot[1:min(10,obsNonzero)])/1.1);
-    }
-    else if(seasonality=="s"){
-# Simple seasonality, lagged CES
-        matF <- matrix(1,2,2);
-        vecg <- matrix(0,2);
-        matw <- matrix(c(1,0),1,2);
-        matvt <- matrix(NA,obsStates,2);
-        colnames(matvt) <- c("level.s","potential.s");
-        matvt[1:maxlag,1] <- y[1:maxlag];
-        matvt[1:maxlag,2] <- matvt[1:maxlag,1]/1.1;
-    }
-    else if(seasonality=="p"){
-# Partial seasonality with a real part only
-        matF <- diag(3);
-        matF[2,1] <- 1;
-        vecg <- matrix(0,3);
-        matw <- matrix(c(1,0,1),1,3);
-        matvt <- matrix(NA,obsStates,3);
-        colnames(matvt) <- c("level","potential","seasonal");
-        matvt[1:maxlag,1] <- mean(y[1:maxlag]);
-        matvt[1:maxlag,2] <- matvt[1:maxlag,1]/1.1;
-        matvt[1:maxlag,3] <- decompose(ts(y,frequency=maxlag),type="additive")$figure;
-    }
-    else if(seasonality=="f"){
-# Full seasonality with both real and imaginary parts
-        matF <- diag(4);
-        matF[2,1] <- 1;
-        matF[4,3] <- 1;
-        vecg <- matrix(0,4);
-        matw <- matrix(c(1,0,1,0),1,4);
-        matvt <- matrix(NA,obsStates,4);
-        colnames(matvt) <- c("level","potential","seasonal 1", "seasonal 2");
-        matvt[1:maxlag,1] <- mean(y[1:maxlag]);
-        matvt[1:maxlag,2] <- matvt[1:maxlag,1]/1.1;
-        matvt[1:maxlag,3] <- decompose(ts(y,frequency=maxlag),type="additive")$figure;
-        matvt[1:maxlag,4] <- matvt[1:maxlag,3]/1.1;
-    }
-
-##### Prepare exogenous variables #####
-    xregdata <- ssXreg(data=data, xreg=xreg, updateX=updateX,
-                       persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
-                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates, maxlag=maxlag, h=h, silent=silentText);
-    n.exovars <- xregdata$n.exovars;
-    matxt <- xregdata$matxt;
-    matat <- xregdata$matat;
-    matFX <- xregdata$matFX;
-    vecgX <- xregdata$vecgX;
-    xreg <- xregdata$xreg;
-    xregEstimate <- xregdata$xregEstimate;
-    FXEstimate <- xregdata$FXEstimate;
-    gXEstimate <- xregdata$gXEstimate;
-    initialXEstimate <- xregdata$initialXEstimate;
-    xregNames <- colnames(matat);
-
-# These three are needed in order to use ssgeneralfun.cpp functions
-    Etype <- "A";
-    Ttype <- "N";
-    Stype <- "N";
-
-# Check number of parameters vs data
-    n.param.exo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
-    n.param.max <- n.param.max + n.param.exo + (intermittent!="n");
-
-##### Check number of observations vs number of max parameters #####
-    if(obsNonzero <= n.param.max){
-        if(!silentText){
-            message(paste0("Number of non-zero observations is ",obsNonzero,
-                           ", while the number of parameters to estimate is ", n.param.max,"."));
-        }
-        stop("Can't fit the model you ask.",call.=FALSE);
-    }
 
 ##### Elements of CES #####
 ElementsCES <- function(C){
@@ -212,29 +124,29 @@ ElementsCES <- function(C){
     }
 
 # If exogenous are included
-    if(!is.null(xreg)){
-        at <- matrix(NA,maxlag,n.exovars);
+    if(xregEstimate){
+        at <- matrix(NA,maxlag,nExovars);
         if(initialXEstimate){
-            at[,] <- rep(C[n.coef+(1:n.exovars)],each=maxlag);
-            n.coef <- n.coef + n.exovars;
+            at[,] <- rep(C[n.coef+(1:nExovars)],each=maxlag);
+            n.coef <- n.coef + nExovars;
         }
         else{
             at <- matat[1:maxlag,];
         }
         if(updateX){
             if(FXEstimate){
-                matFX <- matrix(C[n.coef+(1:(n.exovars^2))],n.exovars,n.exovars);
-                n.coef <- n.coef + n.exovars^2;
+                matFX <- matrix(C[n.coef+(1:(nExovars^2))],nExovars,nExovars);
+                n.coef <- n.coef + nExovars^2;
             }
 
             if(gXEstimate){
-                vecgX <- matrix(C[n.coef+(1:n.exovars)],n.exovars,1);
-                n.coef <- n.coef + n.exovars;
+                vecgX <- matrix(C[n.coef+(1:nExovars)],nExovars,1);
+                n.coef <- n.coef + nExovars;
             }
         }
     }
     else{
-        at <- matrix(0,maxlag,n.exovars);
+        at <- matrix(matat[1:maxlag,],maxlag,nExovars);
     }
 
     return(list(matF=matF,vecg=vecg,vt=vt,at=at,matFX=matFX,vecgX=vecgX));
@@ -252,10 +164,10 @@ CF <- function(C){
     vecgX <- elements$vecgX;
 
     cfRes <- costfunc(matvt, matF, matw, y, vecg,
-                       h, modellags, Etype, Ttype, Stype,
-                       multisteps, cfType, normalizer, initialType,
-                       matxt, matat, matFX, vecgX, ot,
-                       bounds);
+                      h, modellags, Etype, Ttype, Stype,
+                      multisteps, cfType, normalizer, initialType,
+                      matxt, matat, matFX, vecgX, ot,
+                      bounds);
 
     if(is.nan(cfRes) | is.na(cfRes)){
         cfRes <- 1e100;
@@ -268,7 +180,7 @@ CreatorCES <- function(silentText=FALSE,...){
     environment(likelihoodFunction) <- environment();
     environment(ICFunction) <- environment();
 
-    n.param <- sum(modellags)*(initialType!="b") + A$number + B$number + (!is.null(xreg))*(ncol(matat) + updateX*(length(matFX) + nrow(vecgX))) + 1;
+    nParam <- sum(modellags)*(initialType!="b") + A$number + B$number + (!is.null(xreg)) * nExovars + (updateX)*(nExovars^2 + nExovars) + 1;
 
     if(any(initialType=="o",A$estimate,B$estimate,initialXEstimate,FXEstimate,gXEstimate)){
         C <- NULL;
@@ -307,10 +219,10 @@ CreatorCES <- function(silentText=FALSE,...){
             }
             if(updateX){
                 if(FXEstimate){
-                    C <- c(C,c(diag(n.exovars)));
+                    C <- c(C,c(diag(nExovars)));
                 }
                 if(gXEstimate){
-                    C <- c(C,rep(0,n.exovars));
+                    C <- c(C,rep(0,nExovars));
                 }
             }
         }
@@ -332,7 +244,7 @@ CreatorCES <- function(silentText=FALSE,...){
     else{
         cfType <- "MSE";
     }
-    ICValues <- ICFunction(n.param=n.param+n.param.intermittent,C=C,Etype=Etype);
+    ICValues <- ICFunction(nParam=nParam+nParamIntermittent,C=C,Etype=Etype);
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
 
@@ -341,8 +253,116 @@ CreatorCES <- function(silentText=FALSE,...){
 # Revert to the provided cost function
     cfType <- cfTypeOriginal;
 
-    return(list(cfObjective=cfObjective,C=C,ICs=ICs,bestIC=bestIC,n.param=n.param,logLik=logLik));
+    return(list(cfObjective=cfObjective,C=C,ICs=ICs,bestIC=bestIC,nParam=nParam,logLik=logLik));
 }
+
+##### Preset y.fit, y.for, errors and basic parameters #####
+    matvt <- matrix(NA,nrow=obsStates,ncol=nComponents);
+    y.fit <- rep(NA,obsInsample);
+    y.for <- rep(NA,h);
+    errors <- rep(NA,obsInsample);
+
+##### Define parameters for different seasonality types #####
+    # Define "w" matrix, seasonal complex smoothing parameter, seasonality lag (if it is present).
+    #   matvt - the matrix with the components, lags is the lags used in pt matrix.
+    if(seasonality=="n"){
+        # No seasonality
+        matF <- matrix(1,2,2);
+        vecg <- matrix(0,2);
+        matw <- matrix(c(1,0),1,2);
+        matvt <- matrix(NA,obsStates,2);
+        colnames(matvt) <- c("level","potential");
+        matvt[1,] <- c(mean(yot[1:min(10,obsNonzero)]),mean(yot[1:min(10,obsNonzero)])/1.1);
+    }
+    else if(seasonality=="s"){
+        # Simple seasonality, lagged CES
+        matF <- matrix(1,2,2);
+        vecg <- matrix(0,2);
+        matw <- matrix(c(1,0),1,2);
+        matvt <- matrix(NA,obsStates,2);
+        colnames(matvt) <- c("level.s","potential.s");
+        matvt[1:maxlag,1] <- y[1:maxlag];
+        matvt[1:maxlag,2] <- matvt[1:maxlag,1]/1.1;
+    }
+    else if(seasonality=="p"){
+        # Partial seasonality with a real part only
+        matF <- diag(3);
+        matF[2,1] <- 1;
+        vecg <- matrix(0,3);
+        matw <- matrix(c(1,0,1),1,3);
+        matvt <- matrix(NA,obsStates,3);
+        colnames(matvt) <- c("level","potential","seasonal");
+        matvt[1:maxlag,1] <- mean(y[1:maxlag]);
+        matvt[1:maxlag,2] <- matvt[1:maxlag,1]/1.1;
+        matvt[1:maxlag,3] <- decompose(ts(y,frequency=maxlag),type="additive")$figure;
+    }
+    else if(seasonality=="f"){
+        # Full seasonality with both real and imaginary parts
+        matF <- diag(4);
+        matF[2,1] <- 1;
+        matF[4,3] <- 1;
+        vecg <- matrix(0,4);
+        matw <- matrix(c(1,0,1,0),1,4);
+        matvt <- matrix(NA,obsStates,4);
+        colnames(matvt) <- c("level","potential","seasonal 1", "seasonal 2");
+        matvt[1:maxlag,1] <- mean(y[1:maxlag]);
+        matvt[1:maxlag,2] <- matvt[1:maxlag,1]/1.1;
+        matvt[1:maxlag,3] <- decompose(ts(y,frequency=maxlag),type="additive")$figure;
+        matvt[1:maxlag,4] <- matvt[1:maxlag,3]/1.1;
+    }
+
+##### Prepare exogenous variables #####
+    xregdata <- ssXreg(data=data, xreg=xreg, updateX=updateX,
+                       persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
+                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates, maxlag=maxlag, h=h, silent=silentText);
+
+    if(xregDo=="u"){
+        nExovars <- xregdata$nExovars;
+        matxt <- xregdata$matxt;
+        matat <- xregdata$matat;
+        xregEstimate <- xregdata$xregEstimate;
+        matFX <- xregdata$matFX;
+        vecgX <- xregdata$vecgX;
+        xregNames <- colnames(matxt);
+    }
+    else{
+        nExovars <- 1;
+        nExovarsOriginal <- xregdata$nExovars;
+        matxtOriginal <- xregdata$matxt;
+        matatOriginal <- xregdata$matat;
+        xregEstimateOriginal <- xregdata$xregEstimate;
+        matFXOriginal <- xregdata$matFX;
+        vecgXOriginal <- xregdata$vecgX;
+
+        matxt <- matrix(1,nrow(matxtOriginal),1);
+        matat <- matrix(0,nrow(matatOriginal),1);
+        xregEstimate <- FALSE;
+        matFX <- matrix(1,1,1);
+        vecgX <- matrix(0,1,1);
+        xregNames <- NULL;
+    }
+    xreg <- xregdata$xreg;
+    FXEstimate <- xregdata$FXEstimate;
+    gXEstimate <- xregdata$gXEstimate;
+    initialXEstimate <- xregdata$initialXEstimate;
+
+    # These three are needed in order to use ssgeneralfun.cpp functions
+    Etype <- "A";
+    Ttype <- "N";
+    Stype <- "N";
+
+    # Check number of parameters vs data
+    nParamExo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
+    nParamMax <- nParamMax + nParamExo + (intermittent!="n");
+
+    ##### Check number of observations vs number of max parameters #####
+    if(obsNonzero <= nParamMax){
+        if(!silentText){
+            message(paste0("Number of non-zero observations is ",obsNonzero,
+                           ", while the number of parameters to estimate is ", nParamMax,"."));
+        }
+        stop("Can't fit the model you ask.",call.=FALSE);
+    }
 
 ##### Start doing things #####
     environment(intermittentParametersSetter) <- environment();
@@ -405,6 +425,59 @@ CreatorCES <- function(silentText=FALSE,...){
     }
 
     list2env(cesValues,environment());
+
+    if(xregDo!="u"){
+        # Prepare for fitting
+        elements <- ElementsCES(C);
+        matF <- elements$matF;
+        vecg <- elements$vecg;
+        matvt[1:maxlag,] <- elements$vt;
+        matat[1:maxlag,] <- elements$at;
+        matFX <- elements$matFX;
+        vecgX <- elements$vecgX;
+
+        # cesValues <- CreatorCES(silentText=TRUE);
+        ssFitter(ParentEnvironment=environment());
+
+        xregNames <- colnames(matxtOriginal);
+        xregNew <- cbind(errors,xreg[1:nrow(errors),]);
+        colnames(xregNew)[1] <- "errors";
+        colnames(xregNew)[-1] <- xregNames;
+        xregNew <- as.data.frame(xregNew);
+        xregResults <- stepwise(xregNew, ic=ic, silent=TRUE, df=nParam+nParamIntermittent-1);
+        xregNames <- names(coef(xregResults))[-1];
+        nExovars <- length(xregNames);
+        if(nExovars>0){
+            xregEstimate <- TRUE;
+            matxt <- as.data.frame(matxtOriginal)[,xregNames];
+            matat <- as.data.frame(matatOriginal)[,xregNames];
+            matFX <- diag(nExovars);
+            vecgX <- matrix(0,nExovars,1);
+
+            if(nExovars==1){
+                matxt <- matrix(matxt,ncol=1);
+                matat <- matrix(matat,ncol=1);
+                colnames(matxt) <- colnames(matat) <- xregNames;
+            }
+            else{
+                matxt <- as.matrix(matxt);
+                matat <- as.matrix(matat);
+            }
+        }
+        else{
+            nExovars <- 1;
+            xreg <- NULL;
+        }
+
+        if(!is.null(xreg)){
+            cesValues <- CreatorCES(silentText=TRUE);
+            list2env(cesValues,environment());
+        }
+    }
+
+    if(!is.null(xreg)){
+        xreg <- matxt[,xregNames];
+    }
 
 # Prepare for fitting
     elements <- ElementsCES(C);
@@ -489,7 +562,13 @@ CreatorCES <- function(silentText=FALSE,...){
         }
     }
 
-    modelname <- paste0("CES(",seasonality,")");
+    if(!is.null(xreg)){
+        modelname <- "CESX";
+    }
+    else{
+        modelname <- "CES";
+    }
+    modelname <- paste0(modelname,"(",seasonality,")");
 
     if(all(intermittent!=c("n","none"))){
         modelname <- paste0("i",modelname);
@@ -532,7 +611,7 @@ CreatorCES <- function(silentText=FALSE,...){
     model <- list(model=modelname,timeElapsed=Sys.time()-startTime,
                   states=matvt,A=A$value,B=B$value,
                   initialType=initialType,initial=initialValue,
-                  nParam=n.param,
+                  nParam=nParam,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,
                   actuals=data,holdout=y.holdout,iprob=pt,intermittent=intermittent,

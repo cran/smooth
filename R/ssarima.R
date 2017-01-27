@@ -3,14 +3,15 @@ utils::globalVariables(c("normalizer","constantValue","constantRequired","consta
 
 ssarima <- function(data, orders=list(ar=0,i=c(1),ma=c(1)), lags=c(1),
                     constant=FALSE, AR=NULL, MA=NULL,
-                    initial=c("backcasting","optimal"),
+                    initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC"),
                     cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
                     h=10, holdout=FALSE,
                     intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                     intermittent=c("none","auto","fixed","croston","tsb","sba"),
                     bounds=c("admissible","none"),
                     silent=c("none","all","graph","legend","output"),
-                    xreg=NULL, initialX=NULL, updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
+                    xreg=NULL, xregDo=c("use","select"), initialX=NULL,
+                    updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 ##### Function constructs SARIMA model (possible triple seasonality) using state-space approach
 # ar.orders contains vector of seasonal ARs. ar.orders=c(2,1,3) will mean AR(2)*SAR(1)*SAR(3) - model with double seasonality.
 #
@@ -109,109 +110,36 @@ ssarima <- function(data, orders=list(ar=0,i=c(1),ma=c(1)), lags=c(1),
     environment(ssInput) <- environment();
     ssInput(modelType="ssarima",ParentEnvironment=environment());
 
-# Prepare lists for the polynomials
-    P <- list(NA);
-    D <- list(NA);
-    Q <- list(NA);
-
-##### Preset values of matvt and other matrices ######
-    if(n.components > 0){
-# Transition matrix, measurement vector and persistence vector + state vector
-        matF <- rbind(cbind(rep(0,n.components-1),diag(n.components-1)),rep(0,n.components));
-        matw <- matrix(c(1,rep(0,n.components-1)),1,n.components);
-        vecg <- matrix(0.1,n.components,1);
-        matvt <- matrix(NA,obsStates,n.components);
-        if(constantRequired){
-            matF <- cbind(rbind(matF,rep(0,n.components)),c(1,rep(0,n.components-1),1));
-            matw <- cbind(matw,0);
-            vecg <- rbind(vecg,0);
-            matvt <- cbind(matvt,rep(1,obsStates));
-        }
-        if(initialType=="p"){
-            matvt[1,1:n.components] <- initialValue;
-        }
-        else{
-            if(obsInsample<(n.components+datafreq)){
-                matvt[1:n.components,] <- y[1:n.components] + diff(y[1:(n.components+1)]);
-            }
-            else{
-                matvt[1:n.components,] <- (y[1:n.components]+y[1:n.components+datafreq])/2;
-            }
-        }
-    }
-    else{
-        matw <- matF <- matrix(1,1,1);
-        vecg <- matrix(0,1,1);
-        matvt <- matrix(1,obsStates,1);
-        modellags <- matrix(1,1,1);
-    }
-
-##### Preset y.fit, y.for, errors and basic parameters #####
-    y.fit <- rep(NA,obsInsample);
-    y.for <- rep(NA,h);
-    errors <- rep(NA,obsInsample);
-
-##### Prepare exogenous variables #####
-    xregdata <- ssXreg(data=data, xreg=xreg, updateX=updateX,
-                       persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
-                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates, maxlag=maxlag, h=h, silent=silentText);
-    n.exovars <- xregdata$n.exovars;
-    matxt <- xregdata$matxt;
-    matat <- xregdata$matat;
-    matFX <- xregdata$matFX;
-    vecgX <- xregdata$vecgX;
-    xreg <- xregdata$xreg;
-    xregEstimate <- xregdata$xregEstimate;
-    FXEstimate <- xregdata$FXEstimate;
-    gXEstimate <- xregdata$gXEstimate;
-    initialXEstimate <- xregdata$initialXEstimate;
-    xregNames <- colnames(matat);
-
-# These three are needed in order to use ssgeneralfun.cpp functions
-    Etype <- "A";
-    Ttype <- "N";
-    Stype <- "N";
-
-    # Check number of parameters vs data
-    n.param.exo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
-    n.param.max <- n.param.max + n.param.exo + (intermittent!="n");
-
-##### Check number of observations vs number of max parameters #####
-    if(obsNonzero <= n.param.max){
-        stop(paste0("Not enough observations for the reasonable fit. Number of parameters is ",
-                        n.param.max," while the number of observations is ",obsNonzero,"!"),call.=FALSE);
-    }
-
 # Cost function for SSARIMA
 CF <- function(C){
 
-    # cfRes <- costfuncARIMA(ar.orders, ma.orders, i.orders, lags, n.components,
+    # cfRes <- costfuncARIMA(ar.orders, ma.orders, i.orders, lags, nComponents,
     #                        ARValue, MAValue, constantValue, C,
     #                        matvt, matF, matw, y, vecg,
     #                        h, modellags, Etype, Ttype, Stype,
     #                        multisteps, cfType, normalizer, initialType,
-    #                        n.exovars, matxt, matat, matFX, vecgX, ot,
+    #                        nExovars, matxt, matat, matFX, vecgX, ot,
     #                        AREstimate, MAEstimate, constantRequired, constantEstimate,
     #                        xregEstimate, updateX, FXEstimate, gXEstimate, initialXEstimate,
     #                        bounds);
 
-    elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, n.components,
+    elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, nComponents,
                             ARValue, MAValue, constantValue, C,
                             matvt, vecg, matF,
-                            initialType, n.exovars, matat, matFX, vecgX,
+                            initialType, nExovars, matat, matFX, vecgX,
                             AREstimate, MAEstimate, constantRequired, constantEstimate,
                             xregEstimate, updateX, FXEstimate, gXEstimate, initialXEstimate);
     # matF <- elements$matF;
     # vecg <- elements$vecg;
     # matvt[,] <- elements$matvt;
-    # matvt[1,] <- matrixPowerWrap(matF,n.components+1) %*% matvt[1,];
+    # matvt[1,] <- matrixPowerWrap(matF,nComponents+1) %*% matvt[1,];
     # matat[,] <- elements$matat;
     # matFX <- elements$matFX;
     # vecgX <- elements$vecgX;
     polysos.ar <- elements$arPolynomial;
     polysos.ma <- elements$maPolynomial;
 
-    if(bounds=="a" & (n.components > 0)){
+    if(bounds=="a" & (nComponents > 0)){
         arroots <- abs(polyroot(polysos.ar));
         if(any(arroots<1)){
             return(max(arroots)*1E+100);
@@ -239,14 +167,14 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     environment(likelihoodFunction) <- environment();
     environment(ICFunction) <- environment();
 
-    n.param <- 1 + n.components*(initialType!="b") + sum(ar.orders)*ARRequired + sum(ma.orders)*MARequired + constantRequired + FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
+    nParam <- 1 + nComponents*(initialType!="b") + sum(ar.orders)*ARRequired + sum(ma.orders)*MARequired + constantRequired + (!is.null(xreg)) * nExovars + (updateX)*(nExovars^2 + nExovars);
 
     # If there is something to optimise, let's do it.
     if(any((initialType=="o"),(AREstimate),(MAEstimate),
            (xregEstimate),(FXEstimate),(gXEstimate),(constantEstimate))){
 
         C <- NULL;
-        if(n.components > 0){
+        if(nComponents > 0){
 # ar terms, ma terms from season to season...
             if(AREstimate){
                 C <- c(C,rep(0.1,sum(ar.orders)));
@@ -259,9 +187,9 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
             if(initialType=="o"){
                 # slope <- cov(yot[1:min(12,obsNonzero),],c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero)));
                 # intercept <- sum(yot[1:min(12,obsNonzero),])/min(12,obsNonzero) - slope * (sum(c(1:min(12,obsNonzero)))/min(12,obsNonzero) - 1);
-                # initialStuff <- c(rep(intercept,n.components));
-                # C <- c(C,initialStuff[1:n.components]);
-                C <- c(C,matvt[1:n.components,1]);
+                # initialStuff <- c(rep(intercept,nComponents));
+                # C <- c(C,initialStuff[1:nComponents]);
+                C <- c(C,matvt[1:nComponents,1]);
             }
         }
 
@@ -281,10 +209,10 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
             }
             if(updateX){
                 if(FXEstimate){
-                    C <- c(C,c(diag(n.exovars)));
+                    C <- c(C,c(diag(nExovars)));
                 }
                 if(gXEstimate){
-                    C <- c(C,rep(0,n.exovars));
+                    C <- c(C,rep(0,nExovars));
                 }
             }
         }
@@ -303,11 +231,11 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
         C <- NULL;
 
 # initial values of state vector and the constant term
-        if(n.components>0 & initialType=="p"){
-            matvt[1,1:n.components] <- initialValue;
+        if(nComponents>0 & initialType=="p"){
+            matvt[1,1:nComponents] <- initialValue;
         }
         if(constantRequired){
-            matvt[1,(n.components+1)] <- constantValue;
+            matvt[1,(nComponents+1)] <- constantValue;
         }
 
         cfObjective <- CF(C);
@@ -326,7 +254,7 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
         cfType <- "MSE";
     }
 
-    ICValues <- ICFunction(n.param=n.param+n.param.intermittent,C=C,Etype=Etype);
+    ICValues <- ICFunction(nParam=nParam+nParamIntermittent,C=C,Etype=Etype);
     ICs <- ICValues$ICs;
     bestIC <- ICs["AICc"];
     logLik <- ICValues$llikelihood;
@@ -334,8 +262,100 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
 # Revert to the provided cost function
     cfType <- cfTypeOriginal
 
-    return(list(cfObjective=cfObjective,C=C,ICs=ICs,bestIC=bestIC,n.param=n.param,logLik=logLik));
+    return(list(cfObjective=cfObjective,C=C,ICs=ICs,bestIC=bestIC,nParam=nParam,logLik=logLik));
 }
+
+    # Prepare lists for the polynomials
+    P <- list(NA);
+    D <- list(NA);
+    Q <- list(NA);
+
+##### Preset values of matvt and other matrices ######
+    if(nComponents > 0){
+        # Transition matrix, measurement vector and persistence vector + state vector
+        matF <- rbind(cbind(rep(0,nComponents-1),diag(nComponents-1)),rep(0,nComponents));
+        matw <- matrix(c(1,rep(0,nComponents-1)),1,nComponents);
+        vecg <- matrix(0.1,nComponents,1);
+        matvt <- matrix(NA,obsStates,nComponents);
+        if(constantRequired){
+            matF <- cbind(rbind(matF,rep(0,nComponents)),c(1,rep(0,nComponents-1),1));
+            matw <- cbind(matw,0);
+            vecg <- rbind(vecg,0);
+            matvt <- cbind(matvt,rep(1,obsStates));
+        }
+        if(initialType=="p"){
+            matvt[1,1:nComponents] <- initialValue;
+        }
+        else{
+            if(obsInsample<(nComponents+datafreq)){
+                matvt[1:nComponents,] <- y[1:nComponents] + diff(y[1:(nComponents+1)]);
+            }
+            else{
+                matvt[1:nComponents,] <- (y[1:nComponents]+y[1:nComponents+datafreq])/2;
+            }
+        }
+    }
+    else{
+        matw <- matF <- matrix(1,1,1);
+        vecg <- matrix(0,1,1);
+        matvt <- matrix(1,obsStates,1);
+        modellags <- matrix(1,1,1);
+    }
+
+##### Preset y.fit, y.for, errors and basic parameters #####
+    y.fit <- rep(NA,obsInsample);
+    y.for <- rep(NA,h);
+    errors <- rep(NA,obsInsample);
+
+##### Prepare exogenous variables #####
+    xregdata <- ssXreg(data=data, xreg=xreg, updateX=updateX,
+                       persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
+                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates, maxlag=maxlag, h=h, silent=silentText);
+
+    if(xregDo=="u"){
+        nExovars <- xregdata$nExovars;
+        matxt <- xregdata$matxt;
+        matat <- xregdata$matat;
+        xregEstimate <- xregdata$xregEstimate;
+        matFX <- xregdata$matFX;
+        vecgX <- xregdata$vecgX;
+        xregNames <- colnames(matxt);
+    }
+    else{
+        nExovars <- 1;
+        nExovarsOriginal <- xregdata$nExovars;
+        matxtOriginal <- xregdata$matxt;
+        matatOriginal <- xregdata$matat;
+        xregEstimateOriginal <- xregdata$xregEstimate;
+        matFXOriginal <- xregdata$matFX;
+        vecgXOriginal <- xregdata$vecgX;
+
+        matxt <- matrix(1,nrow(matxtOriginal),1);
+        matat <- matrix(0,nrow(matatOriginal),1);
+        xregEstimate <- FALSE;
+        matFX <- matrix(1,1,1);
+        vecgX <- matrix(0,1,1);
+        xregNames <- NULL;
+    }
+    xreg <- xregdata$xreg;
+    FXEstimate <- xregdata$FXEstimate;
+    gXEstimate <- xregdata$gXEstimate;
+    initialXEstimate <- xregdata$initialXEstimate;
+
+    # These three are needed in order to use ssgeneralfun.cpp functions
+    Etype <- "A";
+    Ttype <- "N";
+    Stype <- "N";
+
+    # Check number of parameters vs data
+    nParamExo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
+    nParamMax <- nParamMax + nParamExo + (intermittent!="n");
+
+##### Check number of observations vs number of max parameters #####
+    if(obsNonzero <= nParamMax){
+        stop(paste0("Not enough observations for the reasonable fit. Number of parameters is ",
+                    nParamMax," while the number of observations is ",obsNonzero,"!"),call.=FALSE);
+    }
 
 #####Start the calculations#####
     environment(intermittentParametersSetter) <- environment();
@@ -399,11 +419,71 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
 
     list2env(ssarimaValues,environment());
 
+    if(xregDo!="u"){
+        # Prepare for fitting
+        elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, nComponents,
+                                ARValue, MAValue, constantValue, C,
+                                matvt, vecg, matF,
+                                initialType, nExovars, matat, matFX, vecgX,
+                                AREstimate, MAEstimate, constantRequired, constantEstimate,
+                                xregEstimate, updateX, FXEstimate, gXEstimate, initialXEstimate);
+        matF <- elements$matF;
+        vecg <- elements$vecg;
+        matvt[,] <- elements$matvt;
+        matat[,] <- elements$matat;
+        matFX <- elements$matFX;
+        vecgX <- elements$vecgX;
+        polysos.ar <- elements$arPolynomial;
+        polysos.ma <- elements$maPolynomial;
+        arroots <- abs(polyroot(polysos.ar));
+        maroots <- abs(polyroot(polysos.ma));
+
+        ssFitter(ParentEnvironment=environment());
+
+        xregNames <- colnames(matxtOriginal);
+        xregNew <- cbind(errors,xreg[1:nrow(errors),]);
+        colnames(xregNew)[1] <- "errors";
+        colnames(xregNew)[-1] <- xregNames;
+        xregNew <- as.data.frame(xregNew);
+        xregResults <- stepwise(xregNew, ic=ic, silent=TRUE, df=nParam+nParamIntermittent-1);
+        xregNames <- names(coef(xregResults))[-1];
+        nExovars <- length(xregNames);
+        if(nExovars>0){
+            xregEstimate <- TRUE;
+            matxt <- as.data.frame(matxtOriginal)[,xregNames];
+            matat <- as.data.frame(matatOriginal)[,xregNames];
+            matFX <- diag(nExovars);
+            vecgX <- matrix(0,nExovars,1);
+
+            if(nExovars==1){
+                matxt <- matrix(matxt,ncol=1);
+                matat <- matrix(matat,ncol=1);
+                colnames(matxt) <- colnames(matat) <- xregNames;
+            }
+            else{
+                matxt <- as.matrix(matxt);
+                matat <- as.matrix(matat);
+            }
+        }
+        else{
+            nExovars <- 1;
+            xreg <- NULL;
+        }
+
+        if(!is.null(xreg)){
+            ssarimaValues <- CreatorSSARIMA(silentText);
+            list2env(ssarimaValues,environment());
+        }
+    }
+
+    if(!is.null(xreg)){
+        xreg <- matxt[,xregNames];
+    }
 # Prepare for fitting
-    elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, n.components,
+    elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, nComponents,
                             ARValue, MAValue, constantValue, C,
                             matvt, vecg, matF,
-                            initialType, n.exovars, matat, matFX, vecgX,
+                            initialType, nExovars, matat, matFX, vecgX,
                             AREstimate, MAEstimate, constantRequired, constantEstimate,
                             xregEstimate, updateX, FXEstimate, gXEstimate, initialXEstimate);
     matF <- elements$matF;
@@ -417,7 +497,7 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     arroots <- abs(polyroot(polysos.ar));
     maroots <- abs(polyroot(polysos.ma));
 
-    n.components <- n.components + constantRequired;
+    nComponents <- nComponents + constantRequired;
     # Write down Fisher Information if needed
     if(FI){
         environment(likelihoodFunction) <- environment();
@@ -465,17 +545,17 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     matvt <- ts(matvt,start=(time(data)[1] - deltat(data)*maxlag),frequency=frequency(data));
     if(!is.null(xreg)){
         matvt <- cbind(matvt,matat[1:nrow(matvt),]);
-        colnames(matvt) <- c(paste0("Component ",c(1:max(1,n.components))),colnames(matat));
+        colnames(matvt) <- c(paste0("Component ",c(1:max(1,nComponents))),colnames(matat));
         if(updateX){
             rownames(vecgX) <- xregNames;
             dimnames(matFX) <- list(xregNames,xregNames);
         }
     }
     else{
-        colnames(matvt) <- paste0("Component ",c(1:max(1,n.components)));
+        colnames(matvt) <- paste0("Component ",c(1:max(1,nComponents)));
     }
     if(constantRequired){
-        colnames(matvt)[n.components] <- "Constant";
+        colnames(matvt)[nComponents] <- "Constant";
     }
 
 # AR terms
@@ -544,7 +624,13 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
 
 # Give model the name
     if((length(ar.orders)==1) && all(lags==1)){
-        modelname <- paste0("ARIMA(",ar.orders,",",i.orders,",",ma.orders,")");
+        if(!is.null(xreg)){
+            modelname <- "ARIMAX";
+        }
+        else{
+            modelname <- "ARIMA";
+        }
+        modelname <- paste0(modelname,"(",ar.orders,",",i.orders,",",ma.orders,")");
     }
     else{
         modelname <- "";
@@ -553,7 +639,12 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
             modelname <- paste0(modelname,i.orders[i],",");
             modelname <- paste0(modelname,ma.orders[i],")[",lags[i],"]");
         }
-        modelname <- paste0("SARIMA",modelname);
+        if(!is.null(xreg)){
+            modelname <- paste0("SARIMAX",modelname);
+        }
+        else{
+            modelname <- paste0("SARIMA",modelname);
+        }
     }
     if(all(intermittent!=c("n","none"))){
         modelname <- paste0("i",modelname);
@@ -561,7 +652,7 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
 
     if(constantRequired){
         if(constantEstimate){
-            constantValue <- matvt[1,n.components];
+            constantValue <- matvt[1,nComponents];
         }
         const <- constantValue;
 
@@ -614,7 +705,7 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
                   states=matvt,transition=matF,persistence=vecg,
                   AR=ARterms,I=Iterms,MA=MAterms,constant=const,
                   initialType=initialType,initial=initialValue,
-                  nParam=n.param,
+                  nParam=nParam,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,
                   actuals=data,holdout=y.holdout,iprob=pt,intermittent=intermittent,
