@@ -19,7 +19,7 @@ auto.ces(M3$N2457$x, h=18, holdout=TRUE, initial="o", intervals="sp")
 x <- cbind(rnorm(length(M3$N2457$x),50,3),rnorm(length(M3$N2457$x),100,7))
 
 ## ----auto_ces_N2457_xreg_simple------------------------------------------
-auto.ces(M3$N2457$x, h=18, holdout=TRUE, xreg=x, intervals="p")
+auto.ces(M3$N2457$x, h=18, holdout=TRUE, xreg=x, xregDo="select", intervals="p")
 
 ## ----auto_ces_N2457_xreg_update------------------------------------------
 auto.ces(M3$N2457$x, h=18, holdout=TRUE, xreg=x, updateX=TRUE, intervals="p")

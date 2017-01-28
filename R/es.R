@@ -386,7 +386,8 @@ XregSelector <- function(listToReturn){
         logLik <- res$logLik;
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                              cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=icBest,
-                             nParam=res$nParam,FI=FI,logLik=logLik,xregNames=xregNames);
+                             nParam=res$nParam,FI=FI,logLik=logLik,xreg=xreg,
+                             xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
     }
 
     return(listToReturn);
@@ -511,7 +512,8 @@ PoolPreparerES <- function(...){
 
                 listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                                      cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=NULL,
-                                     nParam=res$nParam,logLik=res$logLik,xregNames=xregNames);
+                                     nParam=res$nParam,logLik=res$logLik,xreg=xreg,
+                                     xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
 
                 if(xregDo!="u"){
                     listToReturn <- XregSelector(listToReturn=listToReturn);
@@ -652,10 +654,12 @@ PoolEstimatorES <- function(silent=FALSE,...){
 
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                              cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=NULL,
-                             nParam=res$nParam,logLik=res$logLik,xregNames=xregNames);
+                             nParam=res$nParam,logLik=res$logLik,xreg=xreg,
+                             xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
         if(xregDo!="u"){
             listToReturn <- XregSelector(listToReturn=listToReturn);
         }
+
         results[[j]] <- listToReturn;
     }
 
@@ -712,7 +716,8 @@ CreatorES <- function(silent=FALSE,...){
         res <- EstimatorES(ParentEnvironment=environment());
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                              cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=res$ICs[ic],
-                             nParam=res$nParam,FI=FI,logLik=res$logLik,xregNames=xregNames);
+                             nParam=res$nParam,FI=FI,logLik=res$logLik,xreg=xreg,
+                             xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
         if(xregDo!="u"){
             listToReturn <- XregSelector(listToReturn=listToReturn);
         }
@@ -765,7 +770,8 @@ CreatorES <- function(silent=FALSE,...){
 
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                              cfObjective=cfObjective,C=C,ICs=ICs,icBest=icBest,
-                             nParam=nParam,FI=FI,logLik=logLik,xregNames=xregNames);
+                             nParam=nParam,FI=FI,logLik=logLik,xreg=xreg,
+                             xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
         return(listToReturn);
     }
 }
@@ -1066,13 +1072,16 @@ CreatorES <- function(silent=FALSE,...){
         BasicMakerES(ParentEnvironment=environment());
         BasicInitialiserES(ParentEnvironment=environment());
 
-        if(!is.null(xreg)){
+        if(!is.null(xregNames)){
             matat <- as.matrix(matatOriginal[,xregNames]);
             matxt <- as.matrix(matxtOriginal[,xregNames]);
             if(ncol(matat)==1){
                 colnames(matxt) <- colnames(matat) <- xregNames;
             }
             xreg <- matxt;
+        }
+        else{
+            xreg <- NULL;
         }
 
         if(damped){
@@ -1099,7 +1108,7 @@ CreatorES <- function(silent=FALSE,...){
             component.names <- c(component.names,"seasonality");
         }
 
-        if(!is.null(xreg)){
+        if(!is.null(xregNames)){
             matvt <- cbind(matvt,matat[1:nrow(matvt),]);
             colnames(matvt) <- c(component.names,xregNames);
             if(updateX){

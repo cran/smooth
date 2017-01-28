@@ -36,8 +36,11 @@ es(M3$N2457$x, model="CCN", h=18, holdout=TRUE, silent="graph")
 x <- cbind(rnorm(length(M3$N2457$x),50,3),rnorm(length(M3$N2457$x),100,7))
 
 ## ----es_N2457_xreg-------------------------------------------------------
-es(M3$N2457$x, model="ZZZ", h=18, holdout=TRUE, xreg=x)
+es(M3$N2457$x, model="XXX", h=18, holdout=TRUE, xreg=x)
+
+## ----es_N2457_xreg_select------------------------------------------------
+es(M3$N2457$x, model="XXX", h=18, holdout=TRUE, xreg=x, xregDo="select")
 
 ## ----es_N2457_xreg_update------------------------------------------------
-es(M3$N2457$x, model="ZZZ", h=18, holdout=TRUE, xreg=x, updateX=TRUE)
+es(M3$N2457$x, model="XXX", h=18, holdout=TRUE, xreg=x, updateX=TRUE)
 
