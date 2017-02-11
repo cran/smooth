@@ -1587,6 +1587,7 @@ qlnormBinCF <- function(quant, iprob, level=0.95, Etype="M", meanVec=0, sdVec){
 qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
     lowerquant <- upperquant <- rep(0,length(sdVec));
 
+# Produce lower quantiles
     if(Etype=="A" | all(Etype=="M",(1-iprob) < (1-level)/2)){
         if(Etype=="M"){
             quantInitials <- qlnorm((1-level)/2,meanVec,sdVec)
@@ -1595,7 +1596,8 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
             quantInitials <- qnorm((1-level)/2,meanVec,sdVec)
         }
         for(i in 1:length(sdVec)){
-            lowerquant[i] <- nlminb(quantInitials[i], qlnormBinCF, iprob=iprob, level=(1-level)/2, Etype=Etype, meanVec=meanVec[i], sdVec=sdVec[i])$par;
+            lowerquant[i] <- optimize(qlnormBinCF, c(quantInitials[i],0), tol=1e-10, iprob=iprob, level=(1-level)/2, Etype=Etype, meanVec=meanVec[i], sdVec=sdVec[i])[[1]];
+            # lowerquant[i] <- nlminb(quantInitials[i], qlnormBinCF, iprob=iprob, level=(1-level)/2, Etype=Etype, meanVec=meanVec[i], sdVec=sdVec[i])$par;
         }
         levelNew <- (1+level)/2;
     }
@@ -1603,15 +1605,20 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
         levelNew <- level;
     }
 
+# Produce upper quantiles
     if(Etype=="M"){
-        quantInitials <- qlnorm(levelNew,meanVec,sdVec)
+        quantInitials <- qlnorm(levelNew,meanVec,sdVec);
     }
     else{
-        quantInitials <- qnorm(levelNew,meanVec,sdVec)
+        quantInitials <- qnorm(levelNew,meanVec,sdVec);
     }
     for(i in 1:length(sdVec)){
-        upperquant[i] <- nlminb(quantInitials[i], qlnormBinCF, iprob=iprob, level=levelNew, Etype=Etype, meanVec=meanVec[i], sdVec=sdVec[i])$par;
+        upperquant[i] <- optimize(qlnormBinCF, c(0,quantInitials[i]), tol=1e-10, iprob=iprob, level=levelNew, Etype=Etype, meanVec=meanVec[i], sdVec=sdVec[i])[[1]];
+        # print(plnorm(upperquant[i], meanlog=meanVec[i], sdlog=sdVec[i]) + (1 - iprob))
+        # hist(rlnorm(1000,meanlog=meanVec[i], sdlog=sdVec[i]),breaks="FD",xlim=range(0,10),ylim=range(0,500))
+        upperquant[i] <- max(0,upperquant[i]);
     }
+
     return(list(lower=lowerquant,upper=upperquant));
 }
 
@@ -1692,6 +1699,9 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
 #### Nonparametric intervals using Taylor and Bunn, 1999 ####
         else if(intervalsType=="np"){
             ye <- errors;
+            if(Etype=="M"){
+                ye <- 1 + ye;
+            }
             xe <- matrix(c(1:n.var),byrow=TRUE,ncol=n.var,nrow=nrow(errors));
             xe <- xe[!is.na(ye)];
             ye <- ye[!is.na(ye)];
@@ -1709,8 +1719,6 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
 
 #### Parametric intervals ####
         else if(intervalsType=="p"){
-            #s2i <- iprob*(1-iprob);
-
             nComponents <- nrow(transition);
             maxlag <- max(modellags);
             h <- n.var;
@@ -1719,7 +1727,6 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
             varVec <- rep(NA,h);
 
 #### Pure multiplicative models ####
-            # if(Etype=="M" & all(c(Ttype,Stype)!="A")){
             if(Etype=="M"){
                 # Array of variance of states
                 mat.var.states <- array(0,c(nComponents,nComponents,h+maxlag));
@@ -1770,6 +1777,7 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
                 }
                 if(any(iprob!=1)){
                     quants <- qlnormBin(iprob, level=level, meanVec=log(y.for), sdVec=sqrt(varVec), Etype="M");
+                    # quants <- qlnormBin(iprob, level=level, meanVec=rep(0,length(y.for)), sdVec=sqrt(varVec), Etype="M");
                     upper <- quants$upper;
                     lower <- quants$lower;
                 }
@@ -1908,6 +1916,9 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
             }
         }
         else if(intervalsType=="np"){
+            if(Etype=="M"){
+                errors <- errors + 1;
+            }
             upper <- quantile(errors,(1+level)/2);
             lower <- quantile(errors,(1-level)/2);
         }
@@ -1936,7 +1947,7 @@ ssForecaster <- function(...){
 
     if(h>0){
         y.for <- ts(forecasterwrap(matrix(matvt[(obsInsample+1):(obsInsample+maxlag),],nrow=maxlag),
-                                   matF, matw, h, Ttype, Stype, modellags,
+                                   matF, matw, h, Etype, Ttype, Stype, modellags,
                                    matrix(matxt[(obsAll-h+1):(obsAll),],ncol=nExovars),
                                    matrix(matat[(obsAll-h+1):(obsAll),],ncol=nExovars), matFX),
                     start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
@@ -1992,7 +2003,7 @@ ssForecaster <- function(...){
                                              Etype,Ttype,Stype,modellags)$matyt;
                 if(!is.null(xreg)){
                     y.exo.for <- c(y.for) - forecasterwrap(matrix(matvt[(obsInsample+1):(obsInsample+maxlag),],nrow=maxlag),
-                                                           matF, matw, h, Ttype, Stype, modellags,
+                                                           matF, matw, h, Etype, Ttype, Stype, modellags,
                                                            matrix(rep(1,h),ncol=1), matrix(rep(0,h),ncol=1), matrix(1,1,1));
                 }
                 else{
@@ -2004,8 +2015,6 @@ ssForecaster <- function(...){
                 y.high <- ts(apply(y.simulated,1,quantile,(1+level)/2,na.rm=T) + y.exo.for,start=start(y.for),frequency=frequency(data));
             }
             else{
-                # vt <- matrix(matvt[cbind(obsInsample-modellags,c(1:nComponents))],nComponents,1);
-
                 quantvalues <- ssIntervals(errors.x, ev=ev, level=level, intervalsType=intervalsType, df=(obsNonzero - nParam),
                                            measurement=matw, transition=matF, persistence=vecg, s2=s2,
                                            modellags=modellags, states=matvt[(obsInsample-maxlag+1):obsInsample,],
@@ -2014,8 +2023,16 @@ ssForecaster <- function(...){
 
                 y.for <- c(pt.for)*y.for;
                 if(Etype=="A"){
-                    y.low <- ts(c(y.for) + quantvalues$lower,start=start(y.for),frequency=frequency(data));
-                    y.high <- ts(c(y.for) + quantvalues$upper,start=start(y.for),frequency=frequency(data));
+                    if(any(iprob!=1)){
+                        y.high <- ceiling(c(y.for) + quantvalues$upper);
+                        y.low <- floor(c(y.for) + quantvalues$lower);
+                    }
+                    else{
+                        y.high <- c(y.for) + quantvalues$upper;
+                        y.low <- c(y.for) + quantvalues$lower;
+                    }
+                    y.low <- ts(y.low,start=start(y.for),frequency=frequency(data));
+                    y.high <- ts(y.high,start=start(y.for),frequency=frequency(data));
                 }
                 # else if(Etype=="M" & all(c(Ttype,Stype)!="A")){
                     # y.low <- ts(c(y.for)*(1 + quantvalues$lower),start=start(y.for),frequency=frequency(data));
@@ -2024,12 +2041,28 @@ ssForecaster <- function(...){
                     # y.high <- ts(quantvalues$upper,start=start(y.for),frequency=frequency(data));
                 # }
                 else{
+                    if(intervalsType=="np"){
+                        quantvalues$upper <- quantvalues$upper*y.for;
+                        quantvalues$lower <- quantvalues$lower*y.for;
+                    }
+                    else if(intervalsType=="sp"){
+                        quantvalues$upper <- quantvalues$upper * y.for/c(pt.for);
+                        quantvalues$lower <- quantvalues$lower * y.for/c(pt.for);
+                    }
+                    if(any(iprob!=1)){
+                        y.high <- ceiling(quantvalues$upper);
+                        y.low <- floor(quantvalues$lower);
+                    }
+                    else{
+                        y.high <- quantvalues$upper;
+                        y.low <- quantvalues$lower;
+                    }
                     # y.low <- ts(c(y.for)*(1 + quantvalues$lower),start=start(y.for),frequency=frequency(data));
                     # y.high <- ts(c(y.for)*(1 + quantvalues$upper),start=start(y.for),frequency=frequency(data))
                     # y.low <- ts(c(y.for) + quantvalues$lower,start=start(y.for),frequency=frequency(data));
                     # y.high <- ts(c(y.for) + quantvalues$upper,start=start(y.for),frequency=frequency(data));
-                    y.low <- ts(quantvalues$lower,start=start(y.for),frequency=frequency(data));
-                    y.high <- ts(quantvalues$upper,start=start(y.for),frequency=frequency(data));
+                    y.low <- ts(y.low,start=start(y.for),frequency=frequency(data));
+                    y.high <- ts(y.high,start=start(y.for),frequency=frequency(data));
                 }
             }
         }
@@ -2057,14 +2090,14 @@ ssForecaster <- function(...){
 }
 
 ##### *Check and initialisation of xreg* #####
-ssXreg <- function(data, xreg=NULL, updateX=FALSE,
+ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
                    persistenceX=NULL, transitionX=NULL, initialX=NULL,
                    obsInsample, obsAll, obsStates, maxlag=1, h=1, silent=FALSE){
 # The function does general checks needed for exogenouse variables and returns the list of necessary parameters
 
     if(!is.null(xreg)){
         if(any(is.na(xreg))){
-            warning("The exogenous variables contain NAs! This may lead to problems during estimation and forecast.",
+            warning("The exogenous variables contain NAs! This may lead to problems during estimation and in forecasting.",
                     call.=FALSE);
         }
         if(!is.null(dim(xreg))){
@@ -2087,6 +2120,12 @@ ssXreg <- function(data, xreg=NULL, updateX=FALSE,
                 }
             }
 
+            if(all(data[1:obsInsample]==xreg[1:obsInsample])){
+                warning("The exogenous variable and the forecasted data are exactly the same. What's the point of such a regression?",
+                        call.=FALSE);
+                xreg <- NULL;
+            }
+
             if(!is.null(xreg)){
                 if(any(length(xreg) < obsAll)){
                     warning("xreg did not contain values for the holdout, so we had to predict missing values.", call.=FALSE);
@@ -2106,7 +2145,12 @@ ssXreg <- function(data, xreg=NULL, updateX=FALSE,
                 matat <- matrix(NA,obsStates,1);
 # Fill in the initial values for exogenous coefs using OLS
                 if(is.null(initialX)){
-                    matat[1:maxlag,] <- cov(data[1:obsInsample],xreg[1:obsInsample])/var(xreg[1:obsInsample]);
+                    if(Etype=="A"){
+                        matat[1:maxlag,] <- cov(data[1:obsInsample],xreg[1:obsInsample])/var(xreg[1:obsInsample]);
+                    }
+                    else{
+                        matat[1:maxlag,] <- cov(log(data[1:obsInsample]),xreg[1:obsInsample])/var(xreg[1:obsInsample]);
+                    }
                 }
                 if(is.null(names(xreg))){
                     colnames(matat) <- "x";
@@ -2122,6 +2166,13 @@ ssXreg <- function(data, xreg=NULL, updateX=FALSE,
         else if(is.matrix(xreg) | is.data.frame(xreg)){
             if(!is.matrix(xreg)){
                 xreg <- as.matrix(xreg);
+            }
+
+            xregEqualToData <- apply(xreg[1:obsInsample,]==data[1:obsInsample],2,all);
+            if(any(xregEqualToData)){
+                warning("One of exogenous variables and the forecasted data are exactly the same. We have droped it.",
+                        call.=FALSE);
+                xreg <- matrix(xreg[,!xregEqualToData],nrow=nrow(xreg),ncol=ncol(xreg)-1);
             }
 
             nExovars <- ncol(xreg);
@@ -2189,9 +2240,16 @@ ssXreg <- function(data, xreg=NULL, updateX=FALSE,
                 matxt <- as.matrix(xreg);
 # Fill in the initial values for exogenous coefs using OLS
                 if(is.null(initialX)){
-                    matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,]) %*% mat.x[1:obsInsample,],tol=1e-50) %*%
-                                                  t(mat.x[1:obsInsample,]) %*% data[1:obsInsample])[2:(nExovars+1)],
-                                            each=maxlag);
+                    if(Etype=="A"){
+                        matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,]) %*% mat.x[1:obsInsample,],tol=1e-50) %*%
+                                                      t(mat.x[1:obsInsample,]) %*% data[1:obsInsample])[2:(nExovars+1)],
+                                                each=maxlag);
+                    }
+                    else{
+                        matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,]) %*% mat.x[1:obsInsample,],tol=1e-50) %*%
+                                                      t(mat.x[1:obsInsample,]) %*% log(data[1:obsInsample]))[2:(nExovars+1)],
+                                                each=maxlag);
+                    }
                 }
                 if(is.null(colnames(xreg))){
                     colnames(matat) <- paste0("x",c(1:nExovars));

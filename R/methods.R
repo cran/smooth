@@ -4,7 +4,7 @@ orders <- function(object, ...) UseMethod("orders")
 lags <- function(object, ...) UseMethod("lags")
 modelType <-  function(object, ...) UseMethod("modelType")
 
-##### Likelihood function
+##### Likelihood function and stuff #####
 logLik.smooth <- function(object,...){
     obs <- nobs(object);
     structure(object$logLik,nobs=obs,df=object$nParam,class="logLik");
@@ -35,12 +35,7 @@ nobs.iss <- function(object, ...){
 
 ##### IC functions #####
 AICc.default <- function(object, ...){
-    # if(!is.null(object$x)){
-    #     obs <- length(object$x);
-    # }
-    # else{
         obs <- nobs(object);
-    # }
 
     llikelihood <- logLik(object);
     nParam <- attributes(llikelihood)$df;
@@ -60,7 +55,7 @@ coef.smooth <- function(object, ...)
     else if(gregexpr("ETS",object$model)!=-1){
         if(any(unlist(gregexpr("C",object$model))==-1)){
             # If this was normal ETS, return values
-            parameters <- c(object$persistence,object$initial,object$initial.season);
+            parameters <- c(object$persistence,object$initial,object$initial.season,object$initialX);
         }
         else{
             # If we did combinations, we cannot return anything
@@ -107,6 +102,7 @@ coef.smooth <- function(object, ...)
     return(parameters);
 }
 
+#### Fitted and forecast values ####
 fitted.smooth <- function(object, ...){
     return(object$fitted);
 }

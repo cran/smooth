@@ -202,7 +202,16 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
 
     if(xregEstimate){
         if(initialXEstimate){
-            C <- c(C,matat[maxlag,]);
+            if(Etype=="A" & modelDo!="estimate"){
+                vecat <- matrix(y[2:obsInsample],nrow=obsInsample-1,ncol=ncol(matxt)) / diff(matxt[1:obsInsample,]);
+                vecat[is.infinite(vecat)] <- NA;
+                vecat <- colSums(vecat,na.rm=T);
+            }
+            else{
+                vecat <- matat[maxlag,];
+            }
+
+            C <- c(C,vecat);
             CLower <- c(CLower,rep(-Inf,nExovars));
             CUpper <- c(CUpper,rep(Inf,nExovars));
         }
@@ -306,10 +315,12 @@ EstimatorES <- function(...){
     C <- res$solution;
 
     if(all(C==Cs$C)){
-        warning(paste0("Failed to optimise the model ETS(", current.model,
-                       "). Try different initialisation maybe?\nAnd check all the messages and warnings...",
-                       "If you did your best, but the optimiser still fails, report this to the maintainer, please."),
-                call.=FALSE);
+        if(initialType!="b"){
+            warning(paste0("Failed to optimise the model ETS(", current.model,
+                           "). Try different initialisation maybe?\nAnd check all the messages and warnings...",
+                           "If you did your best, but the optimiser still fails, report this to the maintainer, please."),
+                    call.=FALSE);
+        }
     }
 
     nParam <- 1 + nComponents + damped + (nComponents + (maxlag - 1) * (Stype!="N")) * (initialType!="b") + (!is.null(xreg)) * nExovars + (updateX)*(nExovars^2 + nExovars);
@@ -378,6 +389,7 @@ XregSelector <- function(listToReturn){
         nExovars <- 1;
         xreg <- NULL;
         xregNames <- NULL;
+        listToReturn$xregEstimate <- xregEstimate;
     }
 
     if(!is.null(xreg)){
@@ -386,7 +398,7 @@ XregSelector <- function(listToReturn){
         logLik <- res$logLik;
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                              cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=icBest,
-                             nParam=res$nParam,FI=FI,logLik=logLik,xreg=xreg,
+                             nParam=res$nParam,FI=FI,logLik=logLik,xreg=xreg,xregEstimate=xregEstimate,
                              xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
     }
 
@@ -840,7 +852,7 @@ CreatorES <- function(silent=FALSE,...){
                               damped, phi, smoothingparameters, initialstates, seasonalcoefs);
 
 ##### Prepare exogenous variables #####
-    xregdata <- ssXreg(data=data, xreg=xreg, updateX=updateX,
+    xregdata <- ssXreg(data=data, Etype=Etype, xreg=xreg, updateX=updateX,
                        persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
                        obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates, maxlag=basicparams$maxlag, h=h, silent=silentText);
 
@@ -1070,18 +1082,21 @@ CreatorES <- function(silent=FALSE,...){
     if(modelDo!="combine"){
         list2env(esValues,environment());
         BasicMakerES(ParentEnvironment=environment());
-        BasicInitialiserES(ParentEnvironment=environment());
 
         if(!is.null(xregNames)){
             matat <- as.matrix(matatOriginal[,xregNames]);
             matxt <- as.matrix(matxtOriginal[,xregNames]);
             if(ncol(matat)==1){
-                colnames(matxt) <- colnames(matat) <- xregNames;
+                colnames(matxt) <- xregNames;
             }
             xreg <- matxt;
         }
         else{
             xreg <- NULL;
+        }
+        BasicInitialiserES(ParentEnvironment=environment());
+        if(!is.null(xregNames)){
+            colnames(matat) <- xregNames;
         }
 
         if(damped){
@@ -1091,7 +1106,7 @@ CreatorES <- function(silent=FALSE,...){
             model <- paste0(Etype,Ttype,Stype);
         }
 
-        # Write down Fisher Information if needed
+# Write down Fisher Information if needed
         if(FI){
             environment(likelihoodFunction) <- environment();
             FI <- numDeriv::hessian(likelihoodFunction,C);
@@ -1120,7 +1135,7 @@ CreatorES <- function(silent=FALSE,...){
             colnames(matvt) <- c(component.names);
         }
 
-        # Write down the initials. Done especially for Nikos and issue #10
+# Write down the initials. Done especially for Nikos and issue #10
         if(persistenceEstimate){
             persistence <- as.vector(vecg);
         }
@@ -1137,6 +1152,7 @@ CreatorES <- function(silent=FALSE,...){
 
         if(initialXEstimate){
             initialX <- matat[1,];
+            names(initialX) <- colnames(matat);
         }
 
         if(initialSeasonEstimate){
@@ -1145,6 +1161,53 @@ CreatorES <- function(silent=FALSE,...){
                 names(initialSeason) <- paste0("s",1:maxlag);
             }
         }
+
+# Write down the formula of ETS
+        esFormula <- "l[t-1]";
+        if(Ttype=="A"){
+            esFormula <- paste0(esFormula," + b[t-1]");
+        }
+        else if(Ttype=="M"){
+            esFormula <- paste0(esFormula," * b[t-1]");
+        }
+        if(Stype=="A"){
+            esFormula <- paste0(esFormula," + s[t-",maxlag,"]");
+        }
+        else if(Stype=="M"){
+            if(Ttype=="A"){
+                esFormula <- paste0("(",esFormula,")");
+            }
+            esFormula <- paste0(esFormula," * s[t-",maxlag,"]");
+        }
+        if(Etype=="A"){
+            if(!is.null(xreg)){
+                if(updateX){
+                    esFormula <- paste0(esFormula," + ",paste0(paste0("a",c(1:nExovars),"[t-1] * "),paste0(xregNames,"[t]"),collapse=" + "));
+                }
+                else{
+                    esFormula <- paste0(esFormula," + ",paste0(paste0("a",c(1:nExovars)," * "),paste0(xregNames,"[t]"),collapse=" + "));
+                }
+            }
+            esFormula <- paste0(esFormula," + e[t]");
+        }
+        else{
+            if(any(c(Ttype,Stype)=="A") & Stype!="M"){
+                esFormula <- paste0("(",esFormula,")");
+            }
+            if(!is.null(xreg)){
+                if(updateX){
+                    esFormula <- paste0(esFormula," * exp(",paste0(paste0("a",c(1:nExovars),"[t-1] * "),paste0(xregNames,"[t]"),collapse=" + "),")");
+                }
+                else{
+                    esFormula <- paste0(esFormula," * exp(",paste0(paste0("a",c(1:nExovars)," * "),paste0(xregNames,"[t]"),collapse=" + "),")");
+                }
+            }
+            esFormula <- paste0(esFormula," * e[t]");
+        }
+        if(intermittent!="n"){
+            esFormula <- paste0("o[t] * (",esFormula,")");
+        }
+        esFormula <- paste0("y[t] = ",esFormula);
     }
 ##### Produce fit and forecasts of combined model #####
     else{
@@ -1182,15 +1245,17 @@ CreatorES <- function(silent=FALSE,...){
                 if(!is.null(xregNames)){
                     matat <- as.matrix(matatOriginal[,xregNames]);
                     matxt <- as.matrix(matxtOriginal[,xregNames]);
-                    # if(ncol(matat)==1){
-                    #     colnames(matxt) <- colnames(matat) <- xregNames;
-                    # }
-                    xregEstimate <- TRUE;
                 }
                 else{
-                    xregEstimate <- FALSE;
+                    matxt <- matrix(1,nrow(matxtOriginal),1);
+                    matat <- matrix(0,nrow(matatOriginal),1);
                 }
+                nExovars <- results[[i]]$nExovars;
+                matFX <- results[[i]]$matFX;
+                vecgX <- results[[i]]$vecgX;
+                xregEstimate <- results[[i]]$xregEstimate;
             }
+
             BasicMakerES(ParentEnvironment=environment());
             BasicInitialiserES(ParentEnvironment=environment());
             if(damped){
@@ -1234,6 +1299,16 @@ CreatorES <- function(silent=FALSE,...){
         }
         names(ICs) <- paste0("Combined ",ic);
         model <- modelOriginal;
+
+# Write down the formula of ETS
+        esFormula <- "y[t] = combination of ";
+        if(intermittent!="n"){
+            esFormula <- paste0(esFormula,"i");
+        }
+        esFormula <- paste0(esFormula,"ETS");
+        if(!is.null(xreg)){
+            esFormula <- paste0(esFormula,"X");
+        }
     }
 
 ##### Do final check and make some preparations for output #####
@@ -1299,7 +1374,7 @@ CreatorES <- function(silent=FALSE,...){
 
     ##### Return values #####
     if(modelDo!="combine"){
-        model <- list(model=modelname,timeElapsed=Sys.time()-startTime,
+        model <- list(model=modelname,formula=esFormula,timeElapsed=Sys.time()-startTime,
                       states=matvt,persistence=persistence,phi=phi,
                       initialType=initialType,initial=initialValue,initialSeason=initialSeason,
                       nParam=nParam,
@@ -1311,7 +1386,7 @@ CreatorES <- function(silent=FALSE,...){
         return(structure(model,class="smooth"));
     }
     else{
-        model <- list(model=modelname,timeElapsed=Sys.time()-startTime,
+        model <- list(model=modelname,formula=esFormula,timeElapsed=Sys.time()-startTime,
                       initialType=initialType,
                       fitted=y.fit,forecast=y.for,
                       lower=y.low,upper=y.high,residuals=errors,s2=s2,intervals=intervalsType,level=level,

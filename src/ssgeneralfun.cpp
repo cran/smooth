@@ -86,9 +86,12 @@ arma::mat errorvf(arma::mat yact, arma::mat yfit, char Etype){
 }
 
 /* # Function returns value of w() -- y-fitted -- used in the measurement equation */
-double wvalue(arma::vec matrixVt, arma::rowvec rowvecW, char T, char S){
-// matrixVt is a vector here!
+// !!! Add matrixAt and xreg as arguments passed here and implement additive / multiplicative xreg!!!
+double wvalue(arma::vec vecVt, arma::rowvec rowvecW, char E, char T, char S,
+              arma::rowvec rowvecXt, arma::vec vecAt){
+// vecVt is a vector here!
     double yfit = 0;
+    arma::mat matyfit;
 
     switch(S){
 // ZZN
@@ -96,10 +99,10 @@ double wvalue(arma::vec matrixVt, arma::rowvec rowvecW, char T, char S){
         switch(T){
         case 'N':
         case 'A':
-            yfit = as_scalar(rowvecW * matrixVt);
+            matyfit = rowvecW * vecVt;
         break;
         case 'M':
-            yfit = as_scalar(exp(rowvecW * log(matrixVt)));
+            matyfit = exp(rowvecW * log(vecVt));
         break;
         }
     break;
@@ -108,10 +111,10 @@ double wvalue(arma::vec matrixVt, arma::rowvec rowvecW, char T, char S){
         switch(T){
         case 'N':
         case 'A':
-            yfit = as_scalar(rowvecW * matrixVt);
+            matyfit = rowvecW * vecVt;
         break;
         case 'M':
-            yfit = as_scalar(exp(rowvecW.cols(0,1) * log(matrixVt.rows(0,1)))) + matrixVt(2);
+            matyfit = exp(rowvecW.cols(0,1) * log(vecVt.rows(0,1))) + vecVt(2);
         break;
         }
     break;
@@ -120,13 +123,22 @@ double wvalue(arma::vec matrixVt, arma::rowvec rowvecW, char T, char S){
         switch(T){
         case 'N':
         case 'M':
-            yfit = as_scalar(exp(rowvecW * log(matrixVt)));
+            matyfit = exp(rowvecW * log(vecVt));
         break;
         case 'A':
-            yfit = as_scalar(rowvecW.cols(0,1) * matrixVt.rows(0,1)) * matrixVt(2);
+            matyfit = rowvecW.cols(0,1) * vecVt.rows(0,1) * vecVt(2);
         break;
         }
     break;
+    }
+
+    switch(E){
+        case 'A':
+            yfit = as_scalar(matyfit + rowvecXt * vecAt);
+        break;
+        case 'M':
+            yfit = as_scalar(exp(log(matyfit) + rowvecXt * vecAt));
+        break;
     }
 
     return yfit;
@@ -134,12 +146,13 @@ double wvalue(arma::vec matrixVt, arma::rowvec rowvecW, char T, char S){
 
 /* # Function returns value of r() -- additive or multiplicative error -- used in the error term of measurement equation.
      This is mainly needed by sim.ets */
-double rvalue(arma::vec matrixVt, arma::rowvec rowvecW, char E, char T, char S){
+double rvalue(arma::vec vecVt, arma::rowvec rowvecW, char E, char T, char S,
+              arma::rowvec rowvecXt, arma::vec vecAt){
 
     switch(E){
 // MZZ
     case 'M':
-        return wvalue(matrixVt, rowvecW, T, S);
+        return wvalue(vecVt, rowvecW, E, T, S, rowvecXt, vecAt);
     break;
 // AZZ
     case 'A':
@@ -290,37 +303,55 @@ arma::vec gvalue(arma::vec matrixVt, arma::mat matrixF, arma::mat rowvecW, char 
     return g;
 }
 
+/* # Function is needed for the proper xreg update in additive / multiplicative models.*/
+// Make sure that the provided vecXt is already in logs or whatever!
+arma::vec gXvalue(arma::vec vecXt, arma::vec vecGX, arma::vec error, char E){
+    arma::vec bufferforat(vecGX.n_rows);
+
+    switch(E){
+    case 'A':
+        bufferforat = vecGX / vecXt * error;
+    break;
+    case 'M':
+        bufferforat = vecGX / vecXt * log(1 + error);
+    break;
+    }
+    bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
+
+    return bufferforat;
+}
+
 /* # Function is needed for the renormalisation of seasonal components. It should be done seasonal-wise.*/
 arma::mat normaliser(arma::mat Vt, int obsall, unsigned int maxlag, char S, char T){
 
-    unsigned int ncomponents = Vt.n_cols;
-    arma::vec meanseason(maxlag, arma::fill::zeros);
+    unsigned int nComponents = Vt.n_rows;
+    double meanseason = 0;
 
     switch(S){
     case 'A':
-        meanseason.fill(arma::as_scalar(mean(Vt.col(ncomponents-1))));
-        Vt.col(ncomponents-1) = Vt.col(ncomponents-1) - meanseason;
+        meanseason = mean(Vt.row(nComponents-1));
+        Vt.row(nComponents-1) = Vt.row(nComponents-1) - meanseason;
         switch(T){
         case 'N':
         case 'A':
-            Vt.col(0) = Vt.col(0) + meanseason;
+            Vt.row(0) = Vt.row(0) + meanseason;
         break;
         case 'M':
-            Vt.col(0) = Vt.col(0) + meanseason / Vt.col(1);
+            Vt.row(0) = Vt.row(0) + meanseason / Vt.row(1);
         break;
         }
     break;
     case 'M':
-        meanseason.fill(arma::as_scalar(exp(mean(log(Vt.col(ncomponents-1))))));
-        Vt.col(ncomponents-1) = Vt.col(ncomponents-1) / meanseason;
+        meanseason = exp(mean(log(Vt.row(nComponents-1))));
+        Vt.row(nComponents-1) = Vt.row(nComponents-1) / meanseason;
         switch(T){
         case 'N':
         case 'M':
-            Vt.col(0) = Vt.col(0) / meanseason;
+            Vt.row(0) = Vt.row(0) / meanseason;
         break;
         case 'A':
-            Vt.col(0) = Vt.col(0) % meanseason;
-            Vt.col(1) = Vt.col(1) % meanseason;
+            Vt.row(0) = Vt.row(0) * meanseason;
+            Vt.row(1) = Vt.row(1) * meanseason;
         break;
         }
     break;
@@ -875,67 +906,80 @@ List fitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arma::v
     * # matrixAt is the matrix with the parameters for the exogenous
     */
 
+    matrixVt = matrixVt.t();
+    matrixAt = matrixAt.t();
+    arma::mat matrixXtTrans = matrixXt.t();
+
     int obs = vecYt.n_rows;
-    int obsall = matrixVt.n_rows;
-    int lagslength = lags.n_rows;
+    int obsall = matrixVt.n_cols;
+    unsigned int nComponents = matrixVt.n_rows;
     unsigned int maxlag = max(lags);
+    int lagslength = lags.n_rows;
 
-    lags = maxlag - lags;
+    lags = lags * nComponents;
 
-    for(int i=1; i<lagslength; i=i+1){
-        lags(i) = lags(i) + obsall * i;
+    for(int i=0; i<lagslength; i=i+1){
+        lags(i) = lags(i) + (lagslength - i - 1);
     }
 
     arma::uvec lagrows(lagslength, arma::fill::zeros);
 
     arma::vec matyfit(obs, arma::fill::zeros);
     arma::vec materrors(obs, arma::fill::zeros);
-    arma::rowvec bufferforat(vecGX.n_rows);
+    arma::vec bufferforat(vecGX.n_rows);
 
     for (unsigned int i=maxlag; i<obs+maxlag; i=i+1) {
-        lagrows = lags - maxlag + i;
+        lagrows = i * nComponents - lags + nComponents - 1;
 
 /* # Measurement equation and the error term */
-        matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
-                                       matrixXt.row(i-maxlag) * arma::trans(matrixAt.row(i-1)));
+        // matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
+        //                                trans(matrixXt.col(i-maxlag)) * matrixAt.col(i-1));
+        matyfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
+                                                         matrixXt.row(i-maxlag), matrixAt.col(i-1));
         materrors(i-maxlag) = errorf(vecYt(i-maxlag), matyfit(i-maxlag), E);
 
 /* # Transition equation */
-        matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S) +
-                                      gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % vecG * materrors(i-maxlag));
+        matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S) +
+                          gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % vecG * materrors(i-maxlag);
 
 /* Failsafe for cases when unreasonable value for state vector was produced */
-        if(!matrixVt.row(i).is_finite()){
-            matrixVt.row(i) = trans(matrixVt(lagrows));
+        if(!matrixVt.col(i).is_finite()){
+            matrixVt.col(i) = matrixVt(lagrows);
         }
-        if((S=='M') & (matrixVt(i,matrixVt.n_cols-1) <= 0)){
-            matrixVt(i,matrixVt.n_cols-1) = arma::as_scalar(trans(matrixVt(lagrows.row(matrixVt.n_cols-1))));
+        if((S=='M') & (matrixVt(matrixVt.n_rows-1,i) <= 0)){
+            matrixVt(matrixVt.n_rows-1,i) = arma::as_scalar(matrixVt(lagrows.row(matrixVt.n_rows-1)));
         }
         if(T=='M'){
-            if((matrixVt(i,0) <= 0) | (matrixVt(i,1) <= 0)){
-                matrixVt(i,0) = arma::as_scalar(trans(matrixVt(lagrows.row(0))));
-                matrixVt(i,1) = arma::as_scalar(trans(matrixVt(lagrows.row(1))));
+            if((matrixVt(0,i) <= 0) | (matrixVt(1,i) <= 0)){
+                matrixVt(0,i) = arma::as_scalar(matrixVt(lagrows.row(0)));
+                matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
             }
         }
 
 /* Renormalise components if the seasonal model is chosen */
         if(S!='N'){
             if(double(i+1) / double(maxlag) == double((i+1) / maxlag)){
-                matrixVt.rows(i-maxlag+1,i) = normaliser(matrixVt.rows(i-maxlag+1,i), obsall, maxlag, S, T);
+                matrixVt.cols(i-maxlag+1,i) = normaliser(matrixVt.cols(i-maxlag+1,i), obsall, maxlag, S, T);
             }
         }
 
 /* # Transition equation for xreg */
-        bufferforat = arma::trans(vecGX / arma::trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag));
-        bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
-        matrixAt.row(i) = matrixAt.row(i-1) * matrixFX + bufferforat;
+// !!! Use gXregValue function here !!!
+// It is also important to pass here alread log values of xreg in cases of multiplicative models
+        bufferforat = gXvalue(matrixXtTrans.col(i-maxlag), vecGX, materrors.row(i-maxlag), E);
+        // bufferforat = vecGX / trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag);
+        // bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
+        matrixAt.col(i) = matrixFX * matrixAt.col(i-1) + bufferforat;
     }
 
     for (int i=obs+maxlag; i<obsall; i=i+1) {
-        lagrows = lags - maxlag + i;
-        matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S));
-        matrixAt.row(i) = matrixAt.row(i-1) * matrixFX;
+        lagrows = i * nComponents - lags + nComponents - 1;
+        matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
+        matrixAt.col(i) = matrixFX * matrixAt.col(i-1);
     }
+
+    matrixVt = matrixVt.t();
+    matrixAt = matrixAt.t();
 
     return List::create(Named("matvt") = matrixVt, Named("yfit") = matyfit,
                         Named("errors") = materrors, Named("matat") = matrixAt);
@@ -954,93 +998,78 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
 
     int nloops = 1;
 
+    matrixVt = matrixVt.t();
+    matrixAt = matrixAt.t();
+    arma::mat matrixXtTrans = matrixXt.t();
+
     int obs = vecYt.n_rows;
-    int obsall = matrixVt.n_rows;
-    int lagslength = lags.n_rows;
+    int obsall = matrixVt.n_cols;
+    unsigned int nComponents = matrixVt.n_rows;
     unsigned int maxlag = max(lags);
-    unsigned int minlag = min(lags);
-    arma::uvec backlags = lags - minlag;
+    int lagslength = lags.n_rows;
+    arma::uvec lagsModifier = lags;
 
-    lags = maxlag - lags;
+    lags = lags * nComponents;
 
-    for(int i=1; i<lagslength; i=i+1){
-        lags(i) = lags(i) + obsall * i;
-        backlags(i) = backlags(i) + obsall * i;
-    }
-    if(maxlag == minlag){
-        backlags = backlags + maxlag - 1;
+    for(int i=0; i<lagslength; i=i+1){
+        lagsModifier(i) = lagslength - i - 1;
+        // lags(i) = lags(i) + (lagslength - i - 1);
     }
 
     arma::uvec lagrows(lagslength, arma::fill::zeros);
 
     arma::vec matyfit(obs, arma::fill::zeros);
     arma::vec materrors(obs, arma::fill::zeros);
-    arma::rowvec bufferforat(vecGX.n_rows);
-
-    // arma::mat matrixFInverted(matrixF);
-    // arma::rowvec rowvecWInverted(rowvecW);
-
-//     if(!inv(matrixFInverted, matrixF)){
-//         matrixFInverted = matrixF.t();
-//     }
-// // Fix for strange behaviour of ETS(ZAdZ) on seasonal data
-//     if(T!='N'){
-//         matrixFInverted(1,1) = 1;
-//     }
-//
-//     rowvecWInverted = rowvecW * matrixFInverted * matrixFInverted;
-
-    // if(maxlag != minlag){
-        // if(!inv(matrixFInverted, matrixF)){
-            // matrixFInverted = matrixF.t();
-        // }
-    // }
+    arma::vec bufferforat(vecGX.n_rows);
 
     for(int j=0; j<=nloops; j=j+1){
 /* ### Go forward ### */
         for (unsigned int i=maxlag; i<obs+maxlag; i=i+1) {
-            lagrows = lags - maxlag + i;
+            lagrows = i * nComponents - (lags + lagsModifier) + nComponents - 1;
 
 /* # Measurement equation and the error term */
-            matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
-                                           matrixXt.row(i-maxlag) * arma::trans(matrixAt.row(i-1)));
+            // matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
+                                    // trans(matrixXt.col(i-maxlag)) * matrixAt.col(i-1));
+            matyfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
+                                                             matrixXt.row(i-maxlag), matrixAt.col(i-1));
             materrors(i-maxlag) = errorf(vecYt(i-maxlag), matyfit(i-maxlag), E);
 
 /* # Transition equation */
-            matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S) +
-                                          gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % vecG * materrors(i-maxlag));
+            matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S) +
+                              gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % vecG * materrors(i-maxlag);
 
 /* Failsafe for cases when unreasonable value for state vector was produced */
-            if(!matrixVt.row(i).is_finite()){
-                matrixVt.row(i) = trans(matrixVt(lagrows));
+            if(!matrixVt.col(i).is_finite()){
+                matrixVt.col(i) = matrixVt(lagrows);
             }
-            if((S=='M') & (matrixVt(i,matrixVt.n_cols-1) <= 0)){
-                matrixVt(i,matrixVt.n_cols-1) = arma::as_scalar(trans(matrixVt(lagrows.row(matrixVt.n_cols-1))));
+            if((S=='M') & (matrixVt(matrixVt.n_rows-1,i) <= 0)){
+                matrixVt(matrixVt.n_rows-1,i) = arma::as_scalar(matrixVt(lagrows.row(matrixVt.n_rows-1)));
             }
             if(T=='M'){
-                if((matrixVt(i,0) <= 0) | (matrixVt(i,1) <= 0)){
-                    matrixVt(i,0) = arma::as_scalar(trans(matrixVt(lagrows.row(0))));
-                    matrixVt(i,1) = arma::as_scalar(trans(matrixVt(lagrows.row(1))));
+                if((matrixVt(0,i) <= 0) | (matrixVt(1,i) <= 0)){
+                    matrixVt(0,i) = arma::as_scalar(matrixVt(lagrows.row(0)));
+                    matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
                 }
             }
 
 /* Renormalise components if the seasonal model is chosen */
             if(S!='N'){
                 if(double(i+1) / double(maxlag) == double((i+1) / maxlag)){
-                    matrixVt.rows(i-maxlag+1,i) = normaliser(matrixVt.rows(i-maxlag+1,i), obsall, maxlag, S, T);
+                    matrixVt.cols(i-maxlag+1,i) = normaliser(matrixVt.cols(i-maxlag+1,i), obsall, maxlag, S, T);
                 }
             }
 
 /* # Transition equation for xreg */
-            bufferforat = arma::trans(vecGX / arma::trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag));
-            bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
-            matrixAt.row(i) = matrixAt.row(i-1) * matrixFX + bufferforat;
+            bufferforat = gXvalue(matrixXtTrans.col(i-maxlag), vecGX, materrors.row(i-maxlag), E);
+            // bufferforat = vecGX / trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag);
+            // bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
+            matrixAt.col(i) = matrixFX * matrixAt.col(i-1) + bufferforat;
         }
-/* # Fill in the tail of the matrices */
+
         for (int i=obs+maxlag; i<obsall; i=i+1) {
-            lagrows = lags - maxlag + i;
-            matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S));
-            matrixAt.row(i) = matrixAt.row(i-1) * matrixFX;
+            lagrows = i * nComponents - (lags + lagsModifier) + nComponents - 1;
+            matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
+            matrixAt.col(i) = matrixFX * matrixAt.col(i-1);
         }
 
 /* # If this is the last loop, stop here and don't do backcast */
@@ -1050,45 +1079,51 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
 
 /* ### Now go back ### */
         for (unsigned int i=obs+maxlag-1; i>=maxlag; i=i-1) {
-            lagrows = backlags + i + 1;
+            lagrows = i * nComponents + lags - lagsModifier + nComponents - 1;
 
 /* # Measurement equation and the error term */
-            matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
-                                           matrixXt.row(i-maxlag) * arma::trans(matrixAt.row(i+1)));
+            // matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
+            //                         trans(matrixXt.col(i-maxlag)) * matrixAt.col(i+1));
+            matyfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
+                                                             matrixXt.row(i-maxlag), matrixAt.col(i+1));
             materrors(i-maxlag) = errorf(vecYt(i-maxlag), matyfit(i-maxlag), E);
 
 /* # Transition equation */
-            matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S) +
-                                          gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % vecG * materrors(i-maxlag));
+            matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S) +
+                              gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % vecG * materrors(i-maxlag);
 
 /* Failsafe for cases when unreasonable value for state vector was produced */
-            if(!matrixVt.row(i).is_finite()){
-                matrixVt.row(i) = trans(matrixVt(lagrows));
+            if(!matrixVt.col(i).is_finite()){
+                matrixVt.col(i) = matrixVt(lagrows);
             }
-            if((S=='M') & (matrixVt(i,matrixVt.n_cols-1) <= 0)){
-                matrixVt(i,matrixVt.n_cols-1) = arma::as_scalar(trans(matrixVt(lagrows.row(matrixVt.n_cols-1))));
+            if((S=='M') & (matrixVt(matrixVt.n_rows-1,i) <= 0)){
+                matrixVt(matrixVt.n_rows-1,i) = arma::as_scalar(matrixVt(lagrows.row(matrixVt.n_rows-1)));
             }
             if(T=='M'){
-                if((matrixVt(i,0) <= 0) | (matrixVt(i,1) <= 0)){
-                    matrixVt(i,0) = arma::as_scalar(trans(matrixVt(lagrows.row(0))));
-                    matrixVt(i,1) = arma::as_scalar(trans(matrixVt(lagrows.row(1))));
+                if((matrixVt(0,i) <= 0) | (matrixVt(1,i) <= 0)){
+                    matrixVt(0,i) = arma::as_scalar(matrixVt(lagrows.row(0)));
+                    matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
                 }
             }
 
 /* Skipping renormalisation of components in backcasting */
 
 /* # Transition equation for xreg */
-            bufferforat = arma::trans(vecGX / arma::trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag));
-            bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
-            matrixAt.row(i) = matrixAt.row(i+1) * matrixFX + bufferforat;
+            bufferforat = gXvalue(matrixXtTrans.col(i-maxlag), vecGX, materrors.row(i-maxlag), E);
+            // bufferforat = vecGX / trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag);
+            // bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
+            matrixAt.col(i) = matrixFX * matrixAt.col(i+1) + bufferforat;
         }
 /* # Fill in the head of the matrices */
         for (int i=maxlag-1; i>0; i=i-1) {
-            lagrows = backlags + i + 1;
-            matrixVt.row(i) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S));
-            matrixAt.row(i) = matrixAt.row(i+1) * matrixFX;
+            lagrows = i * nComponents + lags - lagsModifier + nComponents - 1;
+            matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
+            matrixAt.col(i) = matrixFX * matrixAt.col(i+1);
         }
     }
+
+    matrixVt = matrixVt.t();
+    matrixAt = matrixAt.t();
 
     return List::create(Named("matvt") = matrixVt, Named("yfit") = matyfit,
                         Named("errors") = materrors, Named("matat") = matrixAt);
@@ -1152,7 +1187,7 @@ RcppExport SEXP fitterwrap(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP vecg,
 
 /* # Function produces the point forecasts for the specified model */
 arma::mat forecaster(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW,
-                     unsigned int hor, char T, char S, arma::uvec lags,
+                     unsigned int hor, char E, char T, char S, arma::uvec lags,
                      arma::mat matrixXt, arma::mat matrixAt, arma::mat matrixFX) {
     int lagslength = lags.n_rows;
     unsigned int maxlag = max(lags);
@@ -1177,7 +1212,7 @@ arma::mat forecaster(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW
         matrixVtnew.row(i) = arma::trans(fvalue(matrixVtnew(lagrows), matrixF, T, S));
         matrixAtnew.row(i) = matrixAtnew.row(i-1) * matrixFX;
 
-        matyfor.row(i-maxlag) = (wvalue(matrixVtnew(lagrows), rowvecW, T, S) + matrixXt.row(i-maxlag) * arma::trans(matrixAt.row(i-maxlag)));
+        matyfor.row(i-maxlag) = (wvalue(matrixVtnew(lagrows), rowvecW, E, T, S, matrixXt.row(i-maxlag), trans(matrixAt.row(i-maxlag))));
     }
 
     return matyfor;
@@ -1186,7 +1221,7 @@ arma::mat forecaster(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW
 /* # Wrapper for forecaster */
 // [[Rcpp::export]]
 RcppExport SEXP forecasterwrap(SEXP matvt, SEXP matF, SEXP matw,
-                               SEXP h, SEXP Ttype, SEXP Stype, SEXP modellags,
+                               SEXP h, SEXP Etype, SEXP Ttype, SEXP Stype, SEXP modellags,
                                SEXP matxt, SEXP matat, SEXP matFX){
     NumericMatrix matvt_n(matvt);
     arma::mat matrixVt(matvt_n.begin(), matvt_n.nrow(), matvt_n.ncol(), false);
@@ -1198,6 +1233,7 @@ RcppExport SEXP forecasterwrap(SEXP matvt, SEXP matF, SEXP matw,
     arma::mat rowvecW(matw_n.begin(), matw_n.nrow(), matw_n.ncol(), false);
 
     unsigned int hor = as<int>(h);
+    char E = as<char>(Etype);
     char T = as<char>(Ttype);
     char S = as<char>(Stype);
 
@@ -1213,7 +1249,7 @@ RcppExport SEXP forecasterwrap(SEXP matvt, SEXP matF, SEXP matw,
     NumericMatrix matFX_n(matFX);
     arma::mat matrixFX(matFX_n.begin(), matFX_n.nrow(), matFX_n.ncol(), false);
 
-    return wrap(forecaster(matrixVt, matrixF, rowvecW, hor, T, S, lags, matrixXt, matrixAt, matrixFX));
+    return wrap(forecaster(matrixVt, matrixF, rowvecW, hor, E, T, S, lags, matrixXt, matrixAt, matrixFX));
 }
 
 /* # Function produces matrix of errors based on multisteps forecast */
@@ -1228,7 +1264,7 @@ arma::mat errorer(arma::mat matrixVt, arma::mat matrixF, arma::mat rowvecW, arma
     for(int i = 0; i < obs; i=i+1){
         hh = std::min(hor, obs-i);
         materrors.submat(hor-1+i, 0, hor-1+i, hh-1) = trans(vecOt.rows(i, i+hh-1) % errorvf(vecYt.rows(i, i+hh-1),
-            forecaster(matrixVt.rows(i,i+maxlag-1), matrixF, rowvecW, hh, T, S, lags, matrixXt.rows(i, i+hh-1),
+            forecaster(matrixVt.rows(i,i+maxlag-1), matrixF, rowvecW, hh, E, T, S, lags, matrixXt.rows(i, i+hh-1),
                 matrixAt.rows(i, i+hh-1), matrixFX), E));
     }
 
@@ -1849,6 +1885,8 @@ List simulator(arma::cube arrayVt, arma::mat matrixerrors, arma::mat matrixot,
                  char E, char T, char S, arma::uvec lags) {
 
     arma::mat matY(obs, nseries);
+    arma::rowvec rowvecXt(1, arma::fill::zeros);
+    arma::vec vecAt(1, arma::fill::zeros);
 
     int lagslength = lags.n_rows;
     unsigned int maxlag = max(lags);
@@ -1871,8 +1909,8 @@ List simulator(arma::cube arrayVt, arma::mat matrixerrors, arma::mat matrixot,
 
             lagrows = lags - maxlag + j;
 /* # Measurement equation and the error term */
-            matY(j-maxlag,i) = matrixot(j-maxlag,i) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
-                                 rvalue(matrixVt(lagrows), rowvecW, E, T, S) * matrixerrors(j-maxlag,i));
+            matY(j-maxlag,i) = matrixot(j-maxlag,i) * (wvalue(matrixVt(lagrows), rowvecW, E, T, S, rowvecXt, vecAt) +
+                                 rvalue(matrixVt(lagrows), rowvecW, E, T, S, rowvecXt, vecAt) * matrixerrors(j-maxlag,i));
 /* # Transition equation */
             matrixVt.row(j) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S) +
                                           gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % matrixG.col(i) * matrixerrors(j-maxlag,i));
