@@ -137,6 +137,9 @@ double wvalue(arma::vec vecVt, arma::rowvec rowvecW, char E, char T, char S,
             yfit = as_scalar(matyfit + rowvecXt * vecAt);
         break;
         case 'M':
+            if(any(any(matyfit<0))){
+                matyfit.elem(find(matyfit<0)).ones();
+            }
             yfit = as_scalar(exp(log(matyfit) + rowvecXt * vecAt));
         break;
     }
@@ -932,8 +935,6 @@ List fitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arma::v
         lagrows = i * nComponents - lags + nComponents - 1;
 
 /* # Measurement equation and the error term */
-        // matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
-        //                                trans(matrixXt.col(i-maxlag)) * matrixAt.col(i-1));
         matyfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
                                                          matrixXt.row(i-maxlag), matrixAt.col(i-1));
         materrors(i-maxlag) = errorf(vecYt(i-maxlag), matyfit(i-maxlag), E);
@@ -964,11 +965,7 @@ List fitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arma::v
         }
 
 /* # Transition equation for xreg */
-// !!! Use gXregValue function here !!!
-// It is also important to pass here alread log values of xreg in cases of multiplicative models
         bufferforat = gXvalue(matrixXtTrans.col(i-maxlag), vecGX, materrors.row(i-maxlag), E);
-        // bufferforat = vecGX / trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag);
-        // bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
         matrixAt.col(i) = matrixFX * matrixAt.col(i-1) + bufferforat;
     }
 
@@ -1013,7 +1010,6 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
 
     for(int i=0; i<lagslength; i=i+1){
         lagsModifier(i) = lagslength - i - 1;
-        // lags(i) = lags(i) + (lagslength - i - 1);
     }
 
     arma::uvec lagrows(lagslength, arma::fill::zeros);
@@ -1028,8 +1024,6 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
             lagrows = i * nComponents - (lags + lagsModifier) + nComponents - 1;
 
 /* # Measurement equation and the error term */
-            // matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
-                                    // trans(matrixXt.col(i-maxlag)) * matrixAt.col(i-1));
             matyfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
                                                              matrixXt.row(i-maxlag), matrixAt.col(i-1));
             materrors(i-maxlag) = errorf(vecYt(i-maxlag), matyfit(i-maxlag), E);
@@ -1061,8 +1055,6 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
 
 /* # Transition equation for xreg */
             bufferforat = gXvalue(matrixXtTrans.col(i-maxlag), vecGX, materrors.row(i-maxlag), E);
-            // bufferforat = vecGX / trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag);
-            // bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
             matrixAt.col(i) = matrixFX * matrixAt.col(i-1) + bufferforat;
         }
 
@@ -1082,8 +1074,6 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
             lagrows = i * nComponents + lags - lagsModifier + nComponents - 1;
 
 /* # Measurement equation and the error term */
-            // matyfit.row(i-maxlag) = vecOt(i-maxlag) * (wvalue(matrixVt(lagrows), rowvecW, T, S) +
-            //                         trans(matrixXt.col(i-maxlag)) * matrixAt.col(i+1));
             matyfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
                                                              matrixXt.row(i-maxlag), matrixAt.col(i+1));
             materrors(i-maxlag) = errorf(vecYt(i-maxlag), matyfit(i-maxlag), E);
@@ -1110,12 +1100,10 @@ List backfitter(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, arm
 
 /* # Transition equation for xreg */
             bufferforat = gXvalue(matrixXtTrans.col(i-maxlag), vecGX, materrors.row(i-maxlag), E);
-            // bufferforat = vecGX / trans(matrixXt.row(i-maxlag)) * materrors(i-maxlag);
-            // bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
             matrixAt.col(i) = matrixFX * matrixAt.col(i+1) + bufferforat;
         }
 /* # Fill in the head of the matrices */
-        for (int i=maxlag-1; i>0; i=i-1) {
+        for (int i=maxlag-1; i>=0; i=i-1) {
             lagrows = i * nComponents + lags - lagsModifier + nComponents - 1;
             matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
             matrixAt.col(i) = matrixFX * matrixAt.col(i+1);

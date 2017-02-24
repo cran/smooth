@@ -19,14 +19,14 @@ ourModel <- es(M3$N2457$x, h=18, holdout=TRUE, silent="all")
 es(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, intervals="np", level=0.93)
 
 ## ----es_N2457_modelType--------------------------------------------------
-modelType(ourModel)
+model.type(ourModel)
 
 ## ----es_N2457_reuse_model_parts------------------------------------------
-es(M3$N2457$x, model=modelType(ourModel), h=18, holdout=FALSE, initial=ourModel$initial, silent="graph")
-es(M3$N2457$x, model=modelType(ourModel), h=18, holdout=FALSE, persistence=ourModel$persistence, silent="graph")
+es(M3$N2457$x, model=model.type(ourModel), h=18, holdout=FALSE, initial=ourModel$initial, silent="graph")
+es(M3$N2457$x, model=model.type(ourModel), h=18, holdout=FALSE, persistence=ourModel$persistence, silent="graph")
 
 ## ----es_N2457_set_initial------------------------------------------------
-es(M3$N2457$x, model=modelType(ourModel), h=18, holdout=FALSE, initial=1500, silent="graph")
+es(M3$N2457$x, model=model.type(ourModel), h=18, holdout=FALSE, initial=1500, silent="graph")
 
 ## ----es_N2457_aMSTFE-----------------------------------------------------
 es(M3$N2457$x, h=18, holdout=TRUE, cfType="aMSTFE", bounds="a", ic="BIC", intervals=TRUE)

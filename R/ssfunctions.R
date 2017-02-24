@@ -66,7 +66,12 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
 
     ##### data #####
     if(!is.numeric(data)){
-        stop("The provided data is not a vector or ts object! Can't build any model!", call.=FALSE);
+        stop("The provided data is not a vector or ts object! Can't construct any model!", call.=FALSE);
+    }
+    if(!is.null(ncol(data))){
+        if(ncol(data)>1){
+            stop("The provided data is not a vector! Can't construct any model!", call.=FALSE);
+        }
     }
     # Check the data for NAs
     if(any(is.na(data))){
@@ -997,7 +1002,12 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             }
         }
         else{
-            phiEstimate <- TRUE;
+            if(damped==TRUE){
+                phiEstimate <- TRUE;
+            }
+            else{
+                phiEstimate <- FALSE;
+            }
         }
     }
 
@@ -2097,8 +2107,9 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
 
     if(!is.null(xreg)){
         if(any(is.na(xreg))){
-            warning("The exogenous variables contain NAs! This may lead to problems during estimation and in forecasting.",
+            warning("The exogenous variables contain NAs! This may lead to problems during estimation and in forecasting.\nSubstituting them with 0.",
                     call.=FALSE);
+            xreg[is.na(xreg)] <- 0;
         }
         if(!is.null(dim(xreg))){
             if(ncol(xreg)==1){
@@ -2112,6 +2123,7 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
 ##### The case with vectors and ts objects, but not matrices
         if(is.vector(xreg) | (is.ts(xreg) & !is.matrix(xreg))){
 # Check if xreg contains something meaningful
+
             if(is.null(initialX)){
                 if(all(xreg[1:obsInsample]==xreg[1])){
                     warning("The exogenous variable has no variability. Cannot do anything with that, so dropping out xreg.",
@@ -2120,21 +2132,21 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
                 }
             }
 
-            if(all(data[1:obsInsample]==xreg[1:obsInsample])){
-                warning("The exogenous variable and the forecasted data are exactly the same. What's the point of such a regression?",
-                        call.=FALSE);
-                xreg <- NULL;
-            }
-
             if(!is.null(xreg)){
-                if(any(length(xreg) < obsAll)){
+                if(length(xreg) < obsAll){
                     warning("xreg did not contain values for the holdout, so we had to predict missing values.", call.=FALSE);
                     xregForecast <- es(xreg,h=obsAll-length(xreg),intermittent="auto",ic="AICc",silent=TRUE)$forecast;
                     xreg <- c(as.vector(xreg),as.vector(xregForecast));
                 }
-                else if(any(length(xreg) > obsAll)){
+                else if(length(xreg) > obsAll){
                     warning("xreg contained too many observations, so we had to cut off some of them.", call.=FALSE);
                     xreg <- xreg[1:obsAll];
+                }
+
+                if(all(data[1:obsInsample]==xreg[1:obsInsample])){
+                    warning("The exogenous variable and the forecasted data are exactly the same. What's the point of such a regression?",
+                            call.=FALSE);
+                    xreg <- NULL;
                 }
 
 # Number of exogenous variables
@@ -2168,13 +2180,6 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
                 xreg <- as.matrix(xreg);
             }
 
-            xregEqualToData <- apply(xreg[1:obsInsample,]==data[1:obsInsample],2,all);
-            if(any(xregEqualToData)){
-                warning("One of exogenous variables and the forecasted data are exactly the same. We have droped it.",
-                        call.=FALSE);
-                xreg <- matrix(xreg[,!xregEqualToData],nrow=nrow(xreg),ncol=ncol(xreg)-1);
-            }
-
             nExovars <- ncol(xreg);
             if(nrow(xreg) < obsAll){
                 warning("xreg did not contain values for the holdout, so we had to predict missing values.", call.=FALSE);
@@ -2198,6 +2203,14 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
                 warning("xreg contained too many observations, so we had to cut off some of them.", call.=FALSE);
                 xreg <- xreg[1:obsAll,];
             }
+
+            xregEqualToData <- apply(xreg[1:obsInsample,]==data[1:obsInsample],2,all);
+            if(any(xregEqualToData)){
+                warning("One of exogenous variables and the forecasted data are exactly the same. We have droped it.",
+                        call.=FALSE);
+                xreg <- matrix(xreg[,!xregEqualToData],nrow=nrow(xreg),ncol=ncol(xreg)-1,dimnames=list(NULL,colnames(xreg[,!xregEqualToData])));
+            }
+
             nExovars <- ncol(xreg);
 
 # If initialX is provided, then probably we don't need to check the xreg on variability and multicollinearity
