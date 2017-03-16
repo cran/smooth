@@ -5,8 +5,6 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
                          "persistenceEstimate","initial","multisteps","ot",
                          "silentText","silentGraph","silentLegend"));
 
-
-
 #' Exponential Smoothing in SSOE state-space model
 #'
 #' Function constructs ETS model and returns forecast, fitted values, errors
@@ -29,7 +27,17 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #'
 #' For the details see Hyndman et al.(2008).
 #'
-#' @param data Vector or ts object, containing data needed to be forecasted.
+#' @template ssBasicParam
+#' @template ssAdvancedParam
+#' @template ssPersistenceParam
+#' @template ssAuthor
+#' @template ssKeywords
+#'
+#' @template ssGeneralRef
+#' @template ssIntermittentRef
+#' @template ssETSRef
+#' @template ssIntervalsRef
+#'
 #' @param model The type of ETS model. Can consist of 3 or 4 chars: \code{ANN},
 #' \code{AAN}, \code{AAdN}, \code{AAA}, \code{AAdA}, \code{MAdM} etc.
 #' \code{ZZZ} means that the model will be selected based on the chosen
@@ -58,8 +66,6 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' Keep in mind that model selection with "Z" components uses Branch and Bound
 #' algorithm and may skip some models that could have slightly smaller
 #' information criteria.
-#' @param persistence Vector of smoothing parameters. If \code{NULL}, the
-#' parameters are estimated.
 #' @param phi Value of damping parameter. If \code{NULL} then it is estimated.
 #' @param initial Can be either character or a vector of initial states. If it
 #' is character, then it can be \code{"optimal"}, meaning that the initial
@@ -69,90 +75,16 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' by \code{initial}.
 #' @param initialSeason Vector of initial values for seasonal components. If
 #' \code{NULL}, they are estimated during optimisation.
-#' @param ic Information criterion to use in model selection.
-#' @param cfType Type of Cost Function used in optimization. \code{cfType} can
-#' be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
-#' \code{HAM} (Half Absolute Moment), \code{MLSTFE} - Mean Log Squared Trace
-#' Forecast Error, \code{MSTFE} - Mean Squared Trace Forecast Error and
-#' \code{MSEh} - optimisation using only h-steps ahead error. If
-#' \code{cfType!="MSE"}, then likelihood and model selection is done based on
-#' equivalent \code{MSE}. Model selection in this cases becomes not optimal.
-#'
-#' There are also available analytical approximations for multistep functions:
-#' \code{aMSEh}, \code{aMSTFE} and \code{aMLSTFE}. These can be useful in cases
-#' of small samples.
-#' @param h Length of forecasting horizon.
-#' @param holdout If \code{TRUE}, holdout sample of size \code{h} is taken from
-#' the end of the data.
-#' @param intervals Type of intervals to construct. This can be:
-#'
-#' \itemize{
-#' \item \code{none}, aka \code{n} - do not produce prediction
-#' intervals.
-#' \item \code{parametric}, \code{p} - use state-space structure of ETS. In
-#' case of mixed models this is done using simulations, which may take longer
-#' time than for the pure additive and pure multiplicative models.
-#' \item \code{semiparametric}, \code{sp} - intervals based on covariance
-#' matrix of 1 to h steps ahead errors and assumption of normal / log-normal
-#' distribution (depending on error type).
-#' \item \code{nonparametric}, \code{np} - intervals based on values from a
-#' quantile regression on error matrix (see Taylor and Bunn, 1999). The model
-#' used in this process is e[j] = a j^b, where j=1,..,h.
-#' }
-#' The parameter also accepts \code{TRUE} and \code{FALSE}. Former means that
-#' parametric intervals are constructed, while latter is equivalent to
-#' \code{none}.
-#' @param level Confidence level. Defines width of prediction interval.
-#' @param intermittent Defines type of intermittent model used. Can be: 1.
-#' \code{none}, meaning that the data should be considered as non-intermittent;
-#' 2. \code{fixed}, taking into account constant Bernoulli distribution of
-#' demand occurancies; 3. \code{croston}, based on Croston, 1972 method with
-#' SBA correction; 4. \code{tsb}, based on Teunter et al., 2011 method. 5.
-#' \code{auto} - automatic selection of intermittency type based on information
-#' criteria. The first letter can be used instead. 6. \code{"sba"} -
-#' Syntetos-Boylan Approximation for Croston's method (bias correction)
-#' discussed in Syntetos and Boylan, 2005.
-#' @param bounds What type of bounds to use for smoothing parameters
-#' ("admissible" or "usual"). The first letter can be used instead of the whole
-#' word.
-#' @param silent If \code{silent="none"}, then nothing is silent, everything is
-#' printed out and drawn. \code{silent="all"} means that nothing is produced or
-#' drawn (except for warnings). In case of \code{silent="graph"}, no graph is
-#' produced. If \code{silent="legend"}, then legend of the graph is skipped.
-#' And finally \code{silent="output"} means that nothing is printed out in the
-#' console, but the graph is produced. \code{silent} also accepts \code{TRUE}
-#' and \code{FALSE}. In this case \code{silent=TRUE} is equivalent to
-#' \code{silent="all"}, while \code{silent=FALSE} is equivalent to
-#' \code{silent="none"}. The parameter also accepts first letter of words ("n",
-#' "a", "g", "l", "o").
-#' @param xreg Vector (either numeric or time series) or matrix (or data.frame)
-#' of exogenous variables that should be included in the model. If matrix
-#' included than columns should contain variables and rows - observations. Note
-#' that \code{xreg} should have number of observations equal either to
-#' in-sample or to the whole series. If the number of observations in
-#' \code{xreg} is equal to in-sample, then values for the holdout sample are
-#' produced using Naive.
-#' @param xregDo Variable defines what to do with the provided xreg:
-#' \code{"use"} means that all of the data should be used, whilie
-#' \code{"select"} means that a selection using \code{ic} should be done.
-#' \code{"combine"} will be available at some point in future...
-#' @param initialX Vector of initial parameters for exogenous variables.
-#' Ignored if \code{xreg} is NULL.
-#' @param updateX If \code{TRUE}, transition matrix for exogenous variables is
-#' estimated, introducing non-linear interractions between parameters.
-#' Prerequisite - non-NULL \code{xreg}.
-#' @param persistenceX Persistence vector \eqn{g_X}, containing smoothing
-#' parameters for exogenous variables. If \code{NULL}, then estimated.
-#' Prerequisite - non-NULL \code{xreg}.
-#' @param transitionX Transition matrix \eqn{F_x} for exogenous variables. Can
-#' be provided as a vector. Matrix will be formed using the default
-#' \code{matrix(transition,nc,nc)}, where \code{nc} is number of components in
-#' state vector. If \code{NULL}, then estimated. Prerequisite - non-NULL
-#' \code{xreg}.
 #' @param ...  Other non-documented parameters. For example \code{FI=TRUE} will
 #' make the function also produce Fisher Information matrix, which then can be
 #' used to calculated variances of smoothing parameters and initial states of
 #' the model.
+#' Parameters \code{C}, \code{CLower} and \code{CUpper} can be passed via
+#' ellipsis as well. In this case they will be used for optimisation. \code{C}
+#' sets the initial values before the optimisation, \code{CLower} and
+#' \code{CUpper} define lower and upper bounds for the search inside of the
+#' specified \code{bounds}. These values should have exactly the length equal
+#' to the number of parameters to estimate.
 #' @return Object of class "smooth" is returned. It contains the list of the
 #' following values for clasical ETS models:
 #'
@@ -232,27 +164,9 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' \item \code{xreg},
 #' \item \code{accuracy}.
 #' }
-#' @author Ivan Svetunkov, \email{ivan@svetunkov.ru}
 #' @seealso \code{\link[forecast]{ets}, \link[forecast]{forecast},
 #' \link[stats]{ts}, \link[smooth]{sim.es}}
-#' @references \enumerate{
-#' \item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008) Forecasting
-#' with exponential smoothing: the state space approach, Springer-Verlag.
-#' \url{http://www.exponentialsmoothing.net}.
-#' \item Taylor, J.W. and Bunn, D.W. (1999) A Quantile Regression Approach to
-#' Generating Prediction Intervals. Management Science, Vol 45, No 2, pp
-#' 225-237.
-#' \item Kolassa, S. (2011) Combining exponential smoothing forecasts using Akaike
-#' weights. International Journal of Forecasting, 27, pp 238 - 251.
-#' \item Teunter R., Syntetos A., Babai Z. (2011). Intermittent demand:
-#' Linking forecasting to inventory obsolescence. European Journal of
-#' Operational Research 214, 606-615.
-#' \item Croston, J. (1972) Forecasting and stock control for intermittent demands.
-#' Operational Research Quarterly, 23(3), 289-303.
-#' \item Syntetos, A., Boylan J. (2005) The accuracy of intermittent demand estimates.
-#' International Journal of Forecasting, 21(2), 303-314.
-#' }
-#' @keywords exponential smoothing ETS forecasting trace likelihood
+#'
 #' @examples
 #'
 #' library(Mcomp)
@@ -545,7 +459,7 @@ BasicMakerES <- function(...){
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
 
     basicparams <- initparams(Ttype, Stype, datafreq, obsInsample, obsAll, y,
-                              damped, phi, smoothingparameters, initialstates, seasonalcoefs);
+                              damped, phi, smoothingParameters, initialstates, seasonalCoefs);
     list2env(basicparams,ParentEnvironment);
 }
 
@@ -572,9 +486,15 @@ EstimatorES <- function(...){
     BasicMakerES(ParentEnvironment=environment());
 
     Cs <- CValues(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat);
-    C <- Cs$C;
-    CUpper <- Cs$CUpper;
-    CLower <- Cs$CLower;
+    if(is.null(providedC)){
+        C <- Cs$C;
+    }
+    if(is.null(providedCLower)){
+        CLower <- Cs$CLower;
+    }
+    if(is.null(providedCUpper)){
+        CUpper <- Cs$CUpeer;
+    }
 
     # Parameters are chosen to speed up the optimisation process and have decent accuracy
     res <- nloptr(C, CF, lb=CLower, ub=CUpper,
@@ -621,15 +541,14 @@ EstimatorES <- function(...){
     }
     C <- res$solution;
 
-    if(all(C==Cs$C)){
-        if(initialType!="b"){
+    if(all(C==Cs$C) & (initialType!="b")){
+        if(any(persistenceEstimate,gXEstimate,FXEstimate)){
             warning(paste0("Failed to optimise the model ETS(", current.model,
                            "). Try different initialisation maybe?\nAnd check all the messages and warnings...",
                            "If you did your best, but the optimiser still fails, report this to the maintainer, please."),
                     call.=FALSE);
         }
     }
-
 
     nParam <- 1 + nComponents + damped + (nComponents + (maxlag - 1) * (Stype!="N")) * (initialType!="b") + (!is.null(xreg)) * nExovars + (updateX)*(nExovars^2 + nExovars);
 
@@ -1096,14 +1015,12 @@ CreatorES <- function(silent=FALSE,...){
     }
 }
 
-##### Set initialstates, initialsesons and persistence vector #####
+##### Set initialstates, initialSesons and persistence vector #####
     # If initial values are provided, write them. If not, estimate them.
     # First two columns are needed for additive seasonality, the 3rd and 4th - for the multiplicative
     if(Ttype!="N"){
         if(initialType!="p"){
             initialstates <- matrix(NA,1,4);
-            # "-1" is needed, so the level would correspond to the values before the in-sample
-            #min(max(12,datafreq),obsNonzero)
             initialstates[1,2] <- cov(yot[1:min(12,obsNonzero)],c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero)));
             initialstates[1,1] <- mean(yot[1:min(12,obsNonzero)]) - initialstates[1,2] * mean(c(1:min(12,obsNonzero)));
             if(allowMultiplicative){
@@ -1129,26 +1046,27 @@ CreatorES <- function(silent=FALSE,...){
     if(Stype!="N"){
         if(is.null(initialSeason)){
             initialSeasonEstimate <- TRUE;
-            seasonalcoefs <- decompose(ts(c(y),frequency=datafreq),type="additive")$seasonal[1:datafreq];
-            seasonalcoefs <- cbind(seasonalcoefs,decompose(ts(c(y),frequency=datafreq),
+            seasonalCoefs <- decompose(ts(c(y),frequency=datafreq),type="additive")$seasonal[1:datafreq];
+            seasonalCoefs <- cbind(seasonalCoefs,decompose(ts(c(y),frequency=datafreq),
                                                            type="multiplicative")$seasonal[1:datafreq]);
         }
         else{
             initialSeasonEstimate <- FALSE;
-            seasonalcoefs <- cbind(initialSeason,initialSeason);
+            seasonalCoefs <- cbind(initialSeason,initialSeason);
         }
     }
     else{
         initialSeasonEstimate <- FALSE;
-        seasonalcoefs <- matrix(1,1,1);
+        seasonalCoefs <- matrix(1,1,1);
     }
 
     # If the persistence vector is provided, use it
     if(!is.null(persistence)){
-        smoothingparameters <- cbind(persistence,persistence);
+        smoothingParameters <- cbind(persistence,persistence);
     }
     else{
-        smoothingparameters <- cbind(c(0.2,0.1,0.05),rep(0.05,3));
+        # smoothingParameters <- cbind(c(0.2,0.1,0.05),rep(0.05,3));
+        smoothingParameters <- cbind(c(0.3,0.2,0.1),c(0.3,0.2,0.1));
     }
 
 ##### Preset y.fit, y.for, errors and basic parameters #####
@@ -1157,7 +1075,7 @@ CreatorES <- function(silent=FALSE,...){
     errors <- rep(NA,obsInsample);
 
     basicparams <- initparams(Ttype, Stype, datafreq, obsInsample, obsAll, y,
-                              damped, phi, smoothingparameters, initialstates, seasonalcoefs);
+                              damped, phi, smoothingParameters, initialstates, seasonalCoefs);
 
 ##### Prepare exogenous variables #####
     xregdata <- ssXreg(data=data, Etype=Etype, xreg=xreg, updateX=updateX,
@@ -1312,6 +1230,57 @@ CreatorES <- function(silent=FALSE,...){
         modelDo <- "nothing";
     }
 
+    ellipsis <- list(...);
+    providedC <- ellipsis$C;
+    providedCLower <- ellipsis$CLower;
+    providedCUpper <- ellipsis$CUpper;
+##### Initials for optimiser #####
+    if(!all(c(is.null(providedC),is.null(providedCLower),is.null(providedCUpper)))){
+        if((modelDo==c("estimate")) & (xregDo==c("u"))){
+            environment(BasicMakerES) <- environment();
+            BasicMakerES(ParentEnvironment=environment());
+
+            # Number of parameters
+            nParam <- nComponents + damped + (nComponents + (maxlag-1) * (Stype!="N")) * (initialType!="b") + !is.null(xreg) * nExovars + (updateX)*(nExovars^2 + nExovars);
+            if(nParam!=length(providedC)){
+                warning(paste0("Number of parameters to optimise differes from the length of C:",nParam," vs ",length(providedC),".\n",
+                               "We will have to drop parameter C."),call.=FALSE);
+                providedC <- NULL;
+            }
+            if(nParam!=length(providedCLower)){
+                warning(paste0("Number of parameters to optimise differes from the length of CLower:",nParam," vs ",length(providedCLower),".\n",
+                               "We will have to drop parameter CLower."),call.=FALSE);
+                providedCLower <- NULL;
+            }
+            if(nParam!=length(providedCUpper)){
+                warning(paste0("Number of parameters to optimise differes from the length of CUpper:",nParam," vs ",length(providedCUpper),".\n",
+                               "We will have to drop parameter CUpper."),call.=FALSE);
+                providedCUpper <- NULL;
+            }
+            C <- providedC;
+            CLower <- providedCLower;
+            CUpper <- providedCUpper;
+        }
+        else{
+            if(modelDo==c("select")){
+                warning("Predefined values of C cannot be used with model selection.",call.=FALSE);
+            }
+            else if(modelDo==c("combine")){
+                warning("Predefined values of C cannot be used with combination of forecasts.",call.=FALSE);
+            }
+            else if(modelDo==c("nothing")){
+                warning("Sorry, but there is nothing to optimise, so we have to drop parameter C.",call.=FALSE);
+            }
+
+            if(xregDo==c("select")){
+                warning("Predefined values of C cannot be used with xreg selection.",call.=FALSE);
+            }
+            C <- NULL;
+            CLower <- NULL;
+            CUpper <- NULL;
+        }
+    }
+
 ##### Now do estimation and model selection #####
     environment(intermittentParametersSetter) <- environment();
     environment(intermittentMaker) <- environment();
@@ -1356,18 +1325,26 @@ CreatorES <- function(silent=FALSE,...){
         }
 # Prepare stuff for intermittency selection
         intermittentModelsPool <- c("n","f","c","t","s");
-        intermittentICs <- rep(NA,length(intermittentModelsPool));
+        intermittentCFs <- intermittentICs <- rep(NA,length(intermittentModelsPool));
         intermittentModelsList <- list(NA);
-        intermittentICs <- esValues$icBest;
+        intermittentICs[1] <- esValues$icBest;
+        intermittentCFs[1] <- esValues$cfObjective;
 
         for(i in 2:length(intermittentModelsPool)){
             intermittentParametersSetter(intermittent=intermittentModelsPool[i],ParentEnvironment=environment());
             intermittentMaker(intermittent=intermittentModelsPool[i],ParentEnvironment=environment());
             intermittentModelsList[[i]] <- CreatorES(silent=TRUE);
             intermittentICs[i] <- intermittentModelsList[[i]]$icBest;
+            intermittentCFs[i] <- intermittentModelsList[[i]]$cfObjective;
         }
-        intermittentICs[is.nan(intermittentICs)] <- 1e+100;
-        intermittentICs[is.na(intermittentICs)] <- 1e+100;
+        intermittentICs[is.nan(intermittentICs) | is.na(intermittentICs)] <- 1e+100;
+        intermittentCFs[is.nan(intermittentCFs) | is.na(intermittentCFs)] <- 1e+100;
+        # In cases when the data is binary, choose between intermittent models only
+        if(any(intermittentCFs==0)){
+            if(all(intermittentCFs[2:length(intermittentModelsPool)]==0)){
+                intermittentICs[1] <- Inf;
+            }
+        }
         iBest <- which(intermittentICs==min(intermittentICs))[1];
 
         if(!silentText){

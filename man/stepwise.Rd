@@ -39,9 +39,17 @@ xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rnorm(100,0,3),xreg)
 stepwise(xreg)
 
 }
+\seealso{
+\code{\link[stats]{step}, \link[smooth]{xregExpander}}
+}
 \author{
-Ivan Svetunkov
+Ivan Svetunkov, \email{ivan@svetunkov.ru}
 }
 \keyword{linear}
+\keyword{models}
+\keyword{nonlinear}
 \keyword{regression}
+\keyword{smooth}
 \keyword{stepwise}
+\keyword{ts}
+\keyword{univar}

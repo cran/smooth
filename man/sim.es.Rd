@@ -44,10 +44,10 @@ bounds are also used for multiplicative models, so be careful!}
 \item{nsim}{Number of series to generate (numeber of simulations to do).}
 
 \item{randomizer}{Type of random number generator function used for error
-term. Defaults are: \code{rnorm}, \code{rlnorm}, \code{rt}, \code{runif},
-\code{rbeta}. But any function from \link[stats]{Distributions} will do the
-trick if the appropriate parameters are passed. For example \code{rpois}
-with \code{lambda=2} can be used as well.}
+term. Defaults are: \code{rnorm}, \code{rt}, \code{runif}, \code{rbeta}. But
+any function from \link[stats]{Distributions} will do the trick if the
+appropriate parameters are passed. For example \code{rpois} with
+\code{lambda=2} can be used as well.}
 
 \item{iprob}{Probability of occurrence, used for intermittent data
 generation. This can be a vector, implying that probability varies in time
@@ -63,19 +63,19 @@ data. \code{sd=0.1} is usually already a high value for such models.}
 \value{
 List of the following values is returned:
 \itemize{
-\item{model}{Name of ETS model.}
-\item{data}{Time series vector (or matrix if \code{nsim>1}) of the generated
-series.}
-\item{states}{Matrix (or array if \code{nsim>1}) of states. States are in
-columns, time is in rows.}
-\item{persistence}{Vector (or matrix if \code{nsim>1}) of smoothing
-parameters used in the simulation.}
-\item{phi}{Value of damping parameter used in time series generation.}
-\item{residuals}{Error terms used in the simulation. Either vector or matrix,
-depending on \code{nsim}.}
-\item{occurrences}{Values of occurrence variable. Once again, can be either
-a vector or a matrix...}
-\item{logLik}{Log-likelihood of the constructed model.}
+\item \code{model} - Name of ETS model.
+\item \code{data} - Time series vector (or matrix if \code{nsim>1}) of the generated
+series.
+\item \code{states} - Matrix (or array if \code{nsim>1}) of states. States are in
+columns, time is in rows.
+\item \code{persistence} - Vector (or matrix if \code{nsim>1}) of smoothing
+parameters used in the simulation.
+\item \code{phi} - Value of damping parameter used in time series generation.
+\item \code{residuals} - Error terms used in the simulation. Either vector or matrix,
+depending on \code{nsim}.
+\item \code{occurrences} - Values of occurrence variable. Once again, can be either
+a vector or a matrix...
+\item \code{logLik} - Log-likelihood of the constructed model.
 }
 }
 \description{
@@ -123,9 +123,13 @@ iETS.MNN <- sim.es("MNN",frequency=12,persistence=0.2,initial=4,iprob=iprob,obs=
 
 }
 \references{
-Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
+\itemize{
+\item Snyder, R. D., 1985. Recursive Estimation of Dynamic Linear Models.
+Journal of the Royal Statistical Society, Series B (Methodological) 47 (2), 272-276.
+\item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 Forecasting with exponential smoothing: the state space approach,
 Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
+}
 }
 \seealso{
 \code{\link[smooth]{es}, \link[forecast]{ets},
@@ -134,8 +138,9 @@ Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}
 }
-\keyword{ETS}
-\keyword{exponential}
-\keyword{forecasting}
-\keyword{simulation}
-\keyword{smoothing}
+\keyword{models}
+\keyword{nonlinear}
+\keyword{regression}
+\keyword{smooth}
+\keyword{ts}
+\keyword{univar}

@@ -50,6 +50,9 @@ es(M3$N2457$x, model="ZZZ", h=18, holdout=TRUE, xreg=x, xregDo="select")
 ## ----es_N2457_xreg_update------------------------------------------------
 ourModel <- es(M3$N2457$x, model="ZZZ", h=18, holdout=TRUE, xreg=x, updateX=TRUE)
 
+## ----es_N2457_xreg_expanded_select---------------------------------------
+es(M3$N2457$x, model="ZZZ", h=18, holdout=TRUE, xreg=xregExpander(x), xregDo="select")
+
 ## ----es_N2457_xreg_formula-----------------------------------------------
 formula(ourModel)
 

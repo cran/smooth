@@ -73,18 +73,27 @@ when using extraction function \code{orders()}. See vignettes on simulate
 functions for examples.}
 }
 \value{
-List of the following values is returned: \item{model}{Name of
-SSARIMA model.} \item{AR}{Value of AR parameters. If \code{nsim>1}, then
-this is a matrix.} \item{MA}{Value of MA parameters. If \code{nsim>1}, then
-this is a matrix.} \item{constant}{Value of constant term. If \code{nsim>1},
-then this is a vector.} \item{initial}{Initial values of SSARIM. If
-\code{nsim>1}, then this is a matrix.} \item{data}{Time series vector (or
-matrix if \code{nsim>1}) of the generated series.} \item{states}{Matrix (or
-array if \code{nsim>1}) of states. States are in columns, time is in rows.}
-\item{residuals}{Error terms used in the simulation. Either vector or
-matrix, depending on \code{nsim}.} \item{occurrences}{Values of occurrence
-variable. Once again, can be either a vector or a matrix...}
-\item{logLik}{Log-likelihood of the constructed model.}
+List of the following values is returned:
+\itemize{
+\item \code{model} - Name of SSARIMA model.
+\item \code{AR} - Value of AR parameters. If \code{nsim>1}, then this is a
+matrix.
+\item \code{MA} - Value of MA parameters. If \code{nsim>1}, then this is a
+matrix.
+\item \code{constant} - Value of constant term. If \code{nsim>1}, then this
+is a vector.
+\item \code{initial} - Initial values of SSARIM. If \code{nsim>1}, then this
+is a matrix.
+\item \code{data} - Time series vector (or matrix if \code{nsim>1}) of the
+generated series.
+\item \code{states} - Matrix (or array if \code{nsim>1}) of states. States
+are in columns, time is in rows.
+\item \code{residuals} - Error terms used in the simulation. Either vector or
+matrix, depending on \code{nsim}.
+\item \code{occurrences} - Values of occurrence variable. Once again, can be
+either a vector or a matrix...
+\item \code{logLik} - Log-likelihood of the constructed model.
+}
 }
 \description{
 Function generates data using SSARIMA with Single Source of Error as a data
@@ -106,9 +115,13 @@ x <- sim.ssarima(ar.orders=c(1,0,1),i.orders=c(0,1,0),ma.orders=c(2,1,1),lags=c(
 
 }
 \references{
-Snyder, R.D. (1985) Recursive Estimation of Dynamic Linear
-Models. Journal of the Royal Statistical Society. Series B. Vol. 47, No. 2,
-pp. 272-276.
+\itemize{
+\item Snyder, R. D., 1985. Recursive Estimation of Dynamic Linear Models.
+Journal of the Royal Statistical Society, Series B (Methodological) 47 (2), 272-276.
+\item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
+Forecasting with exponential smoothing: the state space approach,
+Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
+}
 }
 \seealso{
 \code{\link[smooth]{sim.es}, \link[smooth]{ssarima},
@@ -117,7 +130,9 @@ pp. 272-276.
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}
 }
-\keyword{ARIMA}
-\keyword{SARIMA}
-\keyword{forecasting}
-\keyword{simulation}
+\keyword{models}
+\keyword{nonlinear}
+\keyword{regression}
+\keyword{smooth}
+\keyword{ts}
+\keyword{univar}

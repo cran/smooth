@@ -65,6 +65,9 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     }
 
     ##### data #####
+    if(class(data)=="smooth.sim"){
+        data <- data$data;
+    }
     if(!is.numeric(data)){
         stop("The provided data is not a vector or ts object! Can't construct any model!", call.=FALSE);
     }
@@ -505,7 +508,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             stop("Complex values? Right! Come on! Be real!",call.=FALSE);
         }
         if(any(c(orders)<0)){
-            stop("Funny guy! How am I gonna construct a model with negative order?",call.=FALSE);
+            stop("Funny guy! How am I gonna construct a model with negative orders?",call.=FALSE);
         }
         if(any(c(lags)<0)){
             stop("Right! Why don't you try complex lags then, mister smart guy?",call.=FALSE);
@@ -1467,6 +1470,7 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
     assign("intervalsType",intervalsType,ParentEnvironment);
     assign("intermittent",intermittent,ParentEnvironment);
     assign("y",y,ParentEnvironment);
+    assign("data",data,ParentEnvironment);
     assign("xregDo",xregDo,ParentEnvironment);
 }
 
@@ -1638,8 +1642,14 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
         lowerquant <- qnorm((1-level)/2,0,1);
     }
     else{
-        upperquant <- qt((1+level)/2,df=df);
-        lowerquant <- qt((1-level)/2,df=df);
+        if(df>0){
+            upperquant <- qt((1+level)/2,df=df);
+            lowerquant <- qt((1-level)/2,df=df);
+        }
+        else{
+            upperquant <- sqrt(1/((1-level)/2))
+            lowerquant <- -upperquant;
+        }
     }
 
 ##### If they want us to produce several steps ahead #####
@@ -1945,14 +1955,22 @@ ssForecaster <- function(...){
     ellipsis <- list(...);
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
 
+    df <- (obsNonzero - nParam);
+    if(df<=0){
+        warning(paste0("Number of degrees of freedom is negative. It looks like we have overfitted the data."),call.=FALSE);
+        df <- obsNonzero;
+    }
 # If error additive, estimate as normal. Otherwise - lognormal
     if(Etype=="A"){
-        s2 <- as.vector(sum((errors*ot)^2)/(obsNonzero - nParam));
+        s2 <- as.vector(sum((errors*ot)^2)/df);
         s2g <- 1;
     }
     else{
-        s2 <- as.vector(sum(log(1 + errors*ot)^2)/(obsNonzero - nParam));
-        s2g <- log(1 + vecg %*% as.vector(errors*ot)) %*% t(log(1 + vecg %*% as.vector(errors*ot)))/(obsNonzero - nParam);
+        s2 <- as.vector(sum(log(1 + errors*ot)^2)/df);
+        s2g <- log(1 + vecg %*% as.vector(errors*ot)) %*% t(log(1 + vecg %*% as.vector(errors*ot)))/df;
+    }
+    if((obsNonzero - nParam)<=0){
+        df <- 0;
     }
 
     if(h>0){
@@ -1965,6 +1983,9 @@ ssForecaster <- function(...){
         if(Etype=="M" & any(y.for<0)){
             warning(paste0("Negative values produced in forecast. This does not make any sense for model with multiplicative error.\n",
                            "Please, use another model."),call.=FALSE);
+            if(intervals){
+            warning("And don't expect anything reasonable from the prediction intervals!",call.=FALSE);
+            }
         }
 
         # Write down the forecasting intervals
@@ -2025,7 +2046,7 @@ ssForecaster <- function(...){
                 y.high <- ts(apply(y.simulated,1,quantile,(1+level)/2,na.rm=T) + y.exo.for,start=start(y.for),frequency=frequency(data));
             }
             else{
-                quantvalues <- ssIntervals(errors.x, ev=ev, level=level, intervalsType=intervalsType, df=(obsNonzero - nParam),
+                quantvalues <- ssIntervals(errors.x, ev=ev, level=level, intervalsType=intervalsType, df=df,
                                            measurement=matw, transition=matF, persistence=vecg, s2=s2,
                                            modellags=modellags, states=matvt[(obsInsample-maxlag+1):obsInsample,],
                                            y.for=y.for, Etype=Etype, Ttype=Ttype, Stype=Stype, s2g=s2g,
@@ -2389,6 +2410,19 @@ likelihoodFunction <- function(C){
         }
     }
     else{
+        #Failsafe for exceptional cases when the probability is equal to zero / one, when it should not have been.
+        if(any(c(1-pt[ot==0]==0,pt[ot==1]==0))){
+            return(-Inf);
+        }
+        #Failsage for cases, when data has no variability when ot==1.
+        if(CF(C)==0){
+            if(cfType=="TFL" | cfType=="aTFL"){
+                return(sum(log(pt[ot==1]))*h + sum(log(1-pt[ot==0]))*h);
+            }
+            else{
+                return(sum(log(pt[ot==1])) + sum(log(1-pt[ot==0])));
+            }
+        }
         if(cfType=="TFL" | cfType=="aTFL"){
             return(sum(log(pt[ot==1]))*h
                    + sum(log(1-pt[ot==0]))*h
@@ -2567,7 +2601,7 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
 
     cat(paste0("Cost function type: ",cfType))
     if(!is.null(cfObjective)){
-        cat(paste0("; Cost function value: ",round(cfObjective,0),"\n"));
+        cat(paste0("; Cost function value: ",round(cfObjective,3),"\n"));
     }
     else{
         cat("\n");

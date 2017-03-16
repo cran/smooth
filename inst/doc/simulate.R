@@ -115,3 +115,14 @@ plot(x)
 plot(ourData)
 par(mfcol=c(1,1))
 
+## ----simulate_smooth_ges-------------------------------------------------
+x <- ts(100 + rnorm(120,0,5) + rep(runif(12,-50,50),10)*rep(c(1:10),each=12) ,frequency=12)
+ourModel <- ges(x, orders=c(1,1), lags=c(1,12), h=18, silent=TRUE)
+ourData <- simulate(ourModel, nsim=50)
+
+## ----simulate_smooth_ges_compare-----------------------------------------
+par(mfcol=c(1,2))
+plot(x)
+plot(ourData)
+par(mfcol=c(1,1))
+

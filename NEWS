@@ -1,3 +1,40 @@
+smooth v1.9.0 (Release data: 2017-03-18)
+==============
+
+Changes:
+* New function - sim.ges() - simulate data using GES model.
+
+Bugfixes:
+* Fixed bug with cfType="MSTFE" in case of multiplicative errors.
+
+
+smooth v1.8.0 (Release data: 2017-03-12)
+==============
+
+Changes:
+* New function - xregExpander(), which creates matrix of xreg with lagged values based on provided data and automatically fills in NAs with forecasted values using es().
+* "optimal" is now the default initialisation method for ces().
+* Created templates for roxygen2 for the consistency purposes of the documentation.
+* plot() methods for classes smooth and smooth.sim now accept main and ylab parameters. Do whatever you want!
+
+Bugfixes:
+* In cases of df<=0 we now produce a warning and prediction intervals based on Chebyshev's inequality.
+* es() now does not complain about failing to estimate something when persistence is predefined.
+* Fixed a bug, when predicting binary variables using any iSS model, we would end up with errors. Now in this case we just select among the intermittent models, ignoring non-intermittent one.
+
+
+smooth v1.7.1 (Release date: 2017-03-01)
+==============
+
+Changes:
+
+* Mixed ETS models now produce negative forecasts. But it does not make much sense to my taste...
+* The initial values of smoothing parameters before the optimisation are now set to 0.3, 0.2, 0.1 for both additive and multiplicative models.
+* Some plot() methods for smooth now accept additional parameters.
+* es() now also accepts hidden parameters C, CLower and CUpper for initialisation of optimiser and setting bounds in which to search for the optimal value.
+* es(), ces(), ssarima() and ges() now accept smooth.sim objects and can automatically extract data from them. This is just for comfort...
+
+
 smooth v1.7.0 (Release date: 2017-02-24)
 ==============
 

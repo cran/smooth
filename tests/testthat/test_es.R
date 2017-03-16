@@ -24,7 +24,7 @@ test_that("Test ETS(CCC) with BIC on N2568$x", {
 # Test model selection of non-multiplicative trend ETS
 testModel <- es(Mcomp::M3$N2568$x, "MXM", silent=TRUE, ic="AIC");
 test_that("Test ETS(MXM) with AIC on N2568$x", {
-    expect_match(testModel$model, "MAdM");
+    expect_match(testModel$model, "MAM");
 })
 
 # Test trace cost function for ETS
@@ -51,9 +51,9 @@ test_that("Check exogenous variables for ETS on N1457", {
 })
 
 # Test selection of exogenous with ETS
-testModel <- es(y, h=18, holdout=TRUE, xreg=x, silent=TRUE, xregDo="select")
+testModel <- es(y, h=18, holdout=TRUE, xreg=xregExpander(x), silent=TRUE, xregDo="select")
 test_that("Select exogenous variables for ETS on N1457 with selection", {
-    expect_equal(sum(testModel$xreg),1);
+    expect_equal(ncol(testModel$xreg),3);
 })
 
 # Test combination of ETS with exogenous selection

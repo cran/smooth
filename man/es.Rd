@@ -47,8 +47,8 @@ Keep in mind that model selection with "Z" components uses Branch and Bound
 algorithm and may skip some models that could have slightly smaller
 information criteria.}
 
-\item{persistence}{Vector of smoothing parameters. If \code{NULL}, the
-parameters are estimated.}
+\item{persistence}{Persistence vector \eqn{g}, containing smoothing
+parameters. If \code{NULL}, then estimated.}
 
 \item{phi}{Value of damping parameter. If \code{NULL} then it is estimated.}
 
@@ -62,7 +62,7 @@ by \code{initial}.}
 \item{initialSeason}{Vector of initial values for seasonal components. If
 \code{NULL}, they are estimated during optimisation.}
 
-\item{ic}{Information criterion to use in model selection.}
+\item{ic}{The information criterion used in the model selection procedure.}
 
 \item{cfType}{Type of Cost Function used in optimization. \code{cfType} can
 be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
@@ -133,7 +133,7 @@ included than columns should contain variables and rows - observations. Note
 that \code{xreg} should have number of observations equal either to
 in-sample or to the whole series. If the number of observations in
 \code{xreg} is equal to in-sample, then values for the holdout sample are
-produced using Naive.}
+produced using \link[smooth]{es} function.}
 
 \item{xregDo}{Variable defines what to do with the provided xreg:
 \code{"use"} means that all of the data should be used, whilie
@@ -160,7 +160,13 @@ state vector. If \code{NULL}, then estimated. Prerequisite - non-NULL
 \item{...}{Other non-documented parameters. For example \code{FI=TRUE} will
 make the function also produce Fisher Information matrix, which then can be
 used to calculated variances of smoothing parameters and initial states of
-the model.}
+the model.
+Parameters \code{C}, \code{CLower} and \code{CUpper} can be passed via
+ellipsis as well. In this case they will be used for optimisation. \code{C}
+sets the initial values before the optimisation, \code{CLower} and
+\code{CUpper} define lower and upper bounds for the search inside of the
+specified \code{bounds}. These values should have exactly the length equal
+to the number of parameters to estimate.}
 }
 \value{
 Object of class "smooth" is returned. It contains the list of the
@@ -321,22 +327,33 @@ plot(forecast(ourModel))
 
 }
 \references{
-\enumerate{
-\item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008) Forecasting
-with exponential smoothing: the state space approach, Springer-Verlag.
-\url{http://www.exponentialsmoothing.net}.
+\itemize{
+\item Snyder, R. D., 1985. Recursive Estimation of Dynamic Linear Models.
+Journal of the Royal Statistical Society, Series B (Methodological) 47 (2), 272-276.
+\item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
+Forecasting with exponential smoothing: the state space approach,
+Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
+}
+
+\itemize{
+\item Teunter R., Syntetos A., Babai Z. (2011). Intermittent demand:
+Linking forecasting to inventory obsolescence. European Journal of
+Operational Research, 214, 606-615.
+\item Croston, J. (1972) Forecasting and stock control for intermittent
+demands. Operational Research Quarterly, 23(3), 289-303.
+\item Syntetos, A., Boylan J. (2005) The accuracy of intermittent demand
+estimates. International Journal of Forecasting, 21(2), 303-314.
+}
+
+\itemize{
+\item Kolassa, S. (2011) Combining exponential smoothing forecasts using Akaike
+weights. International Journal of Forecasting, 27, pp 238 - 251.
+}
+
+\itemize{
 \item Taylor, J.W. and Bunn, D.W. (1999) A Quantile Regression Approach to
 Generating Prediction Intervals. Management Science, Vol 45, No 2, pp
 225-237.
-\item Kolassa, S. (2011) Combining exponential smoothing forecasts using Akaike
-weights. International Journal of Forecasting, 27, pp 238 - 251.
-\item Teunter R., Syntetos A., Babai Z. (2011). Intermittent demand:
-Linking forecasting to inventory obsolescence. European Journal of
-Operational Research 214, 606-615.
-\item Croston, J. (1972) Forecasting and stock control for intermittent demands.
-Operational Research Quarterly, 23(3), 289-303.
-\item Syntetos, A., Boylan J. (2005) The accuracy of intermittent demand estimates.
-International Journal of Forecasting, 21(2), 303-314.
 }
 }
 \seealso{
@@ -346,9 +363,9 @@ International Journal of Forecasting, 21(2), 303-314.
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}
 }
-\keyword{ETS}
-\keyword{exponential}
-\keyword{forecasting}
-\keyword{likelihood}
-\keyword{smoothing}
-\keyword{trace}
+\keyword{models}
+\keyword{nonlinear}
+\keyword{regression}
+\keyword{smooth}
+\keyword{ts}
+\keyword{univar}

@@ -137,10 +137,7 @@ double wvalue(arma::vec vecVt, arma::rowvec rowvecW, char E, char T, char S,
             yfit = as_scalar(matyfit + rowvecXt * vecAt);
         break;
         case 'M':
-            if(any(any(matyfit<0))){
-                matyfit.elem(find(matyfit<0)).ones();
-            }
-            yfit = as_scalar(exp(log(matyfit) + rowvecXt * vecAt));
+            yfit = real(exp(log(std::complex<double>(as_scalar(matyfit))) + as_scalar(rowvecXt * vecAt)));
         break;
     }
 
@@ -1428,7 +1425,7 @@ double optimizer(arma::mat matrixVt, arma::mat matrixF, arma::rowvec rowvecW, ar
         break;
 // no exp is the temporary fix for very strange behaviour of MAM type models
         case 3:
-            CFres = arma::as_scalar(log(sum(sum(pow(materrors,2)) / double(matobs), 1))
+            CFres = arma::as_scalar(sum(sum(pow(materrors,2)) / double(matobs), 1)
                         + (2 / double(obs)) * double(hor) * yactsum);
         break;
         case 4:
