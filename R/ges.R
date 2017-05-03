@@ -10,16 +10,20 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' The function estimates the Single Source of Error State-space model of the
 #' following type:
 #'
-#' \eqn{y_[t] = o_[t] (w' v_[t-l] + x_t a_[t-1] + \epsilon_[t])}
+#' \deqn{y_{t} = o_{t} (w' v_{t-l} + x_t a_{t-1} + \epsilon_{t})}
 #'
-#' \eqn{v_[t] = F v_[t-l] + g \epsilon_[t]}
+#' \deqn{v_{t} = F v_{t-l} + g \epsilon_{t}}
 #'
-#' \eqn{a_[t] = F_[X] a_[t-1] + g_[X] \epsilon_[t] / x_[t]}
+#' \deqn{a_{t} = F_{X} a_{t-1} + g_{X} \epsilon_{t} / x_{t}}
 #'
-#' Where \eqn{o_[t]} is Bernoulli distributed random variable (in case of
-#' normal data equal to 1), \eqn{v_[t]} is a state vector (defined using
-#' \code{orders}) and \eqn{l} is a vector of \code{lags}, \eqn{x_t} vector of
-#' exogenous parameters.
+#' Where \eqn{o_{t}} is the Bernoulli distributed random variable (in case of
+#' normal data equal to 1), \eqn{v_{t}} is the state vector (defined using
+#' \code{orders}) and \eqn{l} is the vector of \code{lags}, \eqn{x_t} is the
+#' vector of exogenous parameters. \eqn{w} is the \code{measurement} vector,
+#' \eqn{F} is the \code{transition} matrix, \eqn{g} is the \code{persistence}
+#' vector, \eqn{a_t} is the vector of parameters for exogenous variables,
+#' \eqn{F_{X}} is the \code{transitionX} matrix and \eqn{g_{X}} is the
+#' \code{persistenceX} matrix. Finally, \eqn{\epsilon_{t}} is the error term.
 #'
 #'
 #' @template ssBasicParam
@@ -78,6 +82,7 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' into account).
 #' \item \code{intervals} - type of intervals asked by user.
 #' \item \code{level} - confidence level for intervals.
+#' \item \code{cumulative} - whether the produced forecast was cumulative or not.
 #' \item \code{actuals} - original data.
 #' \item \code{holdout} - holdout part of the original data.
 #' \item \code{iprob} - fitted and forecasted values of the probability of demand
@@ -146,8 +151,8 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)),
                 persistence=NULL, transition=NULL, measurement=NULL,
                 initial=c("optimal","backcasting"), ic=c("AICc","AIC","BIC"),
-                cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
-                h=10, holdout=FALSE,
+                cfType=c("MSE","MAE","HAM","GMSTFE","MSTFE","MSEh","TFL"),
+                h=10, holdout=FALSE, cumulative=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                 intermittent=c("none","auto","fixed","croston","tsb","sba"),
                 bounds=c("admissible","none"),
@@ -664,7 +669,12 @@ CreatorGES <- function(silentText=FALSE,...){
 
     if(holdout==T){
         y.holdout <- ts(data[(obsInsample+1):obsAll],start=start(y.for),frequency=frequency(data));
-        errormeasures <- errorMeasurer(y.holdout,y.for,y);
+        if(cumulative){
+            errormeasures <- errorMeasurer(sum(y.holdout),y.for,h*y);
+        }
+        else{
+            errormeasures <- errorMeasurer(y.holdout,y.for,y);
+        }
     }
     else{
         y.holdout <- NA;
@@ -698,22 +708,34 @@ CreatorGES <- function(silentText=FALSE,...){
 
 ##### Make a plot #####
     if(!silentGraph){
+        y.for.new <- y.for;
+        y.high.new <- y.high;
+        y.low.new <- y.low;
+        if(cumulative){
+            y.for.new <- ts(rep(y.for/h,h),start=start(y.for),frequency=datafreq)
+            if(intervals){
+                y.high.new <- ts(rep(y.high/h,h),start=start(y.for),frequency=datafreq)
+                y.low.new <- ts(rep(y.low/h,h),start=start(y.for),frequency=datafreq)
+            }
+        }
+
         if(intervals){
-            graphmaker(actuals=data,forecast=y.for,fitted=y.fit, lower=y.low,upper=y.high,
-                       level=level,legend=!silentLegend,main=modelname);
+            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit, lower=y.low.new,upper=y.high.new,
+                       level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
         else{
-            graphmaker(actuals=data,forecast=y.for,fitted=y.fit,
-                    level=level,legend=!silentLegend,main=modelname);
+            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit,
+                       level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
     }
+
 ##### Return values #####
     model <- list(model=modelname,timeElapsed=Sys.time()-startTime,
                   states=matvt,measurement=matw,transition=matF,persistence=vecg,
                   initialType=initialType,initial=initialValue,
                   nParam=nParam,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
-                  errors=errors.mat,s2=s2,intervals=intervalsType,level=level,
+                  errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
                   actuals=data,holdout=y.holdout,iprob=pt,intermittent=intermittent,
                   xreg=xreg,updateX=updateX,initialX=initialX,persistenceX=vecgX,transitionX=matFX,
                   ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,FI=FI,accuracy=errormeasures);

@@ -7,10 +7,10 @@
 ges(data, orders = c(1, 1), lags = c(1, frequency(data)),
   persistence = NULL, transition = NULL, measurement = NULL,
   initial = c("optimal", "backcasting"), ic = c("AICc", "AIC", "BIC"),
-  cfType = c("MSE", "MAE", "HAM", "MLSTFE", "MSTFE", "MSEh"), h = 10,
-  holdout = FALSE, intervals = c("none", "parametric", "semiparametric",
-  "nonparametric"), level = 0.95, intermittent = c("none", "auto", "fixed",
-  "croston", "tsb", "sba"), bounds = c("admissible", "none"),
+  cfType = c("MSE", "MAE", "HAM", "GMSTFE", "MSTFE", "MSEh", "TFL"), h = 10,
+  holdout = FALSE, cumulative = FALSE, intervals = c("none", "parametric",
+  "semiparametric", "nonparametric"), level = 0.95, intermittent = c("none",
+  "auto", "fixed", "croston", "tsb", "sba"), bounds = c("admissible", "none"),
   silent = c("none", "all", "graph", "legend", "output"), xreg = NULL,
   xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
   persistenceX = NULL, transitionX = NULL, ...)
@@ -48,20 +48,25 @@ produced using backcasting procedure.}
 
 \item{cfType}{Type of Cost Function used in optimization. \code{cfType} can
 be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
-\code{HAM} (Half Absolute Moment), \code{MLSTFE} - Mean Log Squared Trace
+\code{HAM} (Half Absolute Moment), \code{GMSTFE} - Mean Log Squared Trace
 Forecast Error, \code{MSTFE} - Mean Squared Trace Forecast Error and
-\code{MSEh} - optimisation using only h-steps ahead error. If
-\code{cfType!="MSE"}, then likelihood and model selection is done based on
-equivalent \code{MSE}. Model selection in this cases becomes not optimal.
+\code{MSEh} - optimisation using only h-steps ahead error, \code{TFL} -
+trace forecast likelihood. If \code{cfType!="MSE"}, then likelihood and
+model selection is done based on equivalent \code{MSE}. Model selection in
+this cases becomes not optimal.
 
 There are also available analytical approximations for multistep functions:
-\code{aMSEh}, \code{aMSTFE} and \code{aMLSTFE}. These can be useful in cases
+\code{aMSEh}, \code{aMSTFE} and \code{aGMSTFE}. These can be useful in cases
 of small samples.}
 
 \item{h}{Length of forecasting horizon.}
 
 \item{holdout}{If \code{TRUE}, holdout sample of size \code{h} is taken from
 the end of the data.}
+
+\item{cumulative}{If \code{TRUE}, then the cumulative forecast and prediction
+intervals are produced instead of the normal ones. This is useful for
+inventory control systems.}
 
 \item{intervals}{Type of intervals to construct. This can be:
 
@@ -94,9 +99,8 @@ criteria. The first letter can be used instead. 6. \code{"sba"} -
 Syntetos-Boylan Approximation for Croston's method (bias correction)
 discussed in Syntetos and Boylan, 2005.}
 
-\item{bounds}{What type of bounds to use for smoothing parameters
-("admissible" or "usual"). The first letter can be used instead of the whole
-word.}
+\item{bounds}{What type of bounds to use in the model estimation. The first
+letter can be used instead of the whole word.}
 
 \item{silent}{If \code{silent="none"}, then nothing is silent, everything is
 printed out and drawn. \code{silent="all"} means that nothing is produced or
@@ -173,6 +177,7 @@ smoothing parameters live.
 into account).
 \item \code{intervals} - type of intervals asked by user.
 \item \code{level} - confidence level for intervals.
+\item \code{cumulative} - whether the produced forecast was cumulative or not.
 \item \code{actuals} - original data.
 \item \code{holdout} - holdout part of the original data.
 \item \code{iprob} - fitted and forecasted values of the probability of demand
@@ -208,16 +213,20 @@ vector g and initial parameters.
 The function estimates the Single Source of Error State-space model of the
 following type:
 
-\eqn{y_[t] = o_[t] (w' v_[t-l] + x_t a_[t-1] + \epsilon_[t])}
+\deqn{y_{t} = o_{t} (w' v_{t-l} + x_t a_{t-1} + \epsilon_{t})}
 
-\eqn{v_[t] = F v_[t-l] + g \epsilon_[t]}
+\deqn{v_{t} = F v_{t-l} + g \epsilon_{t}}
 
-\eqn{a_[t] = F_[X] a_[t-1] + g_[X] \epsilon_[t] / x_[t]}
+\deqn{a_{t} = F_{X} a_{t-1} + g_{X} \epsilon_{t} / x_{t}}
 
-Where \eqn{o_[t]} is Bernoulli distributed random variable (in case of
-normal data equal to 1), \eqn{v_[t]} is a state vector (defined using
-\code{orders}) and \eqn{l} is a vector of \code{lags}, \eqn{x_t} vector of
-exogenous parameters.
+Where \eqn{o_{t}} is the Bernoulli distributed random variable (in case of
+normal data equal to 1), \eqn{v_{t}} is the state vector (defined using
+\code{orders}) and \eqn{l} is the vector of \code{lags}, \eqn{x_t} is the
+vector of exogenous parameters. \eqn{w} is the \code{measurement} vector,
+\eqn{F} is the \code{transition} matrix, \eqn{g} is the \code{persistence}
+vector, \eqn{a_t} is the vector of parameters for exogenous variables,
+\eqn{F_{X}} is the \code{transitionX} matrix and \eqn{g_{X}} is the
+\code{persistenceX} matrix. Finally, \eqn{\epsilon_{t}} is the error term.
 }
 \examples{
 

@@ -19,6 +19,9 @@ auto.ssarima(M3$N2457$x, h=18)
 auto.ssarima(M3$N1683$x, h=18, initial="backcasting")
 auto.ssarima(M3$N1683$x, h=18, initial="optimal")
 
+## ----ssarima_N2457_orders_multiple_seasonalities-------------------------
+ssarima(M3$N2457$x, orders=list(ar=c(0,0,1),i=c(1,0,0),ma=c(1,1,1)),lags=c(1,6,12),h=18)
+
 ## ----es_N2457_xreg_create------------------------------------------------
 x <- cbind(rnorm(length(M3$N2457$x),50,3),rnorm(length(M3$N2457$x),100,7))
 

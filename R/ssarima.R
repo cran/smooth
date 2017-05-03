@@ -8,26 +8,37 @@ utils::globalVariables(c("normalizer","constantValue","constantRequired","consta
 #' Function constructs State-Space ARIMA, estimating AR, MA terms and initial
 #' states.
 #'
-#' The basic ARIMA(p,d,q) used in the function has the following form: \eqn{(1
-#' - B)^d (1 - a_1 B - a_2 B^2 - ... - a_p B^p) y_[t] = (1 - b_1 B - b_2 B^2 -
-#' ... - b_q B^q) \epsilon_[t] + c} where \eqn{y_[t]} is actual values,
-#' \eqn{\epsilon_[t]} is error term, \eqn{a_i, b_j} are parameters for AR and
-#' MA respectively and \eqn{c} is constant. In case of non-zero differences
-#' \eqn{c} starts acting as drift.
+#' The basic ARIMA(p,d,q) used in the function has the following form:
+#'
+#' \eqn{(1 - B)^d (1 - a_1 B - a_2 B^2 - ... - a_p B^p) y_[t] = (1 + b_1 B +
+#' b_2 B^2 + ... + b_q B^q) \epsilon_[t] + c}
+#'
+#' where \eqn{y_[t]} is the actual values, \eqn{\epsilon_[t]} is the error term,
+#' \eqn{a_i, b_j} are the parameters for AR and MA respectively and \eqn{c} is
+#' the constant. In case of non-zero differences \eqn{c} acts as drift.
 #'
 #' This model is then transformed into ARIMA in the Single Source of Error
-#' State-space form (proposed in Snyder, 1985): \eqn{y_[t] = o_[t] (w' v_[t-l]
-#' + x_t a_[t-1] + \epsilon_[t])} \eqn{v_[t] = F v_[t-1] + g \epsilon_[t]}
-#' \eqn{a_[t] = F_[X] a_[t-1] + g_[X] \epsilon_[t] / x_[t]} where \eqn{o_[t]}
-#' is Bernoulli distributed random variable (in case of normal data equals to 1
-#' for all observations), \eqn{v_[t]} is a state vector (defined using
-#' \code{ar.orders} and \code{i.orders}), \eqn{x_t} vector of exogenous
-#' parameters.
+#' State-space form (proposed in Snyder, 1985):
+#'
+#' \eqn{y_{t} = o_{t} (w' v_{t-l} + x_t a_{t-1} + \epsilon_{t})}
+#'
+#' \eqn{v_{t} = F v_{t-l} + g \epsilon_{t}}
+#'
+#' \eqn{a_{t} = F_{X} a_{t-1} + g_{X} \epsilon_{t} / x_{t}}
+#'
+#' Where \eqn{o_{t}} is the Bernoulli distributed random variable (in case of
+#' normal data equal to 1), \eqn{v_{t}} is the state vector (defined based on
+#' \code{orders}) and \eqn{l} is the vector of \code{lags}, \eqn{x_t} is the
+#' vector of exogenous parameters. \eqn{w} is the \code{measurement} vector,
+#' \eqn{F} is the \code{transition} matrix, \eqn{g} is the \code{persistence}
+#' vector, \eqn{a_t} is the vector of parameters for exogenous variables,
+#' \eqn{F_{X}} is the \code{transitionX} matrix and \eqn{g_{X}} is the
+#' \code{persistenceX} matrix.
 #'
 #' Due to the flexibility of the model, multiple seasonalities can be used. For
 #' example, something crazy like this can be constructed:
 #' SARIMA(1,1,1)(0,1,1)[24](2,0,1)[24*7](0,0,1)[24*30], but the estimation may
-#' take a lot of time...
+#' take some finite time...
 #'
 #' @template ssBasicParam
 #' @template ssAdvancedParam
@@ -100,6 +111,7 @@ utils::globalVariables(c("normalizer","constantValue","constantRequired","consta
 #' account).
 #' \item \code{intervals} - type of intervals asked by user.
 #' \item \code{level} - confidence level for intervals.
+#' \item \code{cumulative} - whether the produced forecast was cumulative or not.
 #' \item \code{actuals} - the original data.
 #' \item \code{holdout} - the holdout part of the original data.
 #' \item \code{iprob} - the fitted and forecasted values of the probability of
@@ -180,8 +192,8 @@ utils::globalVariables(c("normalizer","constantValue","constantRequired","consta
 ssarima <- function(data, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1),
                     constant=FALSE, AR=NULL, MA=NULL,
                     initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC"),
-                    cfType=c("MSE","MAE","HAM","MLSTFE","MSTFE","MSEh"),
-                    h=10, holdout=FALSE,
+                    cfType=c("MSE","MAE","HAM","GMSTFE","MSTFE","MSEh","TFL"),
+                    h=10, holdout=FALSE, cumulative=FALSE,
                     intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                     intermittent=c("none","auto","fixed","croston","tsb","sba"),
                     bounds=c("admissible","none"),
@@ -289,22 +301,22 @@ ssarima <- function(data, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1),
 # Cost function for SSARIMA
 CF <- function(C){
 
-    # cfRes <- costfuncARIMA(ar.orders, ma.orders, i.orders, lags, nComponents,
-    #                        ARValue, MAValue, constantValue, C,
-    #                        matvt, matF, matw, y, vecg,
-    #                        h, modellags, Etype, Ttype, Stype,
-    #                        multisteps, cfType, normalizer, initialType,
-    #                        nExovars, matxt, matat, matFX, vecgX, ot,
-    #                        AREstimate, MAEstimate, constantRequired, constantEstimate,
-    #                        xregEstimate, updateX, FXEstimate, gXEstimate, initialXEstimate,
-    #                        bounds);
+    cfRes <- costfuncARIMA(ar.orders, ma.orders, i.orders, lags, nComponents,
+                           ARValue, MAValue, constantValue, C,
+                           matvt, matF, matw, y, vecg,
+                           h, modellags, Etype, Ttype, Stype,
+                           multisteps, cfType, normalizer, initialType,
+                           nExovars, matxt, matat, matFX, vecgX, ot,
+                           AREstimate, MAEstimate, constantRequired, constantEstimate,
+                           xregEstimate, updateX, FXEstimate, gXEstimate, initialXEstimate,
+                           bounds);
 
-    elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, nComponents,
-                            ARValue, MAValue, constantValue, C,
-                            matvt, vecg, matF,
-                            initialType, nExovars, matat, matFX, vecgX,
-                            AREstimate, MAEstimate, constantRequired, constantEstimate,
-                            xregEstimate, updateX, FXEstimate, gXEstimate, initialXEstimate);
+    # elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, nComponents,
+    #                         ARValue, MAValue, constantValue, C,
+    #                         matvt, vecg, matF,
+    #                         initialType, nExovars, matat, matFX, vecgX,
+    #                         AREstimate, MAEstimate, constantRequired, constantEstimate,
+    #                         xregEstimate, updateX, FXEstimate, gXEstimate, initialXEstimate);
     # matF <- elements$matF;
     # vecg <- elements$vecg;
     # matvt[,] <- elements$matvt;
@@ -312,24 +324,25 @@ CF <- function(C){
     # matat[,] <- elements$matat;
     # matFX <- elements$matFX;
     # vecgX <- elements$vecgX;
-    polysos.ar <- elements$arPolynomial;
-    polysos.ma <- elements$maPolynomial;
 
-    if(bounds=="a" & (nComponents > 0)){
-        arroots <- abs(polyroot(polysos.ar));
-        if(any(arroots<1)){
-            return(max(arroots)*1E+100);
-        }
-        maroots <- abs(polyroot(polysos.ma));
-        if(any(maroots<1)){
-            return(max(maroots)*1E+100);
-        }
-    }
-
-    cfRes <- optimizerwrap(elements$matvt, elements$matF, matw, y, elements$vecg,
-                           h, modellags, Etype, Ttype, Stype,
-                           multisteps, cfType, normalizer, initialType,
-                           matxt, elements$matat, elements$matFX, elements$vecgX, ot);
+    # polysos.ar <- elements$arPolynomial;
+    # polysos.ma <- elements$maPolynomial;
+    #
+    # if(bounds=="a" & (nComponents > 0)){
+    #     arRoots <- abs(polyroot(polysos.ar));
+    #     if(any(arRoots<1)){
+    #         return(max(arRoots)*1E+100);
+    #     }
+    #     maRoots <- abs(polyroot(polysos.ma));
+    #     if(any(maRoots<1)){
+    #         return(max(maRoots)*1E+100);
+    #     }
+    # }
+    #
+    # cfRes <- optimizerwrap(elements$matvt, elements$matF, matw, y, elements$vecg,
+    #                        h, modellags, Etype, Ttype, Stype,
+    #                        multisteps, cfType, normalizer, initialType,
+    #                        matxt, elements$matat, elements$matFX, elements$vecgX, ot);
 
     if(is.nan(cfRes) | is.na(cfRes) | is.infinite(cfRes)){
         cfRes <- 1e+100;
@@ -624,8 +637,9 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
         vecgX <- elements$vecgX;
         polysos.ar <- elements$arPolynomial;
         polysos.ma <- elements$maPolynomial;
-        arroots <- abs(polyroot(polysos.ar));
-        maroots <- abs(polyroot(polysos.ma));
+        # Need to remove polyroot() here as well and find a better substitution
+        arRoots <- abs(polyroot(polysos.ar));
+        maRoots <- abs(polyroot(polysos.ma));
 
         ssFitter(ParentEnvironment=environment());
 
@@ -686,8 +700,9 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     vecgX <- elements$vecgX;
     polysos.ar <- elements$arPolynomial;
     polysos.ma <- elements$maPolynomial;
-    arroots <- abs(polyroot(polysos.ar));
-    maroots <- abs(polyroot(polysos.ma));
+    # Need to remove polyroot() here as well and find a better substitution
+    arRoots <- polyroot(polysos.ar);
+    maRoots <- polyroot(polysos.ma);
 
     nComponents <- nComponents + constantRequired;
     # Write down Fisher Information if needed
@@ -807,7 +822,12 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
 
     if(holdout==T){
         y.holdout <- ts(data[(obsInsample+1):obsAll],start=start(y.for),frequency=frequency(data));
-        errormeasures <- errorMeasurer(y.holdout,y.for,y);
+        if(cumulative){
+            errormeasures <- errorMeasurer(sum(y.holdout),y.for,h*y);
+        }
+        else{
+            errormeasures <- errorMeasurer(y.holdout,y.for,y);
+        }
     }
     else{
         y.holdout <- NA;
@@ -861,37 +881,50 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     }
 
 ##### Print warnings #####
-    if(any(maroots<1)){
-        if(bounds!="a"){
-            warning("Unstable model was estimated! Use bounds='admissible' to address this issue!",call.=FALSE);
-        }
-        else{
-            warning("Something went wrong in optimiser - unstable model was estimated! Please report this error to the maintainer."
-                    ,call.=FALSE);
-        }
-    }
-    if(any(arroots<1)){
-        if(bounds!="a"){
-            warning("Non-stationary model was estimated! Beware of explosions! Use bounds='admissible' to address this issue!"
-                    ,call.=FALSE);
-        }
-        else{
-            warning("Something went wrong in optimiser - non-stationary model was estimated! Please report this error to the maintainer."
-                    ,call.=FALSE);
-        }
-    }
+    # if(any(abs(maRoots)<1)){
+    #     if(bounds!="a"){
+    #         warning("Unstable model was estimated! Use bounds='admissible' to address this issue!",call.=FALSE);
+    #     }
+    #     else{
+    #         warning("Something went wrong in optimiser - unstable model was estimated! Please report this error to the maintainer."
+    #                 ,call.=FALSE);
+    #     }
+    # }
+    #
+    # if(any(abs(arRoots)<1)){
+    #     if(bounds!="a"){
+    #         warning("Non-stationary model was estimated! Beware of explosions! Use bounds='admissible' to address this issue!"
+    #                 ,call.=FALSE);
+    #     }
+    #     else{
+    #         warning("Something went wrong in optimiser - non-stationary model was estimated! Please report this error to the maintainer."
+    #                 ,call.=FALSE);
+    #     }
+    # }
 
 ##### Make a plot #####
     if(!silentGraph){
+        y.for.new <- y.for;
+        y.high.new <- y.high;
+        y.low.new <- y.low;
+        if(cumulative){
+            y.for.new <- ts(rep(y.for/h,h),start=start(y.for),frequency=datafreq)
+            if(intervals){
+                y.high.new <- ts(rep(y.high/h,h),start=start(y.for),frequency=datafreq)
+                y.low.new <- ts(rep(y.low/h,h),start=start(y.for),frequency=datafreq)
+            }
+        }
+
         if(intervals){
-            graphmaker(actuals=data,forecast=y.for,fitted=y.fit, lower=y.low,upper=y.high,
-                       level=level,legend=!silentLegend,main=modelname);
+            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit, lower=y.low.new,upper=y.high.new,
+                       level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
         else{
-            graphmaker(actuals=data,forecast=y.for,fitted=y.fit,
-                    level=level,legend=!silentLegend,main=modelname);
+            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit,
+                       level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
     }
+
 ##### Return values #####
     model <- list(model=modelname,timeElapsed=Sys.time()-startTime,
                   states=matvt,transition=matF,persistence=vecg,
@@ -899,7 +932,7 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
                   initialType=initialType,initial=initialValue,
                   nParam=nParam,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
-                  errors=errors.mat,s2=s2,intervals=intervalsType,level=level,
+                  errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
                   actuals=data,holdout=y.holdout,iprob=pt,intermittent=intermittent,
                   xreg=xreg,updateX=updateX,initialX=initialX,persistenceX=vecgX,transitionX=matFX,
                   ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,FI=FI,accuracy=errormeasures);

@@ -5,34 +5,58 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
                          "persistenceEstimate","initial","multisteps","ot",
                          "silentText","silentGraph","silentLegend"));
 
-#' Exponential Smoothing in SSOE state-space model
+#' NOT AVAILABLE YET: Vector Exponential Smoothing in SSOE state-space model
 #'
-#' Function constructs ETS model and returns forecast, fitted values, errors
-#' and matrix of states.
+#' Function constructs vector ETS model and returns forecast, fitted values, errors
+#' and matrix of states along with other useful variables. THIS IS CURRENTLY UNDER CONSTRUCTION!
 #'
-#' Function estimates ETS in a form of the Single Source of Error State-space
+#' Function estimates vector ETS in a form of the Single Source of Error State-space
 #' model of the following type:
 #'
-#' \deqn{y_{t} = o_{t} (w(v_{t-l}) + x_t a_{t-1} + r(v_{t-l}) \epsilon_{t})}
+#' \deqn{
+#' \mathbf{y}_{t} = \mathbf{o}_{t} (\mathbf{W} \mathbf{v}_{t-l} + \mathbf{x}_t
+#' \mathbf{a}_{t-1} + \mathbf{\epsilon}_{t})
+#' }{
+#' y_{t} = o_{t} (W v_{t-l} + x_t a_{t-1} + \epsilon_{t})
+#' }
 #'
-#' \deqn{v_{t} = f(v_{t-l}) + g(v_{t-l}) \epsilon_{t}}
+#' \deqn{
+#' \mathbf{v}_{t} = \mathbf{F} \mathbf{v}_{t-l} + \mathbf{G}
+#' \mathbf{\epsilon}_{t}
+#' }{
+#' v_{t} = F v_{t-l} + G \epsilon_{t}
+#' }
 #'
-#' \deqn{a_{t} = F_{X} a_{t-1} + g_{X} \epsilon_{t} / x_{t}}
+#' \deqn{\mathbf{a}_{t} = \mathbf{F_{X}} \mathbf{a}_{t-1} + \mathbf{G_{X}}
+#' \mathbf{\epsilon}_{t} / \mathbf{x}_{t}}{a_{t} = F_{X} a_{t-1} + G_{X} \epsilon_{t}
+#' / x_{t}}
 #'
-#' Where \eqn{o_{t}} is the Bernoulli distributed random variable (in case of
-#' normal data it equals to 1 for all observations), \eqn{v_{t}} is the state
-#' vector and \eqn{l} is the vector of lags, \eqn{x_t} is the vector of
-#' exogenous variables. w(.) is the measurement function, r(.) is the error
-#' function, f(.) is the transition function and g(.) is the persistence
-#' function. \eqn{a_t} is the vector of parameters for exogenous variables,
-#' \eqn{F_{X}} is the \code{transitionX} matrix and \eqn{g_{X}} is the
-#' \code{persistenceX} matrix.  Finally, \eqn{\epsilon_{t}} is the error term.
+#' Where \eqn{y_{t}} is the vector of time series on observation \eqn{t}, \eqn{o_{t}}
+#' is the vector of Bernoulli distributed random variable (in case of normal data it
+#' becomes unit vector for all observations), \eqn{\mathbf{v}_{t}} is the matrix of
+#' states and \eqn{l} is the matrix of lags, \eqn{\mathbf{x}_t} is the vector of
+#' exogenous variables. \eqn{\mathbf{W}} is the measurement matrix, \eqn{\mathbf{F}}
+#' is the transition matrix and \eqn{\mathbf{G}} is the persistence matrix.
+#' Finally, \eqn{\epsilon_{t}} is the vector of error terms.
 #'
-#' For the details see Hyndman et al.(2008).
+#' Conventionally we formulate values as:
 #'
-#' @template ssBasicParam
+#' \deqn{\mathbf{y}'_t = (y_{1,t}, y_{2,t}, \dots, y_{m,t})}{y_t = (y_{1,t}, y_{2,t},
+#' \dots, y_{m,t}),}
+#' where \eqn{m} is the number of series in the group.
+#' \deqn{\mathbf{v}'_t = (v_{1,t}, v_{2,t}, \dots, v_{m,t})}{v'_t = (v_{1,t}, v_{2,t},
+#' \dots, v_{m,t}),}
+#' where \eqn{v_{i,t}} is vector of components for i-th time series.
+#' \deqn{\mathbf{W}' = (w_{1}, \dots , 0;
+#' \vdots , \ddots , \vdots;
+#' 0 , \vdots , w_{m})}{W' = (w_{1}, ... , 0;
+#' ... , ... , ...;
+#' 0 , ... , w_{m})} is matrix of measurement vectors.
+#'
+#' For the details see Hyndman et al. (2008), chapter 17.
+#'
+#' @template vssBasicParam
 #' @template ssAdvancedParam
-#' @template ssPersistenceParam
 #' @template ssAuthor
 #' @template ssKeywords
 #'
@@ -44,40 +68,25 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' @param model The type of ETS model. Can consist of 3 or 4 chars: \code{ANN},
 #' \code{AAN}, \code{AAdN}, \code{AAA}, \code{AAdA}, \code{MAdM} etc.
 #' \code{ZZZ} means that the model will be selected based on the chosen
-#' information criteria type. Models pool can be restricted with additive only
-#' components. This is done via \code{model="XXX"}. For example, making
-#' selection between models with none / additive / damped additive trend
-#' component only (i.e. excluding multiplicative trend) can be done with
-#' \code{model="ZXZ"}. Furthermore, selection between multiplicative models
-#' (excluding additive components) is regulated using \code{model="YYY"}. This
-#' can be useful for positive data with low values (for example, slow moving
-#' products). Finally, if \code{model="CCC"}, then all the models are estimated
-#' and combination of their forecasts using AIC weights is produced (Kolassa,
-#' 2011). This can also be regulated. For example, \code{model="CCN"} will
-#' combine forecasts of all non-seasonal models and \code{model="CXY"} will
-#' combine forecasts of all the models with non-multiplicative trend and
-#' non-additive seasonality with either additive or multiplicative error. not
-#' sure why anyone whould need this thing, but it is available.
+#' information criteria type. ATTENTION! NO MODEL SELECTION IS AVAILABLE AT
+#' THIS STAGE!
 #'
-#' The parameter \code{model} can also be a vector of names of models for a
-#' finer tuning (pool of models). For example, \code{model=c("ANN","AAA")} will
-#' estimate only two models and select the best of them.
-#'
-#' Also \code{model} can accept a previously estimated ES model and use all its
+#' Also \code{model} can accept a previously estimated VES model and use all its
 #' parameters.
 #'
 #' Keep in mind that model selection with "Z" components uses Branch and Bound
 #' algorithm and may skip some models that could have slightly smaller
 #' information criteria.
-#' @param phi Value of damping parameter. If \code{NULL} then it is estimated.
-#' @param initial Can be either character or a vector of initial states. If it
-#' is character, then it can be \code{"optimal"}, meaning that the initial
-#' states are optimised, or \code{"backcasting"}, meaning that the initials are
-#' produced using backcasting procedure (advised for data with high frequency).
-#' If character, then \code{initialSeason} will be estimated in the way defined
-#' by \code{initial}.
-#' @param initialSeason Vector of initial values for seasonal components. If
-#' \code{NULL}, they are estimated during optimisation.
+
+#' @param initial Can be either character or a vector / matrix of initial states.
+#' If it is character, then it can be \code{"individual"}, individual values of
+#' the intial non-seasonal components are udes, or \code{"group"}, meaning that
+#' the initials for all the time series are set to be equal to the same value.
+#' If vector of states is provided, then it is automatically transformed into
+#' a matrix, assuming that these values are provided for the whole group.
+#' @param initialSeason Can be either character or a vector / matrix of initial
+#' states. Treated the same way as \code{initial}. This means that different time
+#' series may share the same initial seasonal component.
 #' @param ...  Other non-documented parameters. For example \code{FI=TRUE} will
 #' make the function also produce Fisher Information matrix, which then can be
 #' used to calculated variances of smoothing parameters and initial states of
@@ -88,156 +97,35 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' \code{CUpper} define lower and upper bounds for the search inside of the
 #' specified \code{bounds}. These values should have exactly the length equal
 #' to the number of parameters to estimate.
-#' @return Object of class "smooth" is returned. It contains the list of the
-#' following values for clasical ETS models:
+#' @return Object of class "smooth" is returned. It contains a list of
+#' values.
 #'
-#' \itemize{
-#' \item \code{model} - type of constructed model.
-#' \item \code{formula} - mathematical formula, describing interations between
-#' components of es() and exogenous variables.
-#' \item \code{timeElapsed} - time elapsed for the construction of the model.
-#' \item \code{states} - matrix of the components of ETS.
-#' \item \code{persistence} - persistence vector. This is the place, where
-#' smoothing parameters live.
-#' \item \code{phi} - value of damping parameter.
-#' \item \code{initialType} - Type of initial values used.
-#' \item \code{initial} - intial values of the state vector (non-seasonal).
-#' \item \code{initialSeason} - intial values of the seasonal part of state vector.
-#' \item \code{nParam} - number of estimated parameters.
-#' \item \code{fitted} - fitted values of ETS.
-#' \item \code{forecast} - point forecast of ETS.
-#' \item \code{lower} - lower bound of prediction interval. When \code{intervals="none"}
-#' then NA is returned.
-#' \item \code{upper} - higher bound of prediction interval. When \code{intervals="none"}
-#' then NA is returned.
-#' \item \code{residuals} - residuals of the estimated model.
-#' \item \code{errors} - trace forecast in-sample errors, returned as a matrix. In the
-#' case of trace forecasts this is the matrix used in optimisation. In non-trace estimations
-#' it is returned just for the information.
-#' \item \code{s2} - variance of the residuals (taking degrees of freedom into account).
-#' \item \code{intervals} - type of intervals asked by user.
-#' \item \code{level} - confidence level for intervals.
-#' \item \code{cumulative} - whether the produced forecast was cumulative or not.
-#' \item \code{actuals} - original data.
-#' \item \code{holdout} - holdout part of the original data.
-#' \item \code{iprob} - fitted and forecasted values of the probability of demand occurrence.
-#' \item \code{intermittent} - type of intermittent model fitted to the data.
-#' \item \code{xreg} - provided vector or matrix of exogenous variables. If \code{xregDo="s"},
-#' then this value will contain only selected exogenous variables.
-#' \item \code{updateX} - boolean, defining, if the states of exogenous variables were
-#' estimated as well.
-#' \item \code{initialX} - initial values for parameters of exogenous variables.
-#' \item \code{persistenceX} - persistence vector g for exogenous variables.
-#' \item \code{transitionX} - transition matrix F for exogenous variables.
-#' \item \code{ICs} - values of information criteria of the model. Includes AIC, AICc and BIC.
-#' \item \code{logLik} - log-likelihood of the function.
-#' \item \code{cf} - cost function value.
-#' \item \code{cfType} - type of cost function used in the estimation.
-#' \item \code{FI} - Fisher Information. Equal to NULL if \code{FI=FALSE} or when \code{FI}
-#' is not provided at all.
-#' \item \code{accuracy} - vector of accuracy measures for the holdout sample. In
-#' case of non-intermittent data includes: MPE, MAPE, SMAPE, MASE, sMAE,
-#' RelMAE, sMSE and Bias coefficient (based on complex numbers). In case of
-#' intermittent data the set of errors will be: sMSE, sPIS, sCE (scaled
-#' cumulative error) and Bias coefficient. This is available only when
-#' \code{holdout=TRUE}.
-#' }
-#'
-#' If combination of forecasts is produced (using \code{model="CCC"}), then a
-#' shorter list of values is returned:
-#'
-#' \itemize{
-#' \item \code{model},
-#' \item \code{timeElapsed},
-#' \item \code{initialType},
-#' \item \code{fitted},
-#' \item \code{forecast},
-#' \item \code{lower},
-#' \item \code{upper},
-#' \item \code{residuals},
-#' \item \code{s2} - variance of additive error of combined one-step-ahead forecasts,
-#' \item \code{intervals},
-#' \item \code{level},
-#' \item \code{cumulative},
-#' \item \code{actuals},
-#' \item \code{holdout},
-#' \item \code{iprob},
-#' \item \code{intermittent},
-#' \item \code{ICs} - combined ic,
-#' \item \code{ICw} - ic weights used in the combination,
-#' \item \code{cfType},
-#' \item \code{xreg},
-#' \item \code{accuracy}.
-#' }
-#' @seealso \code{\link[forecast]{ets}, \link[forecast]{forecast},
-#' \link[stats]{ts}, \link[smooth]{sim.es}}
+#' @seealso \code{\link[smooth]{es}, \link[forecast]{ets},
+#' \link[forecast]{forecast}}
 #'
 #' @examples
 #'
 #' library(Mcomp)
 #'
-#' # See how holdout and trace parameters influence the forecast
-#' es(M3$N1245$x,model="AAdN",h=8,holdout=FALSE,cfType="MSE")
-#' \dontrun{es(M3$N2568$x,model="MAM",h=18,holdout=TRUE,cfType="MSTFE")}
+#' \dontrun{es(M3$N2568$x,model="MAM",h=18,holdout=TRUE)}
 #'
-#' # Model selection example
-#' es(M3$N1245$x,model="ZZN",ic="AIC",h=8,holdout=FALSE,bounds="a")
 #'
-#' # Model selection. Compare AICc of these two models:
-#' \dontrun{es(M3$N1683$x,"ZZZ",h=10,holdout=TRUE)
-#' es(M3$N1683$x,"MAdM",h=10,holdout=TRUE)}
-#'
-#' # Model selection, excluding multiplicative trend
-#' \dontrun{es(M3$N1245$x,model="ZXZ",h=8,holdout=TRUE)}
-#'
-#' # Combination example
-#' \dontrun{es(M3$N1245$x,model="CCN",h=8,holdout=TRUE)}
-#'
-#' # Model selection using a specified pool of models
-#' ourModel <- es(M3$N1587$x,model=c("ANN","AAM","AMdA"),h=18)
-#'
-#' # Redo previous model and produce prediction intervals
-#' es(M3$N1587$x,model=ourModel,h=18,intervals="p")
-#'
-#' # Semiparametric intervals example
-#' \dontrun{es(M3$N1587$x,h=18,holdout=TRUE,intervals="sp")}
-#'
-#' # Exogenous variables in ETS example
-#' \dontrun{x <- cbind(c(rep(0,25),1,rep(0,43)),c(rep(0,10),1,rep(0,58)))
-#' y <- ts(c(M3$N1457$x,M3$N1457$xx),frequency=12)
-#' es(y,h=18,holdout=TRUE,xreg=x,cfType="aMSTFE",intervals="np")
-#' ourModel <- es(ts(c(M3$N1457$x,M3$N1457$xx),frequency=12),h=18,holdout=TRUE,xreg=x,updateX=TRUE)}
-#'
-#' # This will be the same model as in previous line but estimated on new portion of data
-#' \dontrun{es(ts(c(M3$N1457$x,M3$N1457$xx),frequency=12),model=ourModel,h=18,holdout=FALSE)}
-#'
-#' # Intermittent data example
-#' x <- rpois(100,0.2)
-#' # Croston's method with the best ETS for demand sizes
-#' es(x,"ZZN",intermittent="croston")
-#' # TSB based on iETS(M,N,N)
-#' es(x,"MNN",intermittent="tsb")
-#' # Constant probability based on iETS(M,N,N)
-#' es(x,"MNN",intermittent="fixed")
-#' # Best type of intermittent model based on iETS(Z,Z,N)
-#' ourModel <- es(x,"ZZN",intermittent="auto")
-#'
-#' summary(ourModel)
-#' forecast(ourModel)
-#' plot(forecast(ourModel))
-#'
-#' @export es
-es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
-               initial=c("optimal","backcasting"), initialSeason=NULL, ic=c("AICc","AIC","BIC"),
-               cfType=c("MSE","MAE","HAM","GMSTFE","MSTFE","MSEh","TFL"),
-               h=10, holdout=FALSE, cumulative=FALSE,
-               intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-               intermittent=c("none","auto","fixed","croston","tsb","sba"),
-               bounds=c("usual","admissible","none"),
-               silent=c("none","all","graph","legend","output"),
-               xreg=NULL, xregDo=c("use","select"), initialX=NULL,
-               updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
-# Copyright (C) 2015 - 2016  Ivan Svetunkov
+ves <- function(data, model="ANN", persistence=c("individual","group"),
+                transition=c("individual","group"), measurement=c("individual","group"),
+                initial=c("individual","group"), initialSeason=c("individual","group"),
+                cfType=c("MSE","MAE","HAM","GMSTFE","MSTFE","MSEh","TFL"),
+                ic=c("AICc","AIC","BIC"), h=10, holdout=FALSE,
+                intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
+                intermittent=c("none","auto","fixed","croston","tsb","sba"),
+                bounds=c("usual","admissible","none"),
+                silent=c("none","all","graph","legend","output"),
+                xreg=NULL, xregDo=c("use","select"), initialX=NULL,
+                updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
+# Copyright (C) 2017 - Inf  Ivan Svetunkov
+
+### This should be done as expanded es() function with matrix of states (rows - time, cols - states),
+### large transition matrix and a persistence matrix. The returned value of the fit is vector.
+### So the vfitter can be based on amended version fitter.
 
 # Start measuring the time of calculations
     startTime <- Sys.time();
@@ -254,6 +142,8 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
             intermittent <- "a";
         }
         persistence <- model$persistence;
+        transition <- model$transition;
+        measurement <- model$measurement;
         initial <- model$initial;
         initialSeason <- model$initialSeason;
         if(is.null(xreg)){
@@ -262,7 +152,6 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
         initialX <- model$initialX;
         persistenceX <- model$persistenceX;
         transitionX <- model$transitionX;
-        phi <- model$phi;
         if(any(c(persistenceX)!=0) | any((transitionX!=0)&(transitionX!=1))){
             updateX <- TRUE;
         }
@@ -276,11 +165,15 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
 # Add all the variables in ellipsis to current environment
     list2env(list(...),environment());
 
-##### Set environment for ssInput and make all the checks #####
-    environment(ssInput) <- environment();
-    ssInput(modelType="es",ParentEnvironment=environment());
+##### Set environment for vssInput and make all the checks #####
+    environment(vssInput) <- environment();
+    vssInput(modelType="ves",ParentEnvironment=environment());
 
-##### Cost Function for ES #####
+
+
+
+
+##### Cost Function for VES #####
 CF <- function(C){
     elements <- etsmatrices(matvt, vecg, phi, matrix(C,nrow=1), nComponents,
                             modellags, initialType, Ttype, Stype, nExovars, matat,
@@ -1583,16 +1476,16 @@ CreatorES <- function(silent=FALSE,...){
         forecasts.list <- forecasts.list[,!badStuff];
         icWeights <- icWeights[!badStuff];
         model.current <- model.current[!badStuff];
-        y.fit <- ts(fitted.list %*% icWeights,start=start(data),frequency=datafreq);
-        y.for <- ts(forecasts.list %*% icWeights,start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
-        errors <- ts(c(y) - y.fit,start=start(data),frequency=datafreq);
+        y.fit <- ts(fitted.list %*% icWeights,start=start(data),frequency=frequency(data));
+        y.for <- ts(forecasts.list %*% icWeights,start=time(data)[obsInsample]+deltat(data),frequency=frequency(data));
+        errors <- ts(c(y) - y.fit,start=start(data),frequency=frequency(data));
         s2 <- mean(errors^2);
         names(icWeights) <- model.current;
         if(intervals){
             lowerList <- lowerList[,!badStuff];
             upperList <- upperList[,!badStuff];
-            y.low <- ts(lowerList %*% icWeights,start=start(y.for),frequency=datafreq);
-            y.high <- ts(upperList %*% icWeights,start=start(y.for),frequency=datafreq);
+            y.low <- ts(lowerList %*% icWeights,start=start(y.for),frequency=frequency(data));
+            y.high <- ts(upperList %*% icWeights,start=start(y.for),frequency=frequency(data));
         }
         else{
             y.low <- NA;
@@ -1634,14 +1527,8 @@ CreatorES <- function(silent=FALSE,...){
 
 ##### Now let's deal with holdout #####
     if(holdout){
-        y.holdout <- ts(data[(obsInsample+1):obsAll],start=start(y.for),frequency=datafreq);
-        if(cumulative){
-            errormeasures <- errorMeasurer(sum(y.holdout),y.for,h*y);
-        }
-        else{
-            errormeasures <- errorMeasurer(y.holdout,y.for,y);
-        }
-
+        y.holdout <- ts(data[(obsInsample+1):obsAll],start=start(y.for),frequency=frequency(data));
+        errormeasures <- errorMeasurer(y.holdout,y.for,y);
 
 # Add PLS
         errormeasuresNames <- names(errormeasures);
@@ -1687,35 +1574,24 @@ CreatorES <- function(silent=FALSE,...){
 
 ##### Make a plot #####
     if(!silentGraph){
-        y.for.new <- y.for;
-        y.high.new <- y.high;
-        y.low.new <- y.low;
-        if(cumulative){
-            y.for.new <- ts(rep(y.for/h,h),start=start(y.for),frequency=datafreq)
-            if(intervals){
-                y.high.new <- ts(rep(y.high/h,h),start=start(y.for),frequency=datafreq)
-                y.low.new <- ts(rep(y.low/h,h),start=start(y.for),frequency=datafreq)
-            }
-        }
-
         if(intervals){
-            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit, lower=y.low.new,upper=y.high.new,
-                       level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
+            graphmaker(actuals=data,forecast=y.for,fitted=y.fit, lower=y.low,upper=y.high,
+                       level=level,legend=!silentLegend,main=modelname);
         }
         else{
-            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit,
-                       level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
+            graphmaker(actuals=data,forecast=y.for,fitted=y.fit,
+                    level=level,legend=!silentLegend,main=modelname);
         }
     }
 
-##### Return values #####
+    ##### Return values #####
     if(modelDo!="combine"){
         model <- list(model=modelname,formula=esFormula,timeElapsed=Sys.time()-startTime,
                       states=matvt,persistence=persistence,phi=phi,
                       initialType=initialType,initial=initialValue,initialSeason=initialSeason,
                       nParam=nParam,
                       fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
-                      errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
+                      errors=errors.mat,s2=s2,intervals=intervalsType,level=level,
                       actuals=data,holdout=y.holdout,iprob=pt,intermittent=intermittent,
                       xreg=xreg,updateX=updateX,initialX=initialX,persistenceX=vecgX,transitionX=matFX,
                       ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,FI=FI,accuracy=errormeasures);
@@ -1726,7 +1602,6 @@ CreatorES <- function(silent=FALSE,...){
                       initialType=initialType,
                       fitted=y.fit,forecast=y.for,
                       lower=y.low,upper=y.high,residuals=errors,s2=s2,intervals=intervalsType,level=level,
-                      cumulative=cumulative,
                       actuals=data,holdout=y.holdout,iprob=pt,intermittent=intermittent,
                       xreg=xreg,updateX=updateX,
                       ICs=ICs,ICw=icWeights,cf=NULL,cfType=cfType,accuracy=errormeasures);

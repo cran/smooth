@@ -1,3 +1,34 @@
+smooth v1.9.9 (Release data: 2017-05-03)
+==============
+
+Changes:
+* New parameter - cumulative - which makes functions return aggregated over the forecast horizon values (point and interval forecasts).
+* graphmaker() now treats cumulative forecasts.
+* Error measures take the possible cumulative nature of forecasts into account.
+* auto() functions now also accept smooth.sim objects as data.
+* polyroot() was working badly for multiple seasonal ARIMAs, so I had to ditch it in favour for my Rcpp function. SSARIMA now works even slower. Will need to optimise it somehow.
+* Updated vignettes, showing how multiple seasonal ARIMA can be estimated.
+* Renamed MLSTFE into GMSTFE - Geometric Mean Squared Trace Forecast Error. This is slightly easier to remember.
+* Trace Forecast Likelihood is once again available as estimator.
+* Started work on a new function - ves() - Vector Exponential Smoothing. It will be released in 2.0.0.
+
+Bugfixes:
+* datafreq is now used in all the functions.
+
+
+smooth v1.9.1 (Release data: 2017-03-28)
+==============
+
+Changes:
+* New function in error measures category - pls() - Prediction Likelihood Score.
+* PLS is now included in accuracy measures of es().
+
+Bugfixes:
+* Fixed a problem with phi estimation in cases, when initial values for the optimiser are provided.
+* Now we don't check C / CLower / CUpper if they are not provided.
+* Fixed a problem with prediction intervals construction for binary variables.
+
+
 smooth v1.9.0 (Release data: 2017-03-18)
 ==============
 
