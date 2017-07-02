@@ -2,29 +2,29 @@
 % Please edit documentation in R/ves.R
 \name{ves}
 \alias{ves}
-\title{NOT AVAILABLE YET: Vector Exponential Smoothing in SSOE state-space model}
+\title{Vector Exponential Smoothing in SSOE state-space model}
 \usage{
-ves(data, model = "ANN", persistence = c("individual", "group"),
-  transition = c("individual", "group"), measurement = c("individual",
-  "group"), initial = c("individual", "group"),
-  initialSeason = c("individual", "group"), cfType = c("MSE", "MAE", "HAM",
-  "GMSTFE", "MSTFE", "MSEh", "TFL"), ic = c("AICc", "AIC", "BIC"), h = 10,
+ves(data, model = "ANN", persistence = c("group", "independent",
+  "dependent"), transition = c("group", "independent", "dependent"),
+  phi = c("group", "individual"), initial = c("individual", "group"),
+  initialSeason = c("group", "individual"), cfType = c("likelihood",
+  "diagonal", "trace"), ic = c("AICc", "AIC", "BIC"), h = 10,
   holdout = FALSE, intervals = c("none", "parametric", "semiparametric",
   "nonparametric"), level = 0.95, intermittent = c("none", "auto", "fixed",
-  "croston", "tsb", "sba"), bounds = c("usual", "admissible", "none"),
-  silent = c("none", "all", "graph", "legend", "output"), xreg = NULL,
-  xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
-  persistenceX = NULL, transitionX = NULL, ...)
+  "tsb"), bounds = c("admissible", "none"), silent = c("none", "all",
+  "graph", "output"), ...)
 }
 \arguments{
 \item{data}{is the matrix with data, where series are in columns and
 observations are in rows.}
 
 \item{model}{The type of ETS model. Can consist of 3 or 4 chars: \code{ANN},
-\code{AAN}, \code{AAdN}, \code{AAA}, \code{AAdA}, \code{MAdM} etc.
+\code{AAN}, \code{AAdN}, \code{AAA}, \code{AAdA}, \code{MMdM} etc.
 \code{ZZZ} means that the model will be selected based on the chosen
-information criteria type. ATTENTION! NO MODEL SELECTION IS AVAILABLE AT
-THIS STAGE!
+information criteria type.
+ATTENTION! ONLY PURE ADDITIVE AND PURE MULTIPLICATIVE MODELS ARE CURRENTLY
+AVAILABLE + NO MODEL SELECTION IS AVAILABLE AT THIS STAGE!
+Pure multiplicative models are done as additive model applied to log(data).
 
 Also \code{model} can accept a previously estimated VES model and use all its
 parameters.
@@ -33,17 +33,38 @@ Keep in mind that model selection with "Z" components uses Branch and Bound
 algorithm and may skip some models that could have slightly smaller
 information criteria.}
 
-\item{persistence}{Persistence vector \eqn{g}, containing smoothing
-parameters. Can either be \code{individual} for each series or \code{group},
-equal to all the time series. If a value is provided, then it is used by the model.}
+\item{persistence}{Persistence matrix \eqn{G}, containing smoothing
+parameters. Can be:
+\itemize{
+\item \code{independent} - each series has its own smoothing parameters
+and no interactions are modelled (all the other values in the matrix are set
+to zero);
+\item \code{dependent} - each series has its own smoothing parameters, but
+interactions between the series are modelled (the whole matrix is estimated);
+\item \code{group} each series has the same smoothing parameters for respective
+components (the values of smoothing parameters are repeated, all the other values
+in the matrix are set to zero).
+\item provided by user as a vector or as a matrix. The value is used by the model.
+}}
 
-\item{transition}{Transition matrix \eqn{F}. Can either be \code{individual} for
-each series or \code{group}, equal to all the time series. If vector or a matrix
-is provided here, then it is used by the model.}
+\item{transition}{Transition matrix \eqn{F}. Can be:
+\itemize{
+\item \code{independent} - each series has its own preset transition matrix
+and no interactions are modelled (all the other values in the matrix are set
+to zero);
+\item \code{dependent} - each series has its own transition matrix, but
+interactions between the series are modelled (the whole matrix is estimated). The
+estimated model behaves similar to VAR in this case;
+\item \code{group} each series has the same transition matrix for respective
+components (the values are repeated, all the other values in the matrix are set to
+zero).
+\item provided by user as a vector or as a matrix. The value is used by the model.
+}}
 
-\item{measurement}{Measurement vector \eqn{w}. Can either be \code{individual} for
-each series or \code{group}, equal to all the time series. If vector is provided
-here, then it is used by the model.}
+\item{phi}{In cases of damped trend this parameter defines whether the \eqn{phi}
+should be estimated separately for each series (\code{individual}) or for the whole
+set (\code{group}). If vector or a value is provided here, then it is used by the
+model.}
 
 \item{initial}{Can be either character or a vector / matrix of initial states.
 If it is character, then it can be \code{"individual"}, individual values of
@@ -57,17 +78,17 @@ states. Treated the same way as \code{initial}. This means that different time
 series may share the same initial seasonal component.}
 
 \item{cfType}{Type of Cost Function used in optimization. \code{cfType} can
-be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
-\code{HAM} (Half Absolute Moment), \code{GMSTFE} - Mean Log Squared Trace
-Forecast Error, \code{MSTFE} - Mean Squared Trace Forecast Error and
-\code{MSEh} - optimisation using only h-steps ahead error, \code{TFL} -
-trace forecast likelihood. If \code{cfType!="MSE"}, then likelihood and
-model selection is done based on equivalent \code{MSE}. Model selection in
-this cases becomes not optimal.
-
-There are also available analytical approximations for multistep functions:
-\code{aMSEh}, \code{aMSTFE} and \code{aGMSTFE}. These can be useful in cases
-of small samples.}
+be:
+\itemize{
+\item \code{likelihood} - which assumes the minimisation of the determinant
+of the covariance matrix of errors between the series. This implies that the
+series could be correlated;
+\item \code{diagonal} - the covariance matrix is assumed to be diagonal with
+zeroes off the diagonal. The determinant of this matrix is just a product of
+variances. This thing is minimised in this siduation in logs.
+\item \code{trace} - the trace of the covariance matrix. The sum of variances
+is minimised in this case.
+}}
 
 \item{ic}{The information criterion used in the model selection procedure.}
 
@@ -76,7 +97,9 @@ of small samples.}
 \item{holdout}{If \code{TRUE}, holdout sample of size \code{h} is taken from
 the end of the data.}
 
-\item{intervals}{Type of intervals to construct. This can be:
+\item{intervals}{Type of intervals to construct. NOT AVAILABLE YET!
+
+This can be:
 
 \itemize{
 \item \code{none}, aka \code{n} - do not produce prediction
@@ -84,31 +107,26 @@ intervals.
 \item \code{parametric}, \code{p} - use state-space structure of ETS. In
 case of mixed models this is done using simulations, which may take longer
 time than for the pure additive and pure multiplicative models.
-\item \code{semiparametric}, \code{sp} - intervals based on covariance
-matrix of 1 to h steps ahead errors and assumption of normal / log-normal
-distribution (depending on error type).
-\item \code{nonparametric}, \code{np} - intervals based on values from a
-quantile regression on error matrix (see Taylor and Bunn, 1999). The model
-used in this process is e[j] = a j^b, where j=1,..,h.
 }
-The parameter also accepts \code{TRUE} and \code{FALSE}. Former means that
-parametric intervals are constructed, while latter is equivalent to
+The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
+parametric intervals are constructed, while the latter is equivalent to
 \code{none}.}
 
 \item{level}{Confidence level. Defines width of prediction interval.}
 
-\item{intermittent}{Defines type of intermittent model used. Can be: 1.
-\code{none}, meaning that the data should be considered as non-intermittent;
-2. \code{fixed}, taking into account constant Bernoulli distribution of
-demand occurancies; 3. \code{croston}, based on Croston, 1972 method with
-SBA correction; 4. \code{tsb}, based on Teunter et al., 2011 method. 5.
-\code{auto} - automatic selection of intermittency type based on information
-criteria. The first letter can be used instead. 6. \code{"sba"} -
-Syntetos-Boylan Approximation for Croston's method (bias correction)
-discussed in Syntetos and Boylan, 2005.}
+\item{intermittent}{Defines type of intermittent model used. Can be:
+\itemize{
+\item \code{none}, meaning that the data should be considered as non-intermittent;
+\item \code{fixed}, taking into account constant Bernoulli distribution of
+demand occurancies;
+\item \code{tsb}, based on Teunter et al., 2011 method.
+\item \code{auto} - automatic selection of intermittency type based on information
+criteria. The first letter can be used instead.
+}}
 
 \item{bounds}{What type of bounds to use in the model estimation. The first
-letter can be used instead of the whole word.}
+letter can be used instead of the whole word. Currently only \code{"admissible"}
+bounds are available.}
 
 \item{silent}{If \code{silent="none"}, then nothing is silent, everything is
 printed out and drawn. \code{silent="all"} means that nothing is produced or
@@ -121,54 +139,47 @@ and \code{FALSE}. In this case \code{silent=TRUE} is equivalent to
 \code{silent="none"}. The parameter also accepts first letter of words ("n",
 "a", "g", "l", "o").}
 
-\item{xreg}{Vector (either numeric or time series) or matrix (or data.frame)
-of exogenous variables that should be included in the model. If matrix
-included than columns should contain variables and rows - observations. Note
-that \code{xreg} should have number of observations equal either to
-in-sample or to the whole series. If the number of observations in
-\code{xreg} is equal to in-sample, then values for the holdout sample are
-produced using \link[smooth]{es} function.}
-
-\item{xregDo}{Variable defines what to do with the provided xreg:
-\code{"use"} means that all of the data should be used, whilie
-\code{"select"} means that a selection using \code{ic} should be done.
-\code{"combine"} will be available at some point in future...}
-
-\item{initialX}{Vector of initial parameters for exogenous variables.
-Ignored if \code{xreg} is NULL.}
-
-\item{updateX}{If \code{TRUE}, transition matrix for exogenous variables is
-estimated, introducing non-linear interractions between parameters.
-Prerequisite - non-NULL \code{xreg}.}
-
-\item{persistenceX}{Persistence vector \eqn{g_X}, containing smoothing
-parameters for exogenous variables. If \code{NULL}, then estimated.
-Prerequisite - non-NULL \code{xreg}.}
-
-\item{transitionX}{Transition matrix \eqn{F_x} for exogenous variables. Can
-be provided as a vector. Matrix will be formed using the default
-\code{matrix(transition,nc,nc)}, where \code{nc} is number of components in
-state vector. If \code{NULL}, then estimated. Prerequisite - non-NULL
-\code{xreg}.}
-
 \item{...}{Other non-documented parameters. For example \code{FI=TRUE} will
 make the function also produce Fisher Information matrix, which then can be
 used to calculated variances of smoothing parameters and initial states of
-the model.
-Parameters \code{C}, \code{CLower} and \code{CUpper} can be passed via
-ellipsis as well. In this case they will be used for optimisation. \code{C}
-sets the initial values before the optimisation, \code{CLower} and
-\code{CUpper} define lower and upper bounds for the search inside of the
-specified \code{bounds}. These values should have exactly the length equal
-to the number of parameters to estimate.}
+the model.}
 }
 \value{
-Object of class "smooth" is returned. It contains a list of
-values.
+Object of class "vsmooth" is returned. It contains the following list of
+values:
+\itemize{
+\item \code{model} - The name of the fitted model;
+\item \code{timeElapsed} - The time elapsed for the construction of the model;
+\item \code{states} - The matrix of states with components in columns and time in rows;
+\item \code{persistence} - The persistence matrix;
+\item \code{transition} - The transition matrix;
+\item \code{measurement} - The measurement matrix;
+\item \code{phi} - The damping parameter value;
+\item \code{coefficients} - The vector of all the estimated coefficients;
+\item \code{initial} - The initial values of the non-seasonal components;
+\item \code{initialSeason} - The initial values of the seasonal components;
+\item \code{nParam} - The number of estimated parameters;
+\item \code{actuals} - The matrix with the original data;
+\item \code{fitted} - The matrix of the fitted values;
+\item \code{holdout} - The matrix with the holdoud values (if \code{holdout=TRUE} in
+the estimation);
+\item \code{residuals} - The matrix of the residuals of the model;
+\item \code{Sigma} - The covariance matrix of the errors (estimated with the correction
+for the number of degrees of freedom);
+\item \code{forecast} - The matrix of point forecasts;
+\item \code{lower} and \code{upper} - The bounds of the prediction intervals;
+\item \code{intervals} - The type of the constructed prediction intervals;
+\item \code{level} - The level of the confidence for the prediction intervals;
+\item \code{ICs} - The values of the information criteria;
+\item \code{logLik} - The log-likelihood function;
+\item \code{cf} - The value of the cost function;
+\item \code{cfType} - The type of the used cost function;
+\item \code{accuracy} - the values of the error measures. Currently not available.
+}
 }
 \description{
 Function constructs vector ETS model and returns forecast, fitted values, errors
-and matrix of states along with other useful variables. THIS IS CURRENTLY UNDER CONSTRUCTION!
+and matrix of states along with other useful variables.
 }
 \details{
 Function estimates vector ETS in a form of the Single Source of Error State-space
@@ -214,56 +225,44 @@ where \eqn{v_{i,t}} is vector of components for i-th time series.
 ... , ... , ...;
 0 , ... , w_{m})} is matrix of measurement vectors.
 
-For the details see Hyndman et al. (2008), chapter 17.
+For the details on the additive model see Hyndman et al. (2008),
+chapter 17.
+
+In case of multiplicative model, instead of the vector y_t we use its logarithms.
+As a result the multiplicative model is much easier to work with.
 }
 \examples{
 
-library(Mcomp)
+Y <- ts(cbind(rnorm(100,100,10),rnorm(100,75,8)),frequency=12)
 
-\dontrun{es(M3$N2568$x,model="MAM",h=18,holdout=TRUE)}
+# The simplest model applied to the data with the default values
+ves(Y,model="ANN",h=10,holdout=TRUE)
 
+# Damped trend model with the dependent persistence
+ves(Y,model="AAdN",persistence="d",h=10,holdout=TRUE)
+
+# Multiplicative damped trend model with individual phi
+ves(Y,model="MMdM",persistence="i",h=10,holdout=TRUE,initialSeason="g")
 
 }
 \references{
 \itemize{
-\item Snyder, R. D., 1985. Recursive Estimation of Dynamic Linear Models.
-Journal of the Royal Statistical Society, Series B (Methodological) 47 (2), 272-276.
+\item de Silva A,, Hyndman R.J. and Snyder, R.D. (2010). The vector
+innovations structural time series framework: a simple approach to
+multivariate forecasting. Statistical Modelling, 10 (4), pp.353-374
 \item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 Forecasting with exponential smoothing: the state space approach,
 Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
 }
-
-\itemize{
-\item Teunter R., Syntetos A., Babai Z. (2011). Intermittent demand:
-Linking forecasting to inventory obsolescence. European Journal of
-Operational Research, 214, 606-615.
-\item Croston, J. (1972) Forecasting and stock control for intermittent
-demands. Operational Research Quarterly, 23(3), 289-303.
-\item Syntetos, A., Boylan J. (2005) The accuracy of intermittent demand
-estimates. International Journal of Forecasting, 21(2), 303-314.
-}
-
-\itemize{
-\item Kolassa, S. (2011) Combining exponential smoothing forecasts using Akaike
-weights. International Journal of Forecasting, 27, pp 238 - 251.
-}
-
-\itemize{
-\item Taylor, J.W. and Bunn, D.W. (1999) A Quantile Regression Approach to
-Generating Prediction Intervals. Management Science, Vol 45, No 2, pp
-225-237.
-}
 }
 \seealso{
-\code{\link[smooth]{es}, \link[forecast]{ets},
-\link[forecast]{forecast}}
+\code{\link[smooth]{es}, \link[forecast]{ets}}
 }
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}
 }
 \keyword{models}
+\keyword{multivariate}
 \keyword{nonlinear}
 \keyword{regression}
-\keyword{smooth}
 \keyword{ts}
-\keyword{univar}

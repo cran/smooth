@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2017-05-02" />
+<meta name="date" content="2017-07-02" />
 
 <title>smooth: forecasting using state-space models</title>
 
@@ -32,7 +32,7 @@
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2017-05-02</em></h4>
+<h4 class="date"><em>2017-07-02</em></h4>
 
 
 
@@ -43,10 +43,13 @@
 <li><a href="ssarima.html">ssarima() - State-Space ARIMA</a>, also known as Several Seasonalities ARIMA;</li>
 <li><a href="ces.html">ces() - Complex Exponential Smoothing</a>;</li>
 <li><a href="ges.html">ges() - Generalised Exponential Smoothing</a>;</li>
+<li><a href="ves.html">ves() - Vector Exponential Smoothing</a>;</li>
 <li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
 <li><a href="simulate.html">sim.es() and simulate() - simulation functions for Exponential Smoothing</a>.</li>
+<li><code>xregExpander()</code> – function that creates lags and leads of the provided exogenous variables (either vector or matrix). This thing returns the matrix.</li>
+<li><code>stepwise()</code> – the function that implements stepwise based on information criteria and partial correlations. Easier to use and works faster than <code>step()</code> from ``stats’’ package.</li>
 </ol>
-<p>This funcions (except for the last one) return object of class “smooth”, which uses several methods.</p>
+<p>This funcions (except for the last one) return object of class ``smooth’’, which uses several methods.</p>
 <div id="methods-for-the-class-smooth" class="section level2">
 <h2>Methods for the class <code>smooth</code></h2>
 <p>There are several functions that can be used together with <code>es()</code>, <code>ces()</code>, <code>ssarima()</code> and <code>ges()</code> functions. So when a model is saved to some object <code>ourModel</code>, these function will do some things. Here’s the list of all the available methods with some explanations:</p>
@@ -60,6 +63,16 @@
 <li><code>simulate(ourModel)</code> – produces data simulated from provided model. Currently only available for ETS via <code>simulate(es(...))</code>;</li>
 <li><code>summary(forecast(ourModel))</code> – prints point and interval forecasts;</li>
 <li><code>plot(forecast(ourModel))</code> – produces graph with actuals, forecast, fitted and intervals using <code>graphmaker()</code> function.</li>
+<li><code>logLik(ourModel)</code> – returns log-likelihood of the model;</li>
+<li><code>nobs(ourModel)</code> – returns number of observations in-sample we had;</li>
+<li><code>nParam(ourModel)</code> – number of estimated parameters;</li>
+<li><code>pointLik(ourModel)</code> – likelihood values for each separate observation;</li>
+<li><code>sigma(ourModel)</code> – variance of the residuals of the model;</li>
+<li><code>lags(ourModel)</code> – lags of the model (used with <code>ssarima()</code> and <code>ges()</code>);</li>
+<li><code>orders(ourModel)</code> – orders of the model (can be used with <code>ssarima()</code> and <code>ges()</code>);</li>
+<li><code>modelType(ourModel)</code> – returns the type of the model. Returns something like “MMM” for ETS(MMM). Can be used with <code>es()</code>, <code>ces()</code> and <code>ets()</code>.</li>
+<li><code>coef(ourModel)</code> – returns the vector of all the estimated coefficients of the model.</li>
+<li><code>formula(ourModel)</code> – returns the formula for the measurement equation. This is just for the information and general understanding what we work with.</li>
 </ol>
 </div>
 

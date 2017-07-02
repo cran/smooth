@@ -302,6 +302,7 @@ cbias <- function(x,C=mean(x),digits=5,...){
 #' @param iprob Vector of probabilities of occurrences for the holdout (only needed
 #' for intermittent models).
 #' @param digits Number of digits for rounding.
+#' @param rounded Defines if the rounded up value is used for demand sizes.
 #' @param ...  Other parameters passed to mean function.
 #'
 #' @return A value of the log-likelihood.
@@ -318,7 +319,7 @@ cbias <- function(x,C=mean(x),digits=5,...){
 #' x <- rnorm(100,0,1)
 #' ourModel <- es(x, h=10, holdout=TRUE)
 #' sigma <- t(ourModel$errors) %*% (ourModel$errors) / length(ourModel$residuals)
-#' Etype <- substr(model.type(ourModel),1,1)
+#' Etype <- substr(modelType(ourModel),1,1)
 #' pls(actuals=ourModel$holdout, forecasts=ourModel$forecast, Etype=Etype,
 #'     sigma=sigma, trace=TRUE)
 #'
@@ -326,14 +327,16 @@ cbias <- function(x,C=mean(x),digits=5,...){
 #' # intermittent state-space models
 #' x <- rpois(100,0.4)
 #' ourModel <- es(x, h=10, holdout=TRUE, intermittent='a')
-#' Etype <- substr(model.type(ourModel),1,1)
-#' iprob <- window(ourModel$iprob,start(ourModel$holdout))
+#' Etype <- substr(modelType(ourModel),1,1)
+#' iprob <- ourModel$imodel$fitted
 #' pls(actuals=ourModel$holdout, forecasts=ourModel$forecast, Etype=Etype,
 #'     sigma=ourModel$s2, trace=FALSE, iprob=iprob)
 #'
+#' @importFrom stats dlnorm
+#' @importFrom stats dnorm
 #' @export pls
 pls <- function(actuals, forecasts, Etype=c("A","M"), sigma, trace=TRUE,
-                iprob=1, digits=5, ...){
+                iprob=1, digits=5, rounded=FALSE, ...){
     # This function calculates half moment
     if(length(actuals)!=length(forecasts)){
         warning("Length of actuals and forecasts differs. Using the shortest of the two.", call.=FALSE);
@@ -404,47 +407,77 @@ pls <- function(actuals, forecasts, Etype=c("A","M"), sigma, trace=TRUE,
     obsNonZero <- sum(ot);
 
     ##### Now do the calculations #####
-    if(all(iprob==1)){
-        if(trace){
-            if(Etype=="A"){
-                pls <- -(obsNonZero/2 * obsNonZero * log(2*pi*det(sigma)) + sum(t(errors) %*% solve(sigma) %*% errors) / 2);
+    if(!rounded){
+        if(all(iprob==1)){
+            if(trace){
+                if(Etype=="A"){
+                    pls <- -(obsNonZero/2 * obsNonZero * log(2*pi*det(sigma)) + sum(t(errors) %*% solve(sigma) %*% errors) / 2);
+                }
+                else{
+                    pls <- -(obsNonZero/2 * obsNonZero * log(2*pi*det(sigma)) + sum(t(errors) %*% solve(sigma) %*% errors) / 2 + obsNonZero * sum(log(actuals)));
+                }
+                # pls <- pls / obsNonZero^2;
             }
             else{
-                pls <- -(obsNonZero/2 * obsNonZero * log(2*pi*det(sigma)) + sum(t(errors) %*% solve(sigma) %*% errors) / 2 + obsNonZero * sum(log(actuals)));
+                if(Etype=="A"){
+                    pls <- sum(log(dnorm(ceiling(actuals[ot]),forecasts[ot],sqrt(sigma))));
+                    # pls <- -(obsNonZero/2 * log(2*pi*sigma) + sum(errors^2) / (2*sigma));
+                }
+                else{
+                    pls <- sum(log(dlnorm(ceiling(actuals[ot]),forecasts[ot],sqrt(sigma))));
+                    # pls <- -(obsNonZero/2 * log(2*pi*sigma) + sum(errors^2) / (2*sigma) + sum(log(actuals)));
+                }
             }
-            # pls <- pls / obsNonZero^2;
         }
         else{
-            if(Etype=="A"){
-                pls <- -(obsNonZero/2 * log(2*pi*sigma) + sum(errors^2) / (2*sigma));
+            if(any(!ot)){
+                if(trace){
+                    if(Etype=="A"){
+                        pls <- -(obsNonZero/2 * obsNonZero * log(2*pi*det(sigma)) + sum(t(errors) %*% solve(sigma) %*% errors) / 2) + (sum(log(iprob[ot])) + sum(log(1-iprob[!ot])));
+                    }
+                    else{
+                        pls <- -(obsNonZero/2 * obsNonZero * log(2*pi*det(sigma)) + sum(t(errors) %*% solve(sigma) %*% errors) / 2 + obsNonZero * sum(log(actuals[ot]))) + (sum(log(iprob[ot])) + sum(log(1-iprob[!ot])));
+                    }
+                }
+                else{
+                    if(Etype=="A"){
+                        pls <- (sum(log(dnorm(ceiling(actuals[ot]),forecasts[ot],sqrt(sigma)))) +
+                                    sum(log(iprob[ot])) + sum(log(1-iprob[!ot])));
+                        # pls <- -(obsNonZero/2 * log(2*pi*sigma) + sum(errors^2) / (2*sigma)) + sum(log(iprob[ot])) + sum(log(1-iprob[!ot]));
+                    }
+                    else{
+                        pls <- (sum(log(dlnorm(ceiling(actuals[ot]),forecasts[ot],sqrt(sigma)))) +
+                                    sum(log(iprob[ot])) + sum(log(1-iprob[!ot])));
+                        # pls <- -(obsNonZero/2 * log(2*pi*sigma) + sum(errors^2) / (2*sigma) + sum(log(actuals[ot]))) + sum(log(iprob[ot])) + sum(log(1-iprob[!ot]));
+                    }
+                }
             }
             else{
-                pls <- -(obsNonZero/2 * log(2*pi*sigma) + sum(errors^2) / (2*sigma) + sum(log(actuals)));
+                pls <- sum(log(1-iprob[!ot]));
             }
         }
     }
     else{
-        if(any(!ot)){
-            if(trace){
-                if(Etype=="A"){
-                    pls <- -(obsNonZero/2 * obsNonZero * log(2*pi*det(sigma)) + sum(t(errors) %*% solve(sigma) %*% errors) / 2) + (sum(log(iprob[ot])) + sum(log(1-iprob[!ot])));
-                }
-                else{
-                    pls <- -(obsNonZero/2 * obsNonZero * log(2*pi*det(sigma)) + sum(t(errors) %*% solve(sigma) %*% errors) / 2 + obsNonZero * sum(log(actuals[ot]))) + (sum(log(iprob[ot])) + sum(log(1-iprob[!ot])));
-                }
+        if(all(iprob==1)){
+            if(Etype=="A"){
+                pls <- sum(log(pnorm(ceiling(actuals),forecasts,sqrt(sigma))-pnorm(ceiling(actuals)-1,forecasts,sqrt(sigma))));
             }
             else{
-                if(Etype=="A"){
-                    pls <- -(obsNonZero/2 * log(2*pi*sigma) + sum(errors^2) / (2*sigma)) + sum(log(iprob[ot])) + sum(log(1-iprob[!ot]));
-                }
-                else{
-                    pls <- -(obsNonZero/2 * log(2*pi*sigma) + sum(errors^2) / (2*sigma) + sum(log(actuals[ot]))) + sum(log(iprob[ot])) + sum(log(1-iprob[!ot]));
-                }
+                pls <- sum(log(plnorm(ceiling(actuals),forecasts,sqrt(sigma)) - pnorm(ceiling(actuals)-1,forecasts,sqrt(sigma))));
             }
         }
         else{
-            if(trace){
-                pls <- sum(log(1-iprob[!ot]));
+            if(any(!ot)){
+                if(Etype=="A"){
+                    pls <- (sum(log(pnorm(ceiling(actuals[ot]),forecasts[ot],sqrt(sigma)) -
+                                   pnorm(ceiling(actuals[ot])-1,forecasts[ot],sqrt(sigma)))) +
+                            sum(log(iprob[ot])) + sum(log(1-iprob[!ot])));
+                }
+                else{
+                    pls <- (sum(log(plnorm(ceiling(actuals[ot]),forecasts[ot],sqrt(sigma)) -
+                                    plnorm(ceiling(actuals[ot])-1,forecasts[ot],sqrt(sigma)))) +
+                            sum(log(iprob[ot])) + sum(log(1-iprob[!ot])));
+                }
             }
             else{
                 pls <- sum(log(1-iprob[!ot]));

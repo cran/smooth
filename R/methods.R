@@ -15,7 +15,7 @@
 #' @seealso \link[stats]{AIC}, \link[stats]{BIC}
 #' @references Kenneth P. Burnham, David R. Anderson (1998). Model Selection
 #' and Multimodel Inference. Springer Science & Business Media.
-#' @keywords information criteria information criterion
+#' @keywords htest
 #' @examples
 #'
 #' ourModel <- ces(rnorm(100,0,1),h=10)
@@ -33,7 +33,7 @@ AICc <- function(object, ...) UseMethod("AICc")
 #'
 #' \code{orders()} and \code{lags()} are usefull only for SSARIMA, GES and SMA. They return \code{NA} for other functions.
 #' This can also be applied to \code{arima()}, \code{Arima()} and \code{auto.arima()} functions from stats and forecast packages.
-#' \code{model.type()} is usefull only for ETS and CES. They return \code{NA} for other functions.
+#' \code{modelType()} is usefull only for ETS and CES. They return \code{NA} for other functions.
 #' This can also be applied to \code{ets()} function from forecast package.
 #'
 #' @aliases orders orders.default
@@ -48,21 +48,21 @@ AICc <- function(object, ...) UseMethod("AICc")
 #' }
 #' @author Ivan Svetunkov, \email{ivan@@svetunkov.ru}
 #' @seealso \link[forecast]{forecast}, \link[smooth]{ssarima}
-#' @keywords forecasting
+#' @keywords ts htest
 #' @examples
 #'
 #' x <- rnorm(100,0,1)
 #'
-#' # Just as example. orders and lags do not return anything for ces() and es(). But model.type does.
+#' # Just as example. orders and lags do not return anything for ces() and es(). But modelType() does.
 #' ourModel <- ces(x, h=10)
 #' orders(ourModel)
 #' lags(ourModel)
-#' model.type(ourModel)
+#' modelType(ourModel)
 #' # And as another example it does the opposite for ges() and ssarima()
 #' ourModel <- ges(x, h=10, orders=c(1,1), lags=c(1,4))
 #' orders(ourModel)
 #' lags(ourModel)
-#' model.type(ourModel)
+#' modelType(ourModel)
 #'
 #' # Finally these values can be used for simulate functions or original functions.
 #' ourModel <- auto.ssarima(x)
@@ -78,10 +78,19 @@ orders <- function(object, ...) UseMethod("orders")
 #' @export lags
 lags <- function(object, ...) UseMethod("lags")
 
-#' @aliases model.type.default
+#' @aliases modelType.default
+#' @rdname orders
+#' @export modelType
+modelType <-  function(object, ...) UseMethod("modelType")
+
+##### model.type() is depricated function. Will be removed later #####
+#' @aliases model.type
 #' @rdname orders
 #' @export model.type
-model.type <-  function(object, ...) UseMethod("model.type")
+model.type <- function(object, ...){
+    warning("This function is depricated. Please, use modelType() instead.",call.=FALSE);
+    modelType(object, ...);
+}
 
 ##### Likelihood function and stuff #####
 #' @importFrom stats logLik
@@ -123,10 +132,119 @@ nobs.iss <- function(object, ...){
     return(length(object$fitted));
 }
 
+#' Number of parameters in the model
+#'
+#' This function returns the number of parameters in the estimated model
+#'
+#' This is a very basic and a simple function which does what it says:
+#' extracts number of parameters in the estimated model.
+#'
+#' @aliases nParam nParam.default
+#' @param object Time series model.
+#' @param ... Some other parameters passed to the method.
+#' @return This function returns a numeric value.
+#' @author Ivan Svetunkov, \email{ivan@@svetunkov.ru}
+#' @seealso \link[stats]{nobs}, \link[stats]{logLik}
+#' @keywords htest
+#' @examples
+#'
+#' ourModel <- ces(rnorm(100,0,1),h=10)
+#'
+#' nParam(ourModel)
+#'
+#' @importFrom stats coefficients
+#' @export nParam
+nParam <- function(object, ...) UseMethod("nParam")
+
+#' @export
+nParam.default <- function(object, ...){
+    # The length of the vector of parameters + variance
+    return(length(coefficients(object))+1);
+}
+
+nParam.smooth <- function(object, ...){
+    return(object$nParam);
+}
+
+#' Point likelihood values
+#'
+#' This function returns a vector of logarithms of likelihoods for each observation
+#'
+#' Instead of taking the expected log-likelihood for the whole series, this function
+#' calculates the individual value for each separate observation. Note that these
+#' values are biased, so you would possibly need to take number of degrees of freedom
+#' into account in order to have an unbiased estimator.
+#'
+#' @aliases pointLik pointLik.default
+#' @param object Time series model.
+#' @param ...  Some stuff.
+#' @return This function returns a vector.
+#' @author Ivan Svetunkov, \email{ivan@@svetunkov.ru}
+#' @seealso \link[stats]{AIC}, \link[stats]{BIC}
+#' @keywords htest
+#' @examples
+#'
+#' ourModel <- ces(rnorm(100,0,1),h=10)
+#'
+#' pointLik(ourModel)
+#'
+#' # Bias correction
+#' pointLik(ourModel) - nParam(ourModel)
+#'
+#' # Bias correction in AIC style
+#' 2*(nParam(ourModel) - pointLik(ourModel))
+#'
+#' # BIC calculation based on pointLik
+#' log(nobs(ourModel))*nParam(ourModel) - 2*sum(pointLik(ourModel))
+#'
+#' @export pointLik
+pointLik <- function(object, ...) UseMethod("pointLik")
+
+#' @export
+pointLik.default <- function(object, ...){
+    obs <- nobs(object);
+    errors <- residuals(object);
+    s2 <- sigma(object)^2;
+    likValues <- -1/2 * log(2*pi*s2) - 1/2 * errors^2 / s2;
+
+    return(likValues);
+}
+
+#' @export
+pointLik.smooth <- function(object, ...){
+    if(!any(class(object)=="smooth")){
+        stop("Sorry, but we do not support this class yet.",call.=FALSE);
+    }
+
+    obs <- nobs(object);
+    errors <- residuals(object);
+    s2 <- sigma(object)^2;
+    likValues <- vector("numeric",obs);
+
+    if(gregexpr("ETS",object$model)!=-1){
+        if(substr(modelType(object),1,1)=="A"){
+            likValues <- -1/2 * log(2*pi*s2) - 1/2 * errors^2 / s2;
+        }
+        else{
+            likValues <- -1/2 * log(2*pi*s2) - 1/2 * errors^2 / s2 - log(getResponse(object));
+        }
+    }
+    else{
+        likValues <- -1/2 * log(2*pi*s2) - 1/2 * errors^2 / s2;
+    }
+    return(likValues);
+}
+
+#' @importFrom stats sigma
+#' @export
+sigma.smooth <- function(object, ...){
+    return(sqrt(object$s2));
+}
+
 ##### IC functions #####
 #' @export
 AICc.default <- function(object, ...){
-        obs <- nobs(object);
+    obs <- nobs(object);
 
     llikelihood <- logLik(object);
     nParam <- attributes(llikelihood)$df;
@@ -147,7 +265,7 @@ coef.smooth <- function(object, ...)
     else if(gregexpr("ETS",object$model)!=-1){
         if(any(unlist(gregexpr("C",object$model))==-1)){
             # If this was normal ETS, return values
-            parameters <- c(object$persistence,object$initial,object$initial.season,object$initialX);
+            parameters <- c(object$persistence,object$initial,object$initialSeason,object$initialX);
         }
         else{
             # If we did combinations, we cannot return anything
@@ -198,7 +316,6 @@ coef.smooth <- function(object, ...)
 #' @export
 forecast::getResponse
 
-
 #### Fitted, forecast and actual values ####
 #' @export
 fitted.smooth <- function(object, ...){
@@ -247,7 +364,7 @@ NULL
 #' @references Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 #' Forecasting with exponential smoothing: the state space approach,
 #' Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
-#' @keywords forecast
+#' @keywords ts univar
 #' @examples
 #'
 #' ourModel <- ces(rnorm(100,0,1),h=10)
@@ -293,13 +410,14 @@ forecast.smooth <- function(object, h=10,
     return(structure(output,class=c("smooth.forecast","forecast")));
 }
 
+#' @importFrom stats window
 #' @export
 getResponse.smooth <- function(object, ...){
-    return(object$actuals);
+    return(window(object$actuals,start(object$actuals),end(object$fitted)));
 }
 #' @export
 getResponse.smooth.forecast <- function(object, ...){
-    return(object$model$actuals);
+    return(window(object$model$actuals,start(object$model$actuals),end(object$model$fitted)));
 }
 
 #### Function extracts lags of provided model ####
@@ -348,7 +466,7 @@ lags.Arima <- function(object, ...){
 
 #### Function extracts type of model. For example "AAN" from ets ####
 #' @export
-model.type.default <- function(object, ...){
+modelType.default <- function(object, ...){
     model <- object$model;
     if(!is.null(model)){
         if(gregexpr("ETS",model)!=-1){
@@ -596,13 +714,19 @@ print.smooth <- function(x, ...){
     if(gregexpr("SMA",x$model)!=-1){
         x$iprob <- 1;
         x$initialType <- "b";
-        x$intermittent <- "n";
+        intermittent <- "n";
     }
     else if(gregexpr("ETS",x$model)!=-1){
     # If cumulative forecast and Etype=="M", report that this was "parameteric" interval
-        if(cumulative & substr(model.type(x),1,1)=="M"){
+        if(cumulative & substr(modelType(x),1,1)=="M"){
             intervalsType <- "p";
         }
+    }
+    if(class(x$imodel)!="iss"){
+        intermittent <- "n";
+    }
+    else{
+        intermittent <- x$imodel$intermittent;
     }
 
     ssOutput(x$timeElapsed, x$model, persistence=x$persistence, transition=x$transition, measurement=x$measurement,
@@ -611,7 +735,7 @@ print.smooth <- function(x, ...){
              cfType=x$cfType, cfObjective=x$cf, intervals=intervals, cumulative=cumulative,
              intervalsType=intervalsType, level=x$level, ICs=x$ICs,
              holdout=holdout, insideintervals=insideintervals, errormeasures=x$accuracy,
-             intermittent=x$intermittent, iprob=x$iprob[length(x$iprob)]);
+             intermittent=intermittent);
 }
 
 #' @export
@@ -634,6 +758,9 @@ print.smooth.sim <- function(x, ...){
             print(round(xPersistence,3));
             if(x$phi!=1){
                 cat(paste0("Phi: ",x$phi,"\n"));
+            }
+            if(x$intermittent!="n"){
+                cat(paste0("Intermittence type: ",x$intermittent,"\n"));
             }
             cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
         }
@@ -747,9 +874,18 @@ print.iss <- function(x, ...){
     ICs <- round(c(AIC(x),AICc(x),BIC(x)),4);
     names(ICs) <- c("AIC","AICc","BIC");
     cat(paste0("Intermittent State-Space model estimated: ",intermittent,"\n"));
-    cat(paste0("Smoothing parameter: ",round(x$C[1],3),"\n"));
-    cat(paste0("Initial value: ",round(x$states[1],3),"\n"));
-    cat(paste0("Probability forecast: ",round(x$forecast[1],3),"\n"));
+    if(!is.null(x$model)){
+        cat(paste0("Underlying ETS model: ",x$model,"\n"));
+    }
+    if(!is.null(x$persistence)){
+        cat("Smoothing parameters:\n");
+        print(round(x$persistence,3));
+    }
+    if(!is.null(x$initial)){
+        cat("Vector of initials:\n");
+        print(round(x$initial,3));
+    }
+    # cat(paste0("Probability forecast: ",round(x$forecast[1],3),"\n"));
     cat("Information criteria: \n");
     print(ICs);
 }

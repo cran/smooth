@@ -5,7 +5,7 @@
 \title{Prediction Likelihood Score}
 \usage{
 pls(actuals, forecasts, Etype = c("A", "M"), sigma, trace = TRUE,
-  iprob = 1, digits = 5, ...)
+  iprob = 1, digits = 5, rounded = FALSE, ...)
 }
 \arguments{
 \item{actuals}{Actual values from the holdout.}
@@ -25,6 +25,8 @@ forecasts (multiple steps ahead), Trace Forecast Likelihood is used in this case
 for intermittent models).}
 
 \item{digits}{Number of digits for rounding.}
+
+\item{rounded}{Defines if the rounded up value is used for demand sizes.}
 
 \item{...}{Other parameters passed to mean function.}
 }
@@ -47,7 +49,7 @@ that the data was "produced" by the estimated model. %In case of trace forecasts
 x <- rnorm(100,0,1)
 ourModel <- es(x, h=10, holdout=TRUE)
 sigma <- t(ourModel$errors) \%*\% (ourModel$errors) / length(ourModel$residuals)
-Etype <- substr(model.type(ourModel),1,1)
+Etype <- substr(modelType(ourModel),1,1)
 pls(actuals=ourModel$holdout, forecasts=ourModel$forecast, Etype=Etype,
     sigma=sigma, trace=TRUE)
 
@@ -55,8 +57,8 @@ pls(actuals=ourModel$holdout, forecasts=ourModel$forecast, Etype=Etype,
 # intermittent state-space models
 x <- rpois(100,0.4)
 ourModel <- es(x, h=10, holdout=TRUE, intermittent='a')
-Etype <- substr(model.type(ourModel),1,1)
-iprob <- window(ourModel$iprob,start(ourModel$holdout))
+Etype <- substr(modelType(ourModel),1,1)
+iprob <- ourModel$imodel$fitted
 pls(actuals=ourModel$holdout, forecasts=ourModel$forecast, Etype=Etype,
     sigma=ourModel$s2, trace=FALSE, iprob=iprob)
 

@@ -10,10 +10,10 @@ es(data, model = "ZZZ", persistence = NULL, phi = NULL,
   "MSTFE", "MSEh", "TFL"), h = 10, holdout = FALSE, cumulative = FALSE,
   intervals = c("none", "parametric", "semiparametric", "nonparametric"),
   level = 0.95, intermittent = c("none", "auto", "fixed", "croston", "tsb",
-  "sba"), bounds = c("usual", "admissible", "none"), silent = c("none",
-  "all", "graph", "legend", "output"), xreg = NULL, xregDo = c("use",
-  "select"), initialX = NULL, updateX = FALSE, persistenceX = NULL,
-  transitionX = NULL, ...)
+  "sba"), imodel = "MNN", bounds = c("usual", "admissible", "none"),
+  silent = c("none", "all", "graph", "legend", "output"), xreg = NULL,
+  xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
+  persistenceX = NULL, transitionX = NULL, ...)
 }
 \arguments{
 \item{data}{Vector or ts object, containing data needed to be forecasted.}
@@ -101,8 +101,8 @@ distribution (depending on error type).
 quantile regression on error matrix (see Taylor and Bunn, 1999). The model
 used in this process is e[j] = a j^b, where j=1,..,h.
 }
-The parameter also accepts \code{TRUE} and \code{FALSE}. Former means that
-parametric intervals are constructed, while latter is equivalent to
+The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
+parametric intervals are constructed, while the latter is equivalent to
 \code{none}.}
 
 \item{level}{Confidence level. Defines width of prediction interval.}
@@ -116,6 +116,10 @@ SBA correction; 4. \code{tsb}, based on Teunter et al., 2011 method. 5.
 criteria. The first letter can be used instead. 6. \code{"sba"} -
 Syntetos-Boylan Approximation for Croston's method (bias correction)
 discussed in Syntetos and Boylan, 2005.}
+
+\item{imodel}{Type of ETS model used for the modelling of the time varying
+probability. Object of the class "iss" can be provided here, and its parameters
+would be used in iETS model.}
 
 \item{bounds}{What type of bounds to use in the model estimation. The first
 letter can be used instead of the whole word.}
@@ -185,7 +189,8 @@ components of es() and exogenous variables.
 \item \code{persistence} - persistence vector. This is the place, where
 smoothing parameters live.
 \item \code{phi} - value of damping parameter.
-\item \code{initialType} - Type of initial values used.
+\item \code{transition} - transition matrix of the model.
+\item \code{initialType} - type of the initial values used.
 \item \code{initial} - intial values of the state vector (non-seasonal).
 \item \code{initialSeason} - intial values of the seasonal part of state vector.
 \item \code{nParam} - number of estimated parameters.
@@ -205,8 +210,7 @@ it is returned just for the information.
 \item \code{cumulative} - whether the produced forecast was cumulative or not.
 \item \code{actuals} - original data.
 \item \code{holdout} - holdout part of the original data.
-\item \code{iprob} - fitted and forecasted values of the probability of demand occurrence.
-\item \code{intermittent} - type of intermittent model fitted to the data.
+\item \code{imodel} - model of the class "iss" if intermittent model was estimated.
 \item \code{xreg} - provided vector or matrix of exogenous variables. If \code{xregDo="s"},
 then this value will contain only selected exogenous variables.
 \item \code{updateX} - boolean, defining, if the states of exogenous variables were
@@ -246,8 +250,7 @@ shorter list of values is returned:
 \item \code{cumulative},
 \item \code{actuals},
 \item \code{holdout},
-\item \code{iprob},
-\item \code{intermittent},
+\item \code{imodel},
 \item \code{ICs} - combined ic,
 \item \code{ICw} - ic weights used in the combination,
 \item \code{cfType},

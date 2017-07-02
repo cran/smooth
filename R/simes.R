@@ -47,6 +47,10 @@
 #' \item \code{persistence} - Vector (or matrix if \code{nsim>1}) of smoothing
 #' parameters used in the simulation.
 #' \item \code{phi} - Value of damping parameter used in time series generation.
+#' \item \code{initial} - Vector (or matrix) of initial values.
+#' \item \code{initialSeason} - Vector (or matrix) of initial seasonal coefficients.
+#' \item \code{iprob} - vector of probabilities used in the simulation.
+#' \item \code{intermittent} - type of the intermittent model used.
 #' \item \code{residuals} - Error terms used in the simulation. Either vector or matrix,
 #' depending on \code{nsim}.
 #' \item \code{occurrences} - Values of occurrence variable. Once again, can be either
@@ -289,6 +293,22 @@ sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
                 }
             }
         }
+        else{
+            iprob <- iprob[1];
+        }
+    }
+
+# Check the probabilities and try to assign the type of intermittent model
+    if(length(iprob)==1){
+        intermittent <- "fixed";
+    }
+    else{
+        # This is a strong assumption!
+        intermittent <- "tsb";
+    }
+
+    if(all(iprob==1)){
+        intermittent <- "none";
     }
 
 ##### Let's make sum fun #####
@@ -301,13 +321,16 @@ sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
 # If the persistence is NULL or was of the wrong length, generate the values
     if(is.null(persistence)){
 ### For the case of "usual" bounds make restrictions on the generated smoothing parameters so the ETS can be "averaging" model.
+
+### First generate the first smoothing parameter.
         if(bounds=="u"){
-            matg[,] <- runif(persistenceLength*nsim,0,1);
+            matg[1,] <- runif(nsim,0,1);
         }
 ### These restrictions are even touhger
         else if(bounds=="r"){
-            matg[,] <- runif(persistenceLength*nsim,0,0.3);
+            matg[1,] <- runif(nsim,0,0.3);
         }
+
 ### Fill in the other smoothing parameters
         if(bounds!="a"){
             if(Ttype!="N"){
@@ -376,9 +399,11 @@ sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
             arrvt[1:maxlag,1,] <- runif(nsim,500,5000);
             arrvt[1:maxlag,2,] <- 1;
         }
+        initial <- matrix(arrvt[1,1:componentsNumber,],ncol=nsim);
     }
     else{
         arrvt[,1:componentsNumber,] <- rep(rep(initial,each=(obs+maxlag)),nsim);
+        initial <- matrix(arrvt[1,1:componentsNumber,],ncol=nsim);
     }
 
 # Generate seasonal states if they were not supplied
@@ -396,10 +421,12 @@ sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
                 arrvt[1:maxlag,componentsNumber+1,i] <- arrvt[1:maxlag,componentsNumber+1,i] / exp(mean(log(arrvt[1:maxlag,componentsNumber+1,i])));
             }
         }
+        initialSeason <- matrix(arrvt[1:maxlag,componentsNumber+1,],ncol=nsim);
     }
 # If the seasonal model is chosen, fill in the first "frequency" values of seasonal component.
     else if(componentSeasonal==TRUE & !is.null(initialSeason)){
         arrvt[1:maxlag,componentsNumber+1,] <- rep(initialSeason,nsim);
+        initialSeason <- matrix(arrvt[1:maxlag,componentsNumber+1,],ncol=nsim);
     }
 
 # Check if any argument was passed in dots
@@ -470,12 +497,12 @@ sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
 #### Simulate the data ####
     simulateddata <- simulatorwrap(arrvt,materrors,matot,arrF,matw,matg,Etype,Ttype,Stype,modellags);
 
-    if(all(iprob == 1)){
+    # if(all(iprob == 1)){
         matyt <- simulateddata$matyt;
-    }
-    else{
-        matyt <- round(simulateddata$matyt,0);
-    }
+    # }
+    # else{
+        # matyt <- round(simulateddata$matyt,0);
+    # }
     arrvt <- simulateddata$arrvt;
     dimnames(arrvt) <- list(NULL,componentsNames,NULL);
 
@@ -504,6 +531,7 @@ sim.es <- function(model="ANN", frequency=1, persistence=NULL, phi=1,
     }
 
     model <- list(model=model, data=matyt, states=arrvt, persistence=matg, phi=phi,
+                  initial=initial, initialSeason=initialSeason, iprob=iprob, intermittent=intermittent,
                   residuals=materrors, occurrences=matot, logLik=veclikelihood);
     return(structure(model,class="smooth.sim"));
 }

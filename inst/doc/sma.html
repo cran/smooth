@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2017-05-02" />
+<meta name="date" content="2017-07-02" />
 
 <title>sma() - Simple Moving Average</title>
 
@@ -70,19 +70,19 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">sma() - Simple Moving Average</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2017-05-02</em></h4>
+<h4 class="date"><em>2017-07-02</em></h4>
 
 
 
 <p>Simple Moving Average is a method of time series smoothing and is actually a very basic forecasting technique. It does not need estimation of parameters, but rather is based on order selection. It is a part of <a href="smooth.html">smooth package</a>.</p>
-<p>In this vignette we will use data from <code>Mcomp</code> package, so it is adviced to install it.</p>
+<p>In this vignette we will use data from <code>Mcomp</code> package, so it is advised to install it.</p>
 <p>Let’s load the necessary packages:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">require</span>(smooth)
 <span class="kw">require</span>(Mcomp)</code></pre></div>
 <p>You may note that <code>Mcomp</code> depends on <code>forecast</code> package and if you load both <code>forecast</code> and <code>smooth</code>, then you will have a message that <code>forecast()</code> function is masked from the environment. There is nothing to be worried about - <code>smooth</code> uses this function for consistency purposes and has exactly the same original <code>forecast()</code> as in the <code>forecast</code> package. The inclusion of this function in <code>smooth</code> was done only in order not to include <code>forecast</code> in dependencies of the package.</p>
 <p>By default SMA does order selection based on AICc and returns the model with the lowest value:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">sma</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.1 seconds
+<pre><code>## Time elapsed: 0.33 seconds
 ## Model estimated: SMA(13)
 ## Initial values were produced using backcasting.
 ## 2 parameters were estimated in the process
@@ -96,7 +96,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>It appears that SMA(13) is the optimal model for this time series, which is not obvious. Note also that the forecast trajectory of SMA(13) is not just a straight line. This is because the actual values are used in construction of point forecasts up to h=13.</p>
 <p>If we try selecting SMA order for data without substantial trend, then we will end up with some other order. For example, let’s consider a seasonal time series N2568:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">sma</span>(M3$N2568$x, <span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.06 seconds
+<pre><code>## Time elapsed: 0.37 seconds
 ## Model estimated: SMA(12)
 ## Initial values were produced using backcasting.
 ## 2 parameters were estimated in the process

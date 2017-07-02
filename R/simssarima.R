@@ -459,7 +459,7 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     matARValue <- matrix(NA,max(1,ARNumber),nsim);
     matMAValue <- matrix(NA,max(1,MANumber),nsim);
     vecConstantValue <- rep(NA,nsim);
-    matInitialValue <- matrix(NA,persistenceLength,nsim);
+    matInitialValue <- matrix(NA,componentsNumber,nsim);
 
     orderPlaceholder <- rep(0,length(ar.orders));
 #### Generate stuff if needed ####
@@ -601,8 +601,17 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     arrvt <- simulateddata$arrvt;
     dimnames(arrvt) <- list(NULL,componentsNames,NULL);
 
+    if(constantRequired){
+        dimnames(arrvt)[[2]][persistenceLength] <- "Constant";
+    }
+
     if(initialGenerate){
-        matInitialValue[,] <- arrvt[burnInPeriod+1,,];
+        if(constantRequired){
+            matInitialValue[,] <- arrvt[burnInPeriod+1,-persistenceLength,];
+        }
+        else{
+            matInitialValue[,] <- arrvt[burnInPeriod+1,,];
+        }
         arrvtDim <- dim(arrvt);
         arrvtDim[1] <- arrvtDim[1] - burnInPeriod;
         arrvt <- array(arrvt[-c(1:burnInPeriod),,],arrvtDim);
@@ -647,6 +656,7 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
         else{
             modelname <- paste0(modelname," with drift");
         }
+        names(vecConstantValue) <- rep("Constant",length(vecConstantValue));
     }
     else{
         const <- FALSE;

@@ -1,13 +1,13 @@
 utils::globalVariables(c("h","holdout","orders","lags","transition","measurement","multisteps","ot","obsInsample","obsAll",
                          "obsStates","obsNonzero","pt","cfType","CF","Etype","Ttype","Stype","matxt","matFX","vecgX","xreg",
                          "matvt","nExovars","matat","errors","nParam","intervals","intervalsType","level","ivar","model",
-                         "constant","AR","MA","data","y.fit","cumulative"));
+                         "constant","AR","MA","data","y.fit","cumulative","rounded"));
 
 ##### *Checker of input of basic functions* #####
-ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
+ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     # This is universal function needed in order to check the passed arguments to es(), ges(), ces() and ssarima()
 
-    modelType <- modelType[1];
+    smoothType <- smoothType[1];
 
     ellipsis <- list(...);
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
@@ -65,7 +65,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     }
 
     ##### data #####
-    if(class(data)=="smooth.sim"){
+    if(any(class(data)=="smooth.sim")){
         data <- data$data;
     }
     if(!is.numeric(data)){
@@ -98,7 +98,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     y <- matrix(data[1:obsInsample],obsInsample,1);
     datafreq <- frequency(data);
 
-    if(modelType=="es"){
+    if(smoothType=="es"){
         ##### model for ES #####
         if(!is.character(model)){
             stop(paste0("Something strange is provided instead of character object in model: ",
@@ -207,10 +207,15 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                                  "AAdA","AAdM","AMdA","AMdM","MAdA","MAdM","MMdA","MMdM");
                 if(datafreq==1 & Stype!="N"){
                     if(!silentText){
-                        message("The provided data has frequency of 1. Only non-seasonal models are available.");
+                        warning("The provided data has frequency of 1. Only non-seasonal models are available.",call.=FALSE);
                     }
                     Stype <- "N";
                     substr(model,nchar(model),nchar(model)) <- "N";
+                }
+
+                if((obsInsample < datafreq*2) & Stype!="N"){
+                    warning("Sorry, but we don't have enough data for the seasonal model. Switching to non-seasonal.",call.=FALSE);
+                    Stype <- "N";
                 }
                 # Restrict error types in the pool
                 if(Etype=="X"){
@@ -284,7 +289,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             Ttype <- "Z";
         }
     }
-    else if(modelType=="ssarima"){
+    else if(smoothType=="ssarima"){
         ##### Orders and lags for ssarima #####
         if(any(is.complex(c(ar.orders,i.orders,ma.orders,lags)))){
             stop("Come on! Be serious! This is ARIMA, not CES!",call.=FALSE);
@@ -453,8 +458,14 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             modellags <- rbind(modellags,1);
         }
         maxlag <- 1;
+
+        if(obsInsample < nComponents){
+            warning(paste0("In-sample size is ",obsInsample,", while number of components is ",nComponents,
+                           ". Cannot fit the model."),call.=FALSE)
+            stop("Not enough observations for such a complicated model.",call.=FALSE);
+        }
     }
-    else if(modelType=="ces"){
+    else if(smoothType=="ces"){
         # If the user typed wrong seasonality, use the "Full" instead
         if(all(seasonality!=c("n","s","p","f","none","simple","partial","full"))){
             warning(paste0("Wrong seasonality type: '",seasonality, "'. Changing to 'full'"), call.=FALSE);
@@ -463,7 +474,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         seasonality <- substring(seasonality[1],1,1);
     }
 
-    if(modelType=="es"){
+    if(smoothType=="es"){
         # Check if the data is ts-object
         if(!is.ts(data) & Stype!="N"){
             if(!silentText){
@@ -492,7 +503,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             Stype <- "N";
         }
     }
-    else if(modelType=="sma"){
+    else if(smoothType=="sma"){
         maxlag <- 1;
         if(is.null(order)){
             nParamMax <- obsInsample;
@@ -503,7 +514,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     }
 
     ##### Lags and components for GES #####
-    if(modelType=="ges"){
+    if(smoothType=="ges"){
         if(any(is.complex(c(orders,lags)))){
             stop("Complex values? Right! Come on! Be real!",call.=FALSE);
         }
@@ -544,10 +555,10 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         maxlag <- max(modellags);
         nComponents <- sum(orders);
     }
-    else if(modelType=="es"){
+    else if(smoothType=="es"){
         maxlag <- datafreq * (Stype!="N") + 1 * (Stype=="N");
     }
-    else if(modelType=="ces"){
+    else if(smoothType=="ces"){
         A <- list(value=A);
         B <- list(value=B);
 
@@ -604,20 +615,6 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     # Define the number of rows that should be in the matvt
     obsStates <- max(obsAll + maxlag, obsInsample + 2*maxlag);
 
-    ##### Fisher Information #####
-    if(!exists("FI")){
-        FI <- FALSE;
-    }
-    else{
-        if(!is.logical(FI)){
-            FI <- FALSE;
-        }
-        if(!requireNamespace("numDeriv",quietly=TRUE) & FI){
-            warning("Sorry, but you don't have 'numDeriv' package, which is required in order to produce Fisher Information.",call.=FALSE);
-            FI <- FALSE;
-        }
-    }
-
     ##### bounds #####
     bounds <- substring(bounds[1],1,1);
     if(bounds!="u" & bounds!="a" & bounds!="n"){
@@ -625,7 +622,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         bounds <- "u";
     }
 
-    if(any(modelType==c("es","ges","ces"))){
+    if(any(smoothType==c("es","ges","ces"))){
         ##### Information Criteria #####
         ic <- ic[1];
         if(all(ic!=c("AICc","AIC","BIC"))){
@@ -692,6 +689,18 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         level <- level / 100;
     }
 
+    ##### imodel #####
+    if(class(imodel)!="iss"){
+        intermittentModel <- imodel;
+        imodelProvided <- FALSE;
+        imodel <- NULL;
+    }
+    else{
+        intermittentModel <- imodel$model;
+        intermittent <- imodel$intermittent;
+        imodelProvided <- TRUE;
+    }
+
     ##### intermittent #####
     if(is.numeric(intermittent)){
         # If it is data, then it should either correspond to the whole sample (in-sample + holdout) or be equal to forecating horizon.
@@ -706,30 +715,32 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             yot <- matrix(y[y!=0],obsNonzero,1);
             pt <- matrix(mean(ot),obsInsample,1);
             pt.for <- matrix(1,h,1);
-        }
-
-        if(any(intermittent<0,intermittent>1)){
-            warning(paste0("Parameter 'intermittent' should contain values between zero and one.\n",
-                           "Converting to appropriate vector."),call.=FALSE);
-            intermittent <- (intermittent!=0)*1;
-        }
-
-        ot <- (y!=0)*1;
-        obsNonzero <- sum(ot);
-        yot <- matrix(y[y!=0],obsNonzero,1);
-        if(length(intermittent)==obsAll){
-            pt <- intermittent[1:obsInsample];
-            pt.for <- intermittent[(obsInsample+1):(obsInsample+h)];
+            nParamIntermittent <- 1;
         }
         else{
-            pt <- matrix(ot,obsInsample,1);
-            pt.for <- matrix(intermittent,h,1);
-        }
+            if(any(intermittent<0,intermittent>1)){
+                warning(paste0("Parameter 'intermittent' should contain values between zero and one.\n",
+                               "Converting to appropriate vector."),call.=FALSE);
+                intermittent <- (intermittent!=0)*1;
+            }
 
-        iprob <- pt.for[1];
-        # "p" stand for "provided", meaning that we have been provided the future data
-        intermittent <- "p";
-        nParamIntermittent <- 0;
+            ot <- (y!=0)*1;
+            obsNonzero <- sum(ot);
+            yot <- matrix(y[y!=0],obsNonzero,1);
+            if(length(intermittent)==obsAll){
+                pt <- intermittent[1:obsInsample];
+                pt.for <- intermittent[(obsInsample+1):(obsInsample+h)];
+            }
+            else{
+                pt <- matrix(ot,obsInsample,1);
+                pt.for <- matrix(intermittent,h,1);
+            }
+
+            iprob <- pt.for[1];
+            # "p" stand for "provided", meaning that we have been provided the future data
+            intermittent <- "p";
+            nParamIntermittent <- 0;
+        }
     }
     else{
         intermittent <- intermittent[1];
@@ -762,9 +773,10 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     # If the data is not intermittent, let's assume that the parameter was switched unintentionally.
     if(all(pt==1) & all(intermittent!=c("n","p"))){
         intermittent <- "n";
+        imodelProvided <- FALSE;
     }
 
-    if(any(modelType==c("es"))){
+    if(any(smoothType==c("es"))){
         # Check if multiplicative models can be fitted
         allowMultiplicative <- !((any(y<=0) & intermittent=="n")| (intermittent!="n" & any(y<0)));
         # If non-positive values are present, check if data is intermittent, if negatives are here, switch to additive models
@@ -784,7 +796,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         }
     }
 
-    if(any(modelType==c("es","ges"))){
+    if(any(smoothType==c("es","ges"))){
         ##### persistence for ES & GES #####
         if(!is.null(persistence)){
             if((!is.numeric(persistence) | !is.vector(persistence)) & !is.matrix(persistence)){
@@ -794,7 +806,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                 persistenceEstimate <- TRUE;
             }
             else{
-                if(modelType=="es"){
+                if(smoothType=="es"){
                     if(modelDo!="estimate"){
                         warning(paste0("Predefined persistence vector can only be used with preselected ETS model.\n",
                                        "Changing to estimation of persistence vector values."),call.=FALSE);
@@ -823,7 +835,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                         }
                     }
                 }
-                else if(modelType=="ges"){
+                else if(smoothType=="ges"){
                     if(length(persistence) != nComponents){
                         warning(paste0("Wrong length of persistence vector. Should be ",nComponents,
                                        " instead of ",length(persistence),".\n",
@@ -871,7 +883,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             initialType <- "o";
         }
         else{
-            if(modelType=="es"){
+            if(smoothType=="es"){
                 if(length(initialValue)>2){
                     warning(paste0("Length of initial vector is wrong! It should not be greater than 2.\n",
                                    "Values of initial vector will be estimated."),call.=FALSE);
@@ -892,7 +904,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                     }
                 }
             }
-            else if(modelType=="ges"){
+            else if(smoothType=="ges"){
                 if(length(initialValue) != (nComponents*max(lags))){
                     warning(paste0("Wrong length of initial vector. Should be ",orders %*% lags,
                                    " instead of ",length(initial),".\n",
@@ -905,7 +917,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                     initialValue <- initial;
                 }
             }
-            else if(modelType=="ssarima"){
+            else if(smoothType=="ssarima"){
                 if(length(initialValue) != nComponents){
                     warning(paste0("Wrong length of initial vector. Should be ",nComponents,
                                    " instead of ",length(initial),".\n",
@@ -918,7 +930,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
                     initialValue <- initial;
                 }
             }
-            else if(modelType=="ces"){
+            else if(smoothType=="ces"){
                 if(length(initialValue) != maxlag*nComponents){
                     warning(paste0("Wrong length of initial vector. Should be ",maxlag*nComponents,
                                    " instead of ",length(initial),".\n",
@@ -934,7 +946,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         }
     }
 
-    if(any(modelType==c("es"))){
+    if(any(smoothType==c("es"))){
         # If model selection is chosen, forget about the initial values and persistence
         if(any(Etype=="Z",Ttype=="Z",Stype=="Z")){
             if(any(!is.null(initialValue),!is.null(initialSeason),!is.null(persistence),!is.null(phi))){
@@ -1014,7 +1026,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         }
     }
 
-    if(modelType=="ges"){
+    if(smoothType=="ges"){
         ##### transition for GES #####
         # Check the provided vector of initials: length and provided values.
         if(!is.null(transition)){
@@ -1059,7 +1071,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         }
     }
 
-    if(modelType=="ssarima"){
+    if(smoothType=="ssarima"){
         if((nComponents==0) & (constantRequired==FALSE)){
             warning("You have not defined any model! Constructing model with zero constant.",call.=FALSE);
             constantRequired <- TRUE;
@@ -1069,7 +1081,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     }
 
     ##### Calculate nParamMax for checks #####
-    if(modelType=="es"){
+    if(smoothType=="es"){
         # 1 - 3: persitence vector;
         # 1 - 2: initials;
         # 1 - 1 phi value;
@@ -1079,15 +1091,15 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
             (1 + (Ttype!="N"))*(initialType=="o") +
             phiEstimate*damped + datafreq*(Stype!="N")*initialSeasonEstimate*(initialType=="o") + 1;
     }
-    else if(modelType=="ges"){
+    else if(smoothType=="ges"){
         nParamMax <- nComponents*measurementEstimate + nComponents*(initialType=="o") +
             transitionEstimate*nComponents^2 + (orders %*% lags)*persistenceEstimate + 1;
     }
-    else if(modelType=="ssarima"){
+    else if(smoothType=="ssarima"){
         nParamMax <- nComponents*(initialType=="o") + sum(ar.orders)*ARRequired +
             sum(ma.orders)*MARequired + constantRequired + 1;
     }
-    else if(modelType=="ces"){
+    else if(smoothType=="ces"){
         nParamMax <- sum(modellags)*(initialType=="o") + A$number + B$number + 1;
     }
 
@@ -1105,19 +1117,46 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     normalizer <- mean(abs(diff(c(y))));
 
     ##### Define xregDo #####
-    if(!exists("xregDo")){
-        xregDo <- "u";
-    }
-    else{
+    if(smoothType!="sma"){
         if(!any(xregDo==c("use","select","u","s"))){
             warning("Wrong type of xregDo parameter. Changing to 'select'.", call.=FALSE);
             xregDo <- "select";
         }
+        xregDo <- substr(xregDo[1],1,1);
     }
-    xregDo <- substr(xregDo[1],1,1);
 
     if(is.null(xreg)){
         xregDo <- "u";
+    }
+
+    ##### Fisher Information #####
+    if(!exists("FI",envir=ParentEnvironment,inherits=FALSE)){
+        FI <- FALSE;
+    }
+    else{
+        if(!is.logical(FI)){
+            FI <- FALSE;
+        }
+        if(!requireNamespace("numDeriv",quietly=TRUE) & FI){
+            warning("Sorry, but you don't have 'numDeriv' package, which is required in order to produce Fisher Information.",call.=FALSE);
+            FI <- FALSE;
+        }
+    }
+
+    ##### Rounded up values #####
+    if(!exists("rounded",envir=ParentEnvironment,inherits=FALSE)){
+        rounded <- FALSE;
+    }
+    else{
+        if(!is.logical(rounded)){
+            rounded <- FALSE;
+        }
+        else{
+            if(rounded){
+                cfType <- "Rounded";
+                cfTypeOriginal <- cfType;
+            }
+        }
     }
 
     ##### Return values to previous environment #####
@@ -1132,7 +1171,6 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     assign("data",data,ParentEnvironment);
     assign("y",y,ParentEnvironment);
     assign("datafreq",datafreq,ParentEnvironment);
-    assign("FI",FI,ParentEnvironment);
     assign("bounds",bounds,ParentEnvironment);
     assign("cfType",cfType,ParentEnvironment);
     assign("cfTypeOriginal",cfTypeOriginal,ParentEnvironment);
@@ -1140,19 +1178,24 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
     assign("intervalsType",intervalsType,ParentEnvironment);
     assign("intervals",intervals,ParentEnvironment);
     assign("intermittent",intermittent,ParentEnvironment);
+    assign("intermittentModel",intermittentModel,ParentEnvironment);
+    assign("imodel",imodel,ParentEnvironment);
     assign("ot",ot,ParentEnvironment);
     assign("yot",yot,ParentEnvironment);
     assign("pt",pt,ParentEnvironment);
     assign("pt.for",pt.for,ParentEnvironment);
     assign("nParamIntermittent",nParamIntermittent,ParentEnvironment);
     assign("iprob",iprob,ParentEnvironment);
+    assign("imodelProvided",imodelProvided,ParentEnvironment);
     assign("initialValue",initialValue,ParentEnvironment);
     assign("initialType",initialType,ParentEnvironment);
     assign("normalizer",normalizer,ParentEnvironment);
     assign("nParamMax",nParamMax,ParentEnvironment);
     assign("xregDo",xregDo,ParentEnvironment);
+    assign("FI",FI,ParentEnvironment);
+    assign("rounded",rounded,ParentEnvironment);
 
-    if(modelType=="es"){
+    if(smoothType=="es"){
         assign("model",model,ParentEnvironment);
         assign("modelsPool",modelsPool,ParentEnvironment);
         assign("Etype",Etype,ParentEnvironment);
@@ -1166,14 +1209,14 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         assign("allowMultiplicative",allowMultiplicative,ParentEnvironment);
         assign("ic",ic,ParentEnvironment);
     }
-    else if(modelType=="ges"){
+    else if(smoothType=="ges"){
         assign("transitionEstimate",transitionEstimate,ParentEnvironment);
         assign("measurementEstimate",measurementEstimate,ParentEnvironment);
         assign("orders",orders,ParentEnvironment);
         assign("lags",lags,ParentEnvironment);
         assign("ic",ic,ParentEnvironment);
     }
-    else if(modelType=="ssarima"){
+    else if(smoothType=="ssarima"){
         assign("ar.orders",ar.orders,ParentEnvironment);
         assign("i.orders",i.orders,ParentEnvironment);
         assign("ma.orders",ma.orders,ParentEnvironment);
@@ -1188,19 +1231,19 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
         assign("constantEstimate",constantEstimate,ParentEnvironment);
         assign("constantRequired",constantRequired,ParentEnvironment);
     }
-    else if(modelType=="ces"){
+    else if(smoothType=="ces"){
         assign("seasonality",seasonality,ParentEnvironment);
         assign("A",A,ParentEnvironment);
         assign("B",B,ParentEnvironment);
         assign("ic",ic,ParentEnvironment);
     }
 
-    if(any(modelType==c("es","ges"))){
+    if(any(smoothType==c("es","ges"))){
         assign("persistence",persistence,ParentEnvironment);
         assign("persistenceEstimate",persistenceEstimate,ParentEnvironment);
     }
 
-    if(any(modelType==c("ges","ssarima","ces"))){
+    if(any(smoothType==c("ges","ssarima","ces"))){
         assign("nComponents",nComponents,ParentEnvironment);
         assign("maxlag",maxlag,ParentEnvironment);
         assign("modellags",modellags,ParentEnvironment);
@@ -1208,7 +1251,7 @@ ssInput <- function(modelType=c("es","ges","ces","ssarima"),...){
 }
 
 ##### *Checker for auto. functions* #####
-ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
+ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
     # This is universal function needed in order to check the passed arguments to auto.ces(), auto.ges() and auto.ssarima()
 
     ellipsis <- list(...);
@@ -1267,12 +1310,12 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
     }
 
     ##### Fisher Information #####
-    if(!exists("FI")){
+    if(!exists("FI",envir=ParentEnvironment,inherits=FALSE)){
         FI <- FALSE;
     }
 
     ##### data #####
-    if(class(data)=="smooth.sim"){
+    if(any(class(data)=="smooth.sim")){
         data <- data$data;
     }
     if(!is.numeric(data)){
@@ -1440,14 +1483,9 @@ ssAutoInput <- function(modelType=c("auto.ces","auto.ges","auto.ssarima"),...){
     }
 
     ##### Define xregDo #####
-    if(!exists("xregDo")){
-        xregDo <- "u";
-    }
-    else{
-        if(!any(xregDo==c("use","select","u","s"))){
-            warning("Wrong type of xregDo parameter. Changing to 'select'.", call.=FALSE);
-            xregDo <- "select";
-        }
+    if(!any(xregDo==c("use","select","u","s"))){
+        warning("Wrong type of xregDo parameter. Changing to 'select'.", call.=FALSE);
+        xregDo <- "select";
     }
     xregDo <- substr(xregDo[1],1,1);
 
@@ -1508,7 +1546,7 @@ ssFitter <- function(...){
         errors.mat <- ts(errorerwrap(matvt, matF, matw, y,
                                      h, Etype, Ttype, Stype, modellags,
                                      matxt, matat, matFX, ot),
-                         start=start(data),frequency=frequency(data));
+                         start=(time(data)[1] - deltat(data)*(h-1)),frequency=datafreq);
         colnames(errors.mat) <- paste0("Error",c(1:h));
     }
     else{
@@ -1696,6 +1734,10 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
             else{
                 upper <- ev + upperquant / hsmN^2 * Re(hm(rowSums(errors),sum(ev)))^2;
                 lower <- ev + lowerquant / hsmN^2 * Im(hm(rowSums(errors),sum(ev)))^2;
+            }
+            if(Etype=="M"){
+                upper <- 1 + upper;
+                lower <- 1 + lower;
             }
         }
 
@@ -2084,6 +2126,11 @@ ssForecaster <- function(...){
                 simulateIntervals <- TRUE;
             }
 
+            #If this is integer-valued model, then do simulations
+            if(rounded){
+                simulateIntervals <- TRUE;
+            }
+
             if(simulateIntervals==TRUE){
                 nSamples <- 10000;
                 matg <- matrix(vecg,nComponents,nSamples);
@@ -2095,7 +2142,7 @@ ssForecaster <- function(...){
                     materrors <- exp(materrors) - 1;
                 }
                 if(all(intermittent!=c("n","p"))){
-                    matot <- matrix(rbinom(h*nSamples,1,iprob),h,nSamples);
+                    matot <- matrix(rbinom(h*nSamples,1,pt.for),h,nSamples);
                 }
                 else{
                     matot <- matrix(1,h,nSamples);
@@ -2112,16 +2159,30 @@ ssForecaster <- function(...){
                     y.exo.for <- rep(0,h);
                 }
 
+                if(rounded){
+                    y.simulated <- ceiling(y.simulated + matrix(y.exo.for,nrow=h,ncol=nSamples));
+                    quantileType <- 1;
+                    for(i in 1:h){
+                        y.for[i] <- median(y.simulated[i,y.simulated[i,]!=0]);
+                    }
+                    # NA means that there were no non-zero demands
+                    y.for[is.na(y.for)] <- 0;
+                }
+                else{
+                    y.simulated <- y.simulated + matrix(y.exo.for,nrow=h,ncol=nSamples);
+                    quantileType <- 7;
+                }
                 y.for <- c(pt.for)*y.for;
 
                 if(cumulative){
                     y.for <- ts(sum(y.for),start=y.forStart,frequency=datafreq);
-                    y.low <- ts(quantile(colSums(y.simulated,na.rm=T),(1-level)/2) + sum(y.exo.for),start=start(y.for),frequency=datafreq);
-                    y.high <- ts(quantile(colSums(y.simulated,na.rm=T),(1+level)/2) + sum(y.exo.for),start=start(y.for),frequency=datafreq);
+                    y.low <- ts(quantile(colSums(y.simulated,na.rm=T),(1-level)/2,type=quantileType),start=y.forStart,frequency=datafreq);
+                    y.high <- ts(quantile(colSums(y.simulated,na.rm=T),(1+level)/2,type=quantileType),start=y.forStart,frequency=datafreq);
                 }
                 else{
-                    y.low <- ts(apply(y.simulated,1,quantile,(1-level)/2,na.rm=T) + y.exo.for,start=start(y.for),frequency=datafreq);
-                    y.high <- ts(apply(y.simulated,1,quantile,(1+level)/2,na.rm=T) + y.exo.for,start=start(y.for),frequency=datafreq);
+                    y.for <- ts(y.for,start=y.forStart + y.exo.for,frequency=datafreq);
+                    y.low <- ts(apply(y.simulated,1,quantile,(1-level)/2,na.rm=T,type=quantileType) + y.exo.for,start=y.forStart,frequency=datafreq);
+                    y.high <- ts(apply(y.simulated,1,quantile,(1+level)/2,na.rm=T,type=quantileType) + y.exo.for,start=y.forStart,frequency=datafreq);
                 }
             }
             else{
@@ -2141,36 +2202,16 @@ ssForecaster <- function(...){
                 }
 
                 if(Etype=="A"){
-                    # if(any(iprob!=1)){
-                    #     y.high <- ceiling(c(y.for) + quantvalues$upper);
-                    #     y.low <- floor(c(y.for) + quantvalues$lower);
-                    # }
-                    # else{
-                        y.high <- c(y.for) + quantvalues$upper;
-                        y.low <- c(y.for) + quantvalues$lower;
-                    # }
-                    y.low <- ts(y.low,start=y.forStart,frequency=datafreq);
-                    y.high <- ts(y.high,start=y.forStart,frequency=datafreq);
+                    y.low <- ts(c(y.for) + quantvalues$lower,start=y.forStart,frequency=datafreq);
+                    y.high <- ts(c(y.for) + quantvalues$upper,start=y.forStart,frequency=datafreq);
                 }
                 else{
-                    if(intervalsType=="np"){
+                    if(any(intervalsType==c("np","sp","a"))){
                         quantvalues$upper <- quantvalues$upper * y.for;
                         quantvalues$lower <- quantvalues$lower * y.for;
                     }
-                    else if(intervalsType=="sp"){
-                        quantvalues$upper <- quantvalues$upper * y.for;
-                        quantvalues$lower <- quantvalues$lower * y.for;
-                    }
-                    # if(any(iprob!=1)){
-                    #     y.high <- ceiling(quantvalues$upper);
-                    #     y.low <- floor(quantvalues$lower);
-                    # }
-                    # else{
-                        y.high <- quantvalues$upper;
-                        y.low <- quantvalues$lower;
-                    # }
-                    y.low <- ts(y.low,start=y.forStart,frequency=datafreq);
-                    y.high <- ts(y.high,start=y.forStart,frequency=datafreq);
+                    y.low <- ts(quantvalues$lower,start=y.forStart,frequency=datafreq);
+                    y.high <- ts(quantvalues$upper,start=y.forStart,frequency=datafreq);
                 }
             }
         }
@@ -2178,6 +2219,12 @@ ssForecaster <- function(...){
             y.low <- NA;
             y.high <- NA;
             y.for <- c(pt.for)*y.for;
+            if(cumulative){
+                y.for <- ts(sum(y.for),start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
+            }
+            else{
+                y.for <- ts(y.for,start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
+            }
         }
     }
     else{
@@ -2198,7 +2245,7 @@ ssForecaster <- function(...){
 }
 
 ##### *Check and initialisation of xreg* #####
-ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
+ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                    persistenceX=NULL, transitionX=NULL, initialX=NULL,
                    obsInsample, obsAll, obsStates, maxlag=1, h=1, silent=FALSE){
 # The function does general checks needed for exogenouse variables and returns the list of necessary parameters
@@ -2256,10 +2303,11 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
 # Fill in the initial values for exogenous coefs using OLS
                 if(is.null(initialX)){
                     if(Etype=="A"){
-                        matat[1:maxlag,] <- cov(data[1:obsInsample],xreg[1:obsInsample])/var(xreg[1:obsInsample]);
+                        matat[1:maxlag,] <- cov(data[1:obsInsample][ot==1],xreg[1:obsInsample][ot==1])/var(xreg[1:obsInsample][ot==1]);
                     }
                     else{
-                        matat[1:maxlag,] <- cov(log(data[1:obsInsample]),xreg[1:obsInsample])/var(xreg[1:obsInsample]);
+                        matat[1:maxlag,] <- cov(log(data[1:obsInsample][ot==1]),
+                                                xreg[1:obsInsample][ot==1])/var(xreg[1:obsInsample][ot==1]);
                     }
                 }
                 if(is.null(names(xreg))){
@@ -2267,8 +2315,9 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
                     colnames(matxt) <- "x";
                 }
                 else{
-                    colnames(matat) <- names(xreg);
-                    colnames(matxt) <- names(xreg);
+                    xregNames <- gsub(" ", "_", names(xreg), fixed = TRUE);
+                    colnames(matat) <- xregNames;
+                    colnames(matxt) <- xregNames;
                 }
             }
         }
@@ -2352,13 +2401,13 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
 # Fill in the initial values for exogenous coefs using OLS
                 if(is.null(initialX)){
                     if(Etype=="A"){
-                        matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,]) %*% mat.x[1:obsInsample,],tol=1e-50) %*%
-                                                      t(mat.x[1:obsInsample,]) %*% data[1:obsInsample])[2:(nExovars+1)],
+                        matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,][ot==1,]) %*% mat.x[1:obsInsample,][ot==1,],tol=1e-50) %*%
+                                                      t(mat.x[1:obsInsample,][ot==1,]) %*% data[1:obsInsample][ot==1])[2:(nExovars+1)],
                                                 each=maxlag);
                     }
                     else{
-                        matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,]) %*% mat.x[1:obsInsample,],tol=1e-50) %*%
-                                                      t(mat.x[1:obsInsample,]) %*% log(data[1:obsInsample]))[2:(nExovars+1)],
+                        matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,][ot==1,]) %*% mat.x[1:obsInsample,][ot==1,],tol=1e-50) %*%
+                                                      t(mat.x[1:obsInsample,][ot==1,]) %*% log(data[1:obsInsample][ot==1]))[2:(nExovars+1)],
                                                 each=maxlag);
                     }
                 }
@@ -2367,8 +2416,9 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE,
                     colnames(matxt) <- paste0("x",c(1:nExovars));
                 }
                 else{
-                    colnames(matat) <- colnames(xreg);
-                    colnames(matxt) <- colnames(xreg);
+                    xregNames <- gsub(" ", "_", colnames(xreg), fixed = TRUE);
+                    colnames(matat) <- xregNames;
+                    colnames(matxt) <- xregNames;
                 }
             }
         }
@@ -2500,6 +2550,9 @@ likelihoodFunction <- function(C){
                 return(sum(log(pt[ot==1])) + sum(log(1-pt[ot==0])));
             }
         }
+        if(rounded){
+            return(sum(log(pt[ot==1])) + sum(log(1-pt[ot==0])) - CF(C));
+        }
         if(cfType=="TFL" | cfType=="aTFL"){
             return(sum(log(pt[ot==1]))*h
                    + sum(log(1-pt[ot==0]))*h
@@ -2538,7 +2591,7 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
                      cfType="MSE", cfObjective=NULL, intervals=FALSE, cumulative=FALSE,
                      intervalsType=c("n","p","sp","np","a"), level=0.95, ICs,
                      holdout=FALSE, insideintervals=NULL, errormeasures=NULL,
-                     intermittent="n", iprob=1){
+                     intermittent="n"){
 # Function forms the generic output for State-space models.
     if(gregexpr("ETS",modelname)!=-1){
         model <- "ETS";
@@ -2572,12 +2625,12 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
             intermittent <- "Croston with SBA";
         }
         cat(paste0("Intermittent model type: ",intermittent));
-        if(iprob!=1){
-            cat(paste0(", ",round(iprob,3),"\n"));
-        }
-        else{
+        # if(iprob!=1){
+        #     cat(paste0(", ",round(iprob,3),"\n"));
+        # }
+        # else{
             cat("\n");
-        }
+        # }
     }
     else if(any(intermittent==c("p","provided"))){
         cat(paste0("Intermittent data provided for holdout.\n"));
@@ -2595,7 +2648,7 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
             }
         }
         if(!is.null(phi)){
-            if(phi!=1){
+            if(gregexpr("d",modelname)!=-1){
                 cat(paste0("Damping parameter: ", round(phi,3),"\n"));
             }
         }

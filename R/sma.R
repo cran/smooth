@@ -114,6 +114,7 @@ sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC"),
 
     initial <- "backcasting";
     intermittent <- "none";
+    imodel <- NULL;
     bounds <- "admissible";
     cfType <- "MSE";
     xreg <- NULL;
@@ -122,7 +123,7 @@ sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC"),
 
 ##### Set environment for ssInput and make all the checks #####
     environment(ssInput) <- environment();
-    ssInput(modelType="sma",ParentEnvironment=environment());
+    ssInput("sma",ParentEnvironment=environment());
 
 ##### Preset y.fit, y.for, errors and basic parameters #####
     y.fit <- rep(NA,obsInsample);
@@ -208,7 +209,8 @@ CreatorSMA <- function(silentText=FALSE,...){
     environment(ssFitter) <- environment();
 
     if(is.null(order)){
-        maxOrder <- min(36,obsInsample/2);
+        # maxOrder <- min(36,obsInsample/2);
+        maxOrder <- obsInsample;
         ICs <- rep(NA,maxOrder);
         smaValuesAll <- list(NA);
         for(i in 1:maxOrder){
@@ -239,6 +241,10 @@ CreatorSMA <- function(silentText=FALSE,...){
         else{
             errormeasures <- errorMeasurer(y.holdout,y.for,y);
         }
+
+        if(cumulative){
+            y.holdout <- ts(sum(y.holdout),start=start(y.for),frequency=datafreq);
+        }
     }
     else{
         y.holdout <- NA;
@@ -266,7 +272,7 @@ CreatorSMA <- function(silentText=FALSE,...){
         }
         else{
             graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit,
-                       level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
+                       legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
     }
 
@@ -276,7 +282,7 @@ CreatorSMA <- function(silentText=FALSE,...){
                   order=order, initialType=initialType, nParam=nParam,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
-                  actuals=data,holdout=y.holdout,intermittent="none",
+                  actuals=data,holdout=y.holdout,imodel=NULL,
                   ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,accuracy=errormeasures);
     return(structure(model,class="smooth"));
 }
