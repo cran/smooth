@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2017-07-02" />
+<meta name="date" content="2017-08-01" />
 
 <title>smooth: forecasting using state-space models</title>
 
@@ -32,7 +32,7 @@
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2017-07-02</em></h4>
+<h4 class="date"><em>2017-08-01</em></h4>
 
 
 
@@ -46,6 +46,7 @@
 <li><a href="ves.html">ves() - Vector Exponential Smoothing</a>;</li>
 <li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
 <li><a href="simulate.html">sim.es() and simulate() - simulation functions for Exponential Smoothing</a>.</li>
+<li><code>iss()</code> – function that estimates probability of occurrence of variable using one of the following: 1. Fixed probability; 2. Croston’s probability; 3. SBA; 4. TSB probability. The model produced by <code>iss()</code> can then be used in any forecasting function as input variable for <code>imodel</code> parameter.</li>
 <li><code>xregExpander()</code> – function that creates lags and leads of the provided exogenous variables (either vector or matrix). This thing returns the matrix.</li>
 <li><code>stepwise()</code> – the function that implements stepwise based on information criteria and partial correlations. Easier to use and works faster than <code>step()</code> from ``stats’’ package.</li>
 </ol>

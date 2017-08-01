@@ -1358,6 +1358,7 @@ int CFtypeswitch (std::string const& CFtype) {
     if (CFtype == "aMSTFE") return 10;
     if (CFtype == "aMSEh") return 11;
     if (CFtype == "Rounded") return 12;
+    if (CFtype == "TSB") return 13;
     else return 7;
 }
 
@@ -1452,7 +1453,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
 
     // Thes lines are needed for Rounded CF
     arma::vec vecYfit;
-    if(CFtypeswitch(CFtype)==12){
+    if(CFtypeswitch(CFtype)>=12){
         NumericMatrix yfitfromfit = as<NumericMatrix>(fitting["yfit"]);
         vecYfit = as<arma::vec>(yfitfromfit);
     }
@@ -1514,6 +1515,9 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         break;
         case 12:
             CFres = -cdf(vecYt.elem(nonzeroes), vecYfit.elem(nonzeroes), matErrors, E);
+        break;
+        case 13:
+            CFres = -(sum(log(vecYfit.elem(find(vecYt>0.5)))) + sum(log(1-vecYfit.elem(find(vecYt<0.5)))));
         }
     break;
     case 'A':
@@ -1566,6 +1570,9 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         break;
         case 12:
             CFres = -cdf(vecYt.elem(nonzeroes), vecYfit.elem(nonzeroes), matErrors, E);
+        break;
+        case 13:
+            CFres = -(sum(log(vecYfit.elem(find(vecYt>0.5)))) + sum(log(1-vecYfit.elem(find(vecYt<0.5)))));
         }
     }
     return CFres;
@@ -1721,6 +1728,18 @@ RcppExport SEXP costfunc(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP vecg,
     }
     else if(boundtype=='a'){
         if(arma::eig_gen(eigval, matrixF - vecG * rowvecW)){
+            if(max(abs(eigval))> (1 + 1E-50)){
+                return wrap(max(abs(eigval))*1E+100);
+            }
+        }
+        else{
+            return wrap(1E+300);
+        }
+    }
+
+    if(matrixAt(0,0)!=0){
+        arma::rowvec rowvecWX(matFX_n.nrow(), arma::fill::ones);
+        if(arma::eig_gen(eigval, matrixFX - vecGX * rowvecWX)){
             if(max(abs(eigval))> (1 + 1E-50)){
                 return wrap(max(abs(eigval))*1E+100);
             }

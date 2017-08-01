@@ -154,7 +154,7 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)),
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                 intermittent=c("none","auto","fixed","croston","tsb","sba"), imodel="MNN",
                 bounds=c("admissible","none"),
-                silent=c("none","all","graph","legend","output"),
+                silent=c("all","graph","legend","output","none"),
                 xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                 updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 # General Exponential Smoothing function. Crazy thing...
@@ -405,7 +405,8 @@ CreatorGES <- function(silentText=FALSE,...){
 ##### Prepare exogenous variables #####
     xregdata <- ssXreg(data=data, xreg=xreg, updateX=updateX, ot=ot,
                        persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
-                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates, maxlag=maxlag, h=h, silent=silentText);
+                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates,
+                       maxlag=maxlag, h=h, xregDo=xregDo, silent=silentText);
 
     if(xregDo=="u"){
         nExovars <- xregdata$nExovars;
@@ -740,7 +741,7 @@ CreatorGES <- function(silentText=FALSE,...){
     model <- list(model=modelname,timeElapsed=Sys.time()-startTime,
                   states=matvt,measurement=matw,transition=matF,persistence=vecg,
                   initialType=initialType,initial=initialValue,
-                  nParam=nParam,
+                  nParam=nParam+nParamExo+nParamIntermittent,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
                   actuals=data,holdout=y.holdout,imodel=imodel,

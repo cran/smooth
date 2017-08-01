@@ -195,7 +195,7 @@ ssarima <- function(data, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1),
                     intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                     intermittent=c("none","auto","fixed","croston","tsb","sba"), imodel="MNN",
                     bounds=c("admissible","none"),
-                    silent=c("none","all","graph","legend","output"),
+                    silent=c("all","graph","legend","output","none"),
                     xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                     updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 ##### Function constructs SARIMA model (possible triple seasonality) using state-space approach
@@ -499,7 +499,8 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
 ##### Prepare exogenous variables #####
     xregdata <- ssXreg(data=data, xreg=xreg, updateX=updateX, ot=ot,
                        persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
-                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates, maxlag=maxlag, h=h, silent=silentText);
+                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates,
+                       maxlag=maxlag, h=h, xregDo=xregDo, silent=silentText);
 
     if(xregDo=="u"){
         nExovars <- xregdata$nExovars;
@@ -940,7 +941,7 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
                   states=matvt,transition=matF,persistence=vecg,
                   AR=ARterms,I=Iterms,MA=MAterms,constant=const,
                   initialType=initialType,initial=initialValue,
-                  nParam=nParam,
+                  nParam=nParam+nParamExo+nParamIntermittent,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
                   actuals=data,holdout=y.holdout,imodel=imodel,

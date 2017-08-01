@@ -636,7 +636,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     if(any(cfType==c("GMSTFE","MSTFE","TFL","MSEh","aGMSTFE","aMSTFE","aTFL","aMSEh"))){
         multisteps <- TRUE;
     }
-    else if(any(cfType==c("MSE","MAE","HAM"))){
+    else if(any(cfType==c("MSE","MAE","HAM","TSB"))){
         multisteps <- FALSE;
     }
     else{
@@ -792,6 +792,17 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
             if(Stype=="M"){
                 warning("Can't apply multiplicative model to non-positive data. Switching seasonality type to 'A'", call.=FALSE);
                 Stype <- "A";
+            }
+
+            if(!is.null(modelsPool)){
+                if(any(c(substr(modelsPool,1,1),
+                         substr(modelsPool,2,2),
+                         substr(modelsPool,nchar(modelsPool),nchar(modelsPool)))=="M")){
+                    warning("Can't apply multiplicative model to non-positive data. Switching to additive.", call.=FALSE);
+                    substr(modelsPool,1,1)[substr(modelsPool,1,1)=="M"] <- "A";
+                    substr(modelsPool,2,2)[substr(modelsPool,2,2)=="M"] <- "A";
+                    substr(modelsPool,nchar(modelsPool),nchar(modelsPool))[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="M"] <- "A";
+                }
             }
         }
     }
@@ -970,7 +981,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
             }
             else{
                 if(length(initialSeason)!=datafreq){
-                warning(paste0("The length of initialSeason vector is wrong! It should correspond to the frequency of the data.",
+                warning(paste0("The length of initialSeason vector is wrong! It should correspond to the frequency of the data.\n",
                                "Values of initialSeason vector will be estimated."),call.=FALSE);
                     initialSeason <- NULL;
                     initialSeasonEstimate <- TRUE
@@ -1073,7 +1084,9 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
 
     if(smoothType=="ssarima"){
         if((nComponents==0) & (constantRequired==FALSE)){
-            warning("You have not defined any model! Constructing model with zero constant.",call.=FALSE);
+            if(!silentText){
+                warning("You have not defined any model! Constructing model with zero constant.",call.=FALSE);
+            }
             constantRequired <- TRUE;
             constantValue <- 0;
             initialType <- "p";
@@ -1437,6 +1450,18 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
         intervals <- TRUE;
     }
 
+    ##### imodel #####
+    if(class(imodel)!="iss"){
+        intermittentModel <- imodel;
+        imodelProvided <- FALSE;
+        imodel <- NULL;
+    }
+    else{
+        intermittentModel <- imodel$model;
+        intermittent <- imodel$intermittent;
+        imodelProvided <- TRUE;
+    }
+
     ##### intermittent #####
     if(is.numeric(intermittent)){
         # If it is data, then it should either correspond to the whole sample (in-sample + holdout) or be equal to forecating horizon.
@@ -1480,6 +1505,12 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
                 intermittentParametersSetter(intermittent,ParentEnvironment=environment());
             }
         }
+    }
+
+    # If the data is not intermittent, let's assume that the parameter was switched unintentionally.
+    if(all(pt==1) & all(intermittent!=c("n","p"))){
+        intermittent <- "n";
+        imodelProvided <- FALSE;
     }
 
     ##### Define xregDo #####
@@ -1739,6 +1770,7 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
                 upper <- 1 + upper;
                 lower <- 1 + lower;
             }
+            varVec <- NULL;
         }
 
 #### Semiparametric intervals using the variance of errors ####
@@ -1828,6 +1860,7 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
                 upper <- quantile(rowSums(ye),(1+level)/2);
                 lower <- quantile(rowSums(ye),(1-level)/2);
             }
+            varVec <- NULL;
         }
 
 #### Parametric intervals ####
@@ -2021,8 +2054,8 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
                     lower <- quants$lower;
                 }
                 else{
-                    upperquant <- y.for*qlnorm((1+level)/2,0,sqrt(s2));
-                    lowerquant <- y.for*qlnorm((1-level)/2,0,sqrt(s2));
+                    upper <- y.for*qlnorm((1+level)/2,0,sqrt(s2));
+                    lower <- y.for*qlnorm((1-level)/2,0,sqrt(s2));
                 }
             }
             else{
@@ -2044,12 +2077,13 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
             upper <- quantile(errors,(1+level)/2);
             lower <- quantile(errors,(1-level)/2);
         }
+        varVec <- NULL;
     }
     else{
         stop("The provided data is not either vector or matrix. Can't do anything with it!", call.=FALSE);
     }
 
-    return(list(upper=upper,lower=lower));
+    return(list(upper=upper,lower=lower,variance=varVec));
 }
 
 ##### *Forecaster of state-space functions* #####
@@ -2127,9 +2161,9 @@ ssForecaster <- function(...){
             }
 
             #If this is integer-valued model, then do simulations
-            if(rounded){
-                simulateIntervals <- TRUE;
-            }
+            # if(rounded){
+            #     simulateIntervals <- TRUE;
+            # }
 
             if(simulateIntervals==TRUE){
                 nSamples <- 10000;
@@ -2184,6 +2218,8 @@ ssForecaster <- function(...){
                     y.low <- ts(apply(y.simulated,1,quantile,(1-level)/2,na.rm=T,type=quantileType) + y.exo.for,start=y.forStart,frequency=datafreq);
                     y.high <- ts(apply(y.simulated,1,quantile,(1+level)/2,na.rm=T,type=quantileType) + y.exo.for,start=y.forStart,frequency=datafreq);
                 }
+                # For now we leave it as NULL
+                varVec <- NULL;
             }
             else{
                 quantvalues <- ssIntervals(errors.x, ev=ev, level=level, intervalsType=intervalsType, df=df,
@@ -2192,6 +2228,10 @@ ssForecaster <- function(...){
                                            cumulative=cumulative,
                                            y.for=y.for, Etype=Etype, Ttype=Ttype, Stype=Stype, s2g=s2g,
                                            iprob=iprob, ivar=ivar);
+
+                if(rounded){
+                    y.for <- ceiling(y.for);
+                }
 
                 if(!(intervalsType=="sp" & Etype=="M")){
                     y.for <- c(pt.for)*y.for;
@@ -2213,11 +2253,20 @@ ssForecaster <- function(...){
                     y.low <- ts(quantvalues$lower,start=y.forStart,frequency=datafreq);
                     y.high <- ts(quantvalues$upper,start=y.forStart,frequency=datafreq);
                 }
+
+                if(rounded){
+                    y.low <- ceiling(y.low);
+                    y.high <- ceiling(y.high);
+                }
+                varVec <- quantvalues$variance;
             }
         }
         else{
             y.low <- NA;
             y.high <- NA;
+            if(rounded){
+                y.for <- ceiling(y.for);
+            }
             y.for <- c(pt.for)*y.for;
             if(cumulative){
                 y.for <- ts(sum(y.for),start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
@@ -2225,32 +2274,37 @@ ssForecaster <- function(...){
             else{
                 y.for <- ts(y.for,start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
             }
+            varVec <- NULL;
         }
     }
     else{
         y.low <- NA;
         y.high <- NA;
         y.for <- ts(NA,start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
+        # For now we leave it as NULL, because this thing is estimated in ssIntervals()
+        varVec <- NULL;
     }
 
     if(any(is.na(y.fit),all(is.na(y.for),h>0))){
-        warning("Something went wrong during the optimisation and NAs were produced!",call.=FALSE,immediate.=TRUE);
-        warning("Please check the input and report this error to the maintainer if it persists.",call.=FALSE,immediate.=TRUE);
+        warning("Something went wrong during the optimisation and NAs were produced!",call.=FALSE);
+        warning("Please check the input and report this error to the maintainer if it persists.",call.=FALSE);
     }
 
     assign("s2",s2,ParentEnvironment);
     assign("y.for",y.for,ParentEnvironment);
     assign("y.low",y.low,ParentEnvironment);
     assign("y.high",y.high,ParentEnvironment);
+    assign("varVec",varVec,ParentEnvironment);
 }
 
 ##### *Check and initialisation of xreg* #####
 ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                    persistenceX=NULL, transitionX=NULL, initialX=NULL,
-                   obsInsample, obsAll, obsStates, maxlag=1, h=1, silent=FALSE){
+                   obsInsample, obsAll, obsStates, maxlag=1, h=1, xregDo="u", silent=FALSE){
 # The function does general checks needed for exogenouse variables and returns the list of necessary parameters
 
     if(!is.null(xreg)){
+        xreg <- as.matrix(xreg);
         if(any(is.na(xreg))){
             warning("The exogenous variables contain NAs! This may lead to problems during estimation and in forecasting.\nSubstituting them with 0.",
                     call.=FALSE);
@@ -2268,7 +2322,6 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 ##### The case with vectors and ts objects, but not matrices
         if(is.vector(xreg) | (is.ts(xreg) & !is.matrix(xreg))){
 # Check if xreg contains something meaningful
-
             if(is.null(initialX)){
                 if(all(xreg[1:obsInsample]==xreg[1])){
                     warning("The exogenous variable has no variability. Cannot do anything with that, so dropping out xreg.",
@@ -2320,13 +2373,10 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                     colnames(matxt) <- xregNames;
                 }
             }
+            xreg <- as.matrix(xreg);
         }
 ##### The case with matrices and data frames
         else if(is.matrix(xreg) | is.data.frame(xreg)){
-            if(!is.matrix(xreg)){
-                xreg <- as.matrix(xreg);
-            }
-
             nExovars <- ncol(xreg);
             if(nrow(xreg) < obsAll){
                 warning("xreg did not contain values for the holdout, so we had to predict missing values.", call.=FALSE);
@@ -2381,12 +2431,40 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                 if(!is.null(xreg)){
 # Check for multicollinearity and drop something if there is a perfect one
                     corMatrix <- cor(xreg);
-                    corCheck <- upper.tri(corMatrix) & corMatrix==1;
+                    corCheck <- upper.tri(corMatrix) & abs(corMatrix)>=0.999;
                     if(any(corCheck)){
                         removexreg <- unique(which(corCheck,arr.ind=TRUE)[,1]);
-                        xreg <- matrix(xreg[,-removexreg],ncol=ncol(xreg)-length(removexreg));
+                        if(ncol(xreg)-length(removexreg)>1){
+                            xreg <- xreg[,-removexreg];
+                        }
+                        else{
+                            xreg <- matrix(xreg[,-removexreg],ncol=ncol(xreg)-length(removexreg),
+                                           dimnames=list(NULL,c(colnames(xreg)[-removexreg])));
+                        }
+                        nExovars <- ncol(xreg)
                         warning("Some exogenous variables were perfectly correlated. We've dropped them out.",
                                 call.=FALSE);
+                    }
+                    # Check multiple correlations. This is needed for cases with dummy variables.
+                    # In case with xregDo="select" some of the perfectly correlated things, will be dropped out automatically.
+                    if(nExovars>2 & (xregDo=="u")){
+                        corMatrix <- cor(xreg);
+                        corMulti <- rep(NA,nExovars);
+                        if(det(corMatrix)!=0){
+                            for(i in 1:nExovars){
+                                corMulti[i] <- 1 - det(corMatrix) / det(corMatrix[-i,-i]);
+                            }
+                            if(any(corMulti>=0.999)){
+                                stop(paste0("Some combinations of exogenous variables are perfectly correlated. \n",
+                                            "If you use sets of dummy variables, don't forget to drop some of them."),
+                                     call.=FALSE);
+                            }
+                        }
+                        else{
+                            stop(paste0("Some combinations of exogenous variables are perfectly correlated. \n",
+                                        "If you use sets of dummy variables, don't forget to drop some of them."),
+                                 call.=FALSE);
+                        }
                     }
                 }
             }
@@ -2417,6 +2495,11 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                 }
                 else{
                     xregNames <- gsub(" ", "_", colnames(xreg), fixed = TRUE);
+                    if(xregDo=="s" & any(grepl('[^[:alnum:]]', xregNames))){
+                        warning(paste0("There were some special characters in names of ",
+                                       "xreg variables. We had to remove them."),call.=FALSE);
+                        xregNames <- gsub("[^[:alnum:]]", "", xregNames);
+                    }
                     colnames(matat) <- xregNames;
                     colnames(matxt) <- xregNames;
                 }
@@ -2539,9 +2622,18 @@ likelihoodFunction <- function(C){
     else{
         #Failsafe for exceptional cases when the probability is equal to zero / one, when it should not have been.
         if(any(c(1-pt[ot==0]==0,pt[ot==1]==0))){
-            return(-Inf);
+            # return(-Inf);
+            ptNew <- pt[(pt!=0) & (pt!=1)];
+            otNew <- ot[(pt!=0) & (pt!=1)];
+            if(length(ptNew)==0){
+                return(-obsNonzero/2 *(log(2*pi*exp(1)) + log(CF(C))));
+            }
+            else{
+                return(sum(log(ptNew[otNew==1])) + sum(log(1-ptNew[otNew==0]))
+                       - obsNonzero/2 *(log(2*pi*exp(1)) + log(CF(C))));
+            }
         }
-        #Failsage for cases, when data has no variability when ot==1.
+        #Failsafe for cases, when data has no variability when ot==1.
         if(CF(C)==0){
             if(cfType=="TFL" | cfType=="aTFL"){
                 return(sum(log(pt[ot==1]))*h + sum(log(1-pt[ot==0]))*h);

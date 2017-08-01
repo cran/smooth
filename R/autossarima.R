@@ -1,7 +1,5 @@
 utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType","ar.orders","i.orders","ma.orders"));
 
-
-
 #' State-Space ARIMA
 #'
 #' Function selects the best State-Space ARIMA based on information criteria,
@@ -38,6 +36,9 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' weights.
 #' @param workFast If \code{TRUE}, then some of the orders of ARIMA are
 #' skipped. This is not advised for models with \code{lags} greater than 12.
+#' @param constant If \code{NULL}, then the function will check if constant is
+#' needed. if \code{TRUE}, then constant is forced in the model. Otherwise
+#' constant is not used.
 #' @param ...  Other non-documented parameters. For example \code{FI=TRUE} will
 #' make the function also produce Fisher Information matrix, which then can be
 #' used to calculated variances of parameters of the model.  Maximum orders to
@@ -74,14 +75,14 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #'
 #' @export auto.ssarima
 auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,frequency(data)),
-                         combine=FALSE, workFast=TRUE,
+                         combine=FALSE, workFast=TRUE, constant=NULL,
                          initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC"),
                          cfType=c("MSE","MAE","HAM","GMSTFE","MSTFE","MSEh","TFL"),
                          h=10, holdout=FALSE, cumulative=FALSE,
                          intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                          intermittent=c("none","auto","fixed","croston","tsb","sba"), imodel="MNN",
                          bounds=c("admissible","none"),
-                         silent=c("none","all","graph","legend","output"),
+                         silent=c("all","graph","legend","output","none"),
                          xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                          updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 # Function estimates several ssarima models and selects the best one using the selected information criterion.
@@ -145,6 +146,23 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
     environment(ssAutoInput) <- environment();
     ssAutoInput("auto.ssarima",ParentEnvironment=environment());
 
+    if(is.null(constant)){
+        constantCheck <- TRUE;
+        constantValue <- TRUE;
+    }
+    else{
+        if(is.logical(constant)){
+            constantCheck <- FALSE;
+            constantValue <- constant;
+        }
+        else{
+            constant <- NULL;
+            constantCheck <- TRUE;
+            constantValue <- TRUE;
+            warning("Strange value of constant parameter. We changed it to default value.");
+        }
+    }
+
     if(any(is.complex(c(ar.max,i.max,ma.max,lags)))){
         stop("Come on! Be serious! This is ARIMA, not CES!",call.=FALSE);
     }
@@ -189,12 +207,6 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
         lags <- lags[orders2leave];
     }
 
-    # Order things, so we would deal with the lowest level of seasonality first
-    ar.max <- ar.max[order(lags,decreasing=FALSE)];
-    i.max <- i.max[order(lags,decreasing=FALSE)];
-    ma.max <- ma.max[order(lags,decreasing=FALSE)];
-    lags <- sort(lags,decreasing=FALSE);
-
     # Get rid of duplicates in lags
     if(length(unique(lags))!=length(lags)){
         if(frequency(data)!=1){
@@ -203,9 +215,9 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
         lags.new <- unique(lags);
         ar.max.new <- i.max.new <- ma.max.new <- lags.new;
         for(i in 1:length(lags.new)){
-            ar.max.new[i] <- max(ar.max[which(lags==lags.new[i])]);
-            i.max.new[i] <- max(i.max[which(lags==lags.new[i])]);
-            ma.max.new[i] <- max(ma.max[which(lags==lags.new[i])]);
+            ar.max.new[i] <- max(ar.max[which(lags==lags.new[i])],na.rm=TRUE);
+            i.max.new[i] <- max(i.max[which(lags==lags.new[i])],na.rm=TRUE);
+            ma.max.new[i] <- max(ma.max[which(lags==lags.new[i])],na.rm=TRUE);
         }
         ar.max <- ar.max.new;
         i.max <- i.max.new;
@@ -213,8 +225,14 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
         lags <- lags.new;
     }
 
+    # Order things, so we would deal with the lowest level of seasonality first
+    ar.max <- ar.max[order(lags,decreasing=FALSE)];
+    i.max <- i.max[order(lags,decreasing=FALSE)];
+    ma.max <- ma.max[order(lags,decreasing=FALSE)];
+    lags <- sort(lags,decreasing=FALSE);
+
 # 1 stands for constant, the other one stands for variance
-    nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + 1 + 1;
+    nParamMax <- max(ar.max %*% lags + i.max %*% lags,ma.max %*% lags) + sum(ar.max) + sum(ma.max) + constantCheck + 1;
 
 # Try to figure out if the number of parameters can be tuned in order to fit something smaller on small samples
 # Don't try to fix anything if the number of seasonalities is greater than 2
@@ -285,7 +303,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
     }
     ICValue <- 1E+100;
     m <- 0;
-    constant <- TRUE;
+    # constant <- TRUE;
 
     test.lags <- ma.test <- ar.test <- i.test <- rep(0,length(lags));
     ar.best <- ma.best <- i.best <- rep(0,length(lags));
@@ -317,7 +335,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
     if(all(c(ar.max,i.max,ma.max)==0)){
         cat("\b\b\b\bDone!\n");
         bestModel <- ssarima(data, orders=list(ar=ar.best,i=(i.best),ma=(ma.best)), lags=(lags),
-                             constant=TRUE, initial=initialType, cfType=cfType,
+                             constant=constantValue, initial=initialType, cfType=cfType,
                              h=h, holdout=holdout, cumulative=cumulative,
                              intervals=intervals, level=level,
                              intermittent=intermittent, imodel=imodel,
@@ -342,216 +360,21 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                 i.orders[,seasLag] <- rep(c(0:i.max[seasLag]),each=prod(i.max[1:(seasLag-1)]+1))
             }
         }
+    }
 
-        # Start the loop with differences
-        for(d in 1:nrow(i.orders)){
-            m <- m + 1;
-            if(silentText==FALSE){
-                cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
-                cat(paste0(round((m)/nModels,2)*100,"%"));
-            }
-            nParamOriginal <- 1;
-            if(silent[1]=="d"){
-                cat("I: ");cat(i.orders[d,]);cat(", ");
-            }
-            testModel <- ssarima(data, orders=list(ar=0,i=i.orders[d,],ma=0), lags=lags,
-                                 constant=TRUE, initial=initialType, cfType=cfType,
-                                 h=h, holdout=holdout, cumulative=cumulative,
-                                 intervals=intervals, level=level,
-                                 intermittent=intermittent, imodel=imodel,
-                                 bounds=bounds, silent=TRUE,
-                                 xreg=xreg, xregDo=xregDo, initialX=initialX,
-                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
-            ICValue <- testModel$ICs[ic];
-            if(combine){
-                testForecasts[[m]] <- matrix(NA,h,3);
-                testForecasts[[m]][,1] <- testModel$forecast;
-                testForecasts[[m]][,2] <- testModel$lower;
-                testForecasts[[m]][,3] <- testModel$upper;
-                testFitted[[m]] <- testModel$fitted;
-                testICs[[m]] <- ICValue;
-                testLevels[[m]] <- 1;
-                testStates[[m]] <- testModel$states;
-                testTransition[[m]] <- testModel$transition;
-                testPersistence[[m]] <- testModel$persistence;
-            }
-            if(silent[1]=="d"){
-                cat(ICValue); cat("\n");
-            }
-            if(m==1){
-                bestIC <- ICValue;
-                dataI <- testModel$residuals;
-                i.best <- i.orders[d,];
-                bestICAR <- bestICI <- bestICMA <- bestIC;
-            }
-            else{
-                if(ICValue < bestICI){
-                    bestICI <- ICValue;
-                    dataI <- testModel$residuals;
-                    if(ICValue < bestIC){
-                        i.best <- i.orders[d,];
-                        bestIC <- ICValue;
-                        ma.best <- ar.best <- rep(0,length(ar.test));
-                    }
-                }
-                else{
-                    if(workFast){
-                        m <- m + sum(ma.max*(1 + sum(ar.max)));
-                        next;
-                    }
-                }
-            }
-
-##### Loop for MA #####
-            if(any(ma.max!=0)){
-                bestICMA <- bestICI;
-                ma.best.local <- ma.test <- rep(0,length(ma.test));
-                for(seasSelectMA in 1:length(lags)){
-                    if(ma.max[seasSelectMA]!=0){
-                        for(maSelect in 1:ma.max[seasSelectMA]){
-                            m <- m + 1;
-                            if(silentText==FALSE){
-                                cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
-                                cat(paste0(round((m)/nModels,2)*100,"%"));
-                            }
-                            ma.test[seasSelectMA] <- ma.max[seasSelectMA] - maSelect + 1;
-                            nParamMA <- sum(ma.test);
-                            nParamNew <- nParamOriginal + nParamMA;
-
-                            if(silent[1]=="d"){
-                                cat("MA: ");cat(ma.test);cat(", ");
-                            }
-                            testModel <- ssarima(dataI, orders=list(ar=0,i=0,ma=ma.test), lags=lags,
-                                                 constant=FALSE, initial=initialType, cfType=cfType,
-                                                 h=h, holdout=FALSE,
-                                                 intervals=intervals, level=level,
-                                                 intermittent=intermittent, imodel=imodel,
-                                                 bounds=bounds, silent=TRUE,
-                                                 xreg=NULL, xregDo="use", initialX=initialX,
-                                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
-                            ICValue <- icCorrector(testModel$ICs[ic], nParamMA, obsInsample, nParamNew);
-                            if(combine){
-                                testForecasts[[m]] <- matrix(NA,h,3);
-                                testForecasts[[m]][,1] <- testModel$forecast;
-                                testForecasts[[m]][,2] <- testModel$lower;
-                                testForecasts[[m]][,3] <- testModel$upper;
-                                testFitted[[m]] <- testModel$fitted;
-                                testICs[[m]] <- ICValue;
-                                testLevels[[m]] <- 2;
-                                testStates[[m]] <- testModel$states;
-                                testTransition[[m]] <- testModel$transition;
-                                testPersistence[[m]] <- testModel$persistence;
-                            }
-                            if(silent[1]=="d"){
-                                cat(ICValue); cat("\n");
-                            }
-                            if(ICValue < bestICMA){
-                                bestICMA <- ICValue;
-                                ma.best.local <- ma.test;
-                                if(ICValue < bestIC){
-                                    bestIC <- bestICMA;
-                                    i.best <- i.orders[d,];
-                                    ma.best <- ma.test;
-                                    ar.best <- rep(0,length(ar.test));
-                                }
-                                dataMA <- testModel$residuals;
-                            }
-                            else{
-                                if(workFast){
-                                    m <- m + ma.test[seasSelectMA] * (1 + sum(ar.max)) - 1;
-                                    ma.test <- ma.best.local;
-                                    break;
-                                }
-                                else{
-                                    ma.test <- ma.best.local;
-                                }
-                            }
-
-##### Loop for AR #####
-                            if(any(ar.max!=0)){
-                                bestICAR <- bestICMA;
-                                ar.best.local <- ar.test <- rep(0,length(ar.test));
-                                for(seasSelectAR in 1:length(lags)){
-                                    test.lags[seasSelectAR] <- lags[seasSelectAR];
-                                    if(ar.max[seasSelectAR]!=0){
-                                        for(arSelect in 1:ar.max[seasSelectAR]){
-                                            m <- m + 1;
-                                            if(silentText==FALSE){
-                                                cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
-                                                cat(paste0(round((m)/nModels,2)*100,"%"));
-                                            }
-                                            ar.test[seasSelectAR] <- ar.max[seasSelectAR] - arSelect + 1;
-                                            nParamAR <- sum(ar.test);
-                                            nParamNew <- nParamOriginal + nParamMA + nParamAR;
-
-                                            if(silent[1]=="d"){
-                                                cat("AR: ");cat(ar.test);cat(", ");
-                                            }
-                                            testModel <- ssarima(dataMA, orders=list(ar=ar.test,i=0,ma=0), lags=lags,
-                                                                 constant=FALSE, initial=initialType, cfType=cfType,
-                                                                 h=h, holdout=FALSE,
-                                                                 intervals=intervals, level=level,
-                                                                 intermittent=intermittent, imodel=imodel,
-                                                                 bounds=bounds, silent=TRUE,
-                                                                 xreg=NULL, xregDo="use", initialX=initialX,
-                                                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
-                                            ICValue <- icCorrector(testModel$ICs[ic], nParamAR, obsInsample, nParamNew);
-                                            if(combine){
-                                                testForecasts[[m]] <- matrix(NA,h,3);
-                                                testForecasts[[m]][,1] <- testModel$forecast;
-                                                testForecasts[[m]][,2] <- testModel$lower;
-                                                testForecasts[[m]][,3] <- testModel$upper;
-                                                testFitted[[m]] <- testModel$fitted;
-                                                testICs[[m]] <- ICValue;
-                                                testLevels[[m]] <- 3;
-                                                testStates[[m]] <- testModel$states;
-                                                testTransition[[m]] <- testModel$transition;
-                                                testPersistence[[m]] <- testModel$persistence;
-                                            }
-                                            if(silent[1]=="d"){
-                                                cat(ICValue); cat("\n");
-                                            }
-                                            if(ICValue < bestICAR){
-                                                bestICAR <- ICValue;
-                                                ar.best.local <- ar.test;
-                                                if(ICValue < bestIC){
-                                                    bestIC <- ICValue;
-                                                    i.best <- i.orders[d,];
-                                                    ar.best <- ar.test;
-                                                    ma.best <- ma.test;
-                                                }
-                                            }
-                                            else{
-                                                if(workFast){
-                                                    m <- m + ar.test[seasSelectAR] - 1;
-                                                    ar.test <- ar.best.local;
-                                                    break;
-                                                }
-                                                else{
-                                                    ar.test <- ar.best.local;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    # Start the loop with differences
+    for(d in 1:nrow(i.orders)){
+        m <- m + 1;
+        if(silentText==FALSE){
+            cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
+            cat(paste0(round((m)/nModels,2)*100,"%"));
         }
-    }
-
-    m <- m + 1;
-    if(silentText==FALSE){
-        cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
-        cat(paste0(round((m)/nModels,2)*100,"%"));
-    }
-
-#### Test the constant ####
-    if(any(c(ar.best,i.best,ma.best)!=0)){
-        testModel <- ssarima(data, orders=list(ar=(ar.best),i=(i.best),ma=(ma.best)), lags=(lags),
-                             constant=FALSE, initial=initialType, cfType=cfType,
+        nParamOriginal <- 1;
+        if(silent[1]=="d"){
+            cat("I: ");cat(i.orders[d,]);cat(", ");
+        }
+        testModel <- ssarima(data, orders=list(ar=0,i=i.orders[d,],ma=0), lags=lags,
+                             constant=constantValue, initial=initialType, cfType=cfType,
                              h=h, holdout=holdout, cumulative=cumulative,
                              intervals=intervals, level=level,
                              intermittent=intermittent, imodel=imodel,
@@ -571,13 +394,280 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
             testTransition[[m]] <- testModel$transition;
             testPersistence[[m]] <- testModel$persistence;
         }
-# cat("Constant: ");print(ICValue);
-        if(ICValue < bestIC){
-            bestModel <- testModel;
-            constant <- FALSE;
+        if(silent[1]=="d"){
+            cat(ICValue); cat("\n");
+        }
+        if(m==1){
+            bestIC <- ICValue;
+            dataI <- testModel$residuals;
+            i.best <- i.orders[d,];
+            bestICAR <- bestICI <- bestICMA <- bestIC;
         }
         else{
-            constant <- TRUE;
+            if(ICValue < bestICI){
+                bestICI <- ICValue;
+                dataI <- testModel$residuals;
+                if(ICValue < bestIC){
+                    i.best <- i.orders[d,];
+                    bestIC <- ICValue;
+                    ma.best <- ar.best <- rep(0,length(ar.test));
+                }
+            }
+            else{
+                if(workFast){
+                    m <- m + sum(ma.max*(1 + sum(ar.max)));
+                    next;
+                }
+            }
+        }
+
+        ##### Loop for MA #####
+        if(any(ma.max!=0)){
+            bestICMA <- bestICI;
+            ma.best.local <- ma.test <- rep(0,length(ma.test));
+            for(seasSelectMA in 1:length(lags)){
+                if(ma.max[seasSelectMA]!=0){
+                    for(maSelect in 1:ma.max[seasSelectMA]){
+                        m <- m + 1;
+                        if(silentText==FALSE){
+                            cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
+                            cat(paste0(round((m)/nModels,2)*100,"%"));
+                        }
+                        ma.test[seasSelectMA] <- ma.max[seasSelectMA] - maSelect + 1;
+                        nParamMA <- sum(ma.test);
+                        nParamNew <- nParamOriginal + nParamMA;
+
+                        if(silent[1]=="d"){
+                            cat("MA: ");cat(ma.test);cat(", ");
+                        }
+                        testModel <- ssarima(dataI, orders=list(ar=0,i=0,ma=ma.test), lags=lags,
+                                             constant=FALSE, initial=initialType, cfType=cfType,
+                                             h=h, holdout=FALSE,
+                                             intervals=intervals, level=level,
+                                             intermittent=intermittent, imodel=imodel,
+                                             bounds=bounds, silent=TRUE,
+                                             xreg=NULL, xregDo="use", initialX=initialX,
+                                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                        ICValue <- icCorrector(testModel$ICs[ic], nParamMA, obsInsample, nParamNew);
+                        if(combine){
+                            testForecasts[[m]] <- matrix(NA,h,3);
+                            testForecasts[[m]][,1] <- testModel$forecast;
+                            testForecasts[[m]][,2] <- testModel$lower;
+                            testForecasts[[m]][,3] <- testModel$upper;
+                            testFitted[[m]] <- testModel$fitted;
+                            testICs[[m]] <- ICValue;
+                            testLevels[[m]] <- 2;
+                            testStates[[m]] <- testModel$states;
+                            testTransition[[m]] <- testModel$transition;
+                            testPersistence[[m]] <- testModel$persistence;
+                        }
+                        if(silent[1]=="d"){
+                            cat(ICValue); cat("\n");
+                        }
+                        if(ICValue < bestICMA){
+                            bestICMA <- ICValue;
+                            ma.best.local <- ma.test;
+                            if(ICValue < bestIC){
+                                bestIC <- bestICMA;
+                                i.best <- i.orders[d,];
+                                ma.best <- ma.test;
+                                ar.best <- rep(0,length(ar.test));
+                            }
+                            dataMA <- testModel$residuals;
+                        }
+                        else{
+                            if(workFast){
+                                m <- m + ma.test[seasSelectMA] * (1 + sum(ar.max)) - 1;
+                                ma.test <- ma.best.local;
+                                break;
+                            }
+                            else{
+                                ma.test <- ma.best.local;
+                            }
+                        }
+
+                        ##### Loop for AR #####
+                        if(any(ar.max!=0)){
+                            bestICAR <- bestICMA;
+                            ar.best.local <- ar.test <- rep(0,length(ar.test));
+                            for(seasSelectAR in 1:length(lags)){
+                                test.lags[seasSelectAR] <- lags[seasSelectAR];
+                                if(ar.max[seasSelectAR]!=0){
+                                    for(arSelect in 1:ar.max[seasSelectAR]){
+                                        m <- m + 1;
+                                        if(silentText==FALSE){
+                                            cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
+                                            cat(paste0(round((m)/nModels,2)*100,"%"));
+                                        }
+                                        ar.test[seasSelectAR] <- ar.max[seasSelectAR] - arSelect + 1;
+                                        nParamAR <- sum(ar.test);
+                                        nParamNew <- nParamOriginal + nParamMA + nParamAR;
+
+                                        if(silent[1]=="d"){
+                                            cat("AR: ");cat(ar.test);cat(", ");
+                                        }
+                                        testModel <- ssarima(dataMA, orders=list(ar=ar.test,i=0,ma=0), lags=lags,
+                                                             constant=FALSE, initial=initialType, cfType=cfType,
+                                                             h=h, holdout=FALSE,
+                                                             intervals=intervals, level=level,
+                                                             intermittent=intermittent, imodel=imodel,
+                                                             bounds=bounds, silent=TRUE,
+                                                             xreg=NULL, xregDo="use", initialX=initialX,
+                                                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                                        ICValue <- icCorrector(testModel$ICs[ic], nParamAR, obsInsample, nParamNew);
+                                        if(combine){
+                                            testForecasts[[m]] <- matrix(NA,h,3);
+                                            testForecasts[[m]][,1] <- testModel$forecast;
+                                            testForecasts[[m]][,2] <- testModel$lower;
+                                            testForecasts[[m]][,3] <- testModel$upper;
+                                            testFitted[[m]] <- testModel$fitted;
+                                            testICs[[m]] <- ICValue;
+                                            testLevels[[m]] <- 3;
+                                            testStates[[m]] <- testModel$states;
+                                            testTransition[[m]] <- testModel$transition;
+                                            testPersistence[[m]] <- testModel$persistence;
+                                        }
+                                        if(silent[1]=="d"){
+                                            cat(ICValue); cat("\n");
+                                        }
+                                        if(ICValue < bestICAR){
+                                            bestICAR <- ICValue;
+                                            ar.best.local <- ar.test;
+                                            if(ICValue < bestIC){
+                                                bestIC <- ICValue;
+                                                i.best <- i.orders[d,];
+                                                ar.best <- ar.test;
+                                                ma.best <- ma.test;
+                                            }
+                                        }
+                                        else{
+                                            if(workFast){
+                                                m <- m + ar.test[seasSelectAR] - 1;
+                                                ar.test <- ar.best.local;
+                                                break;
+                                            }
+                                            else{
+                                                ar.test <- ar.best.local;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else{
+            ##### Loop for AR #####
+            if(any(ar.max!=0)){
+                bestICAR <- bestICMA;
+                ar.best.local <- ar.test <- rep(0,length(ar.test));
+                for(seasSelectAR in 1:length(lags)){
+                    test.lags[seasSelectAR] <- lags[seasSelectAR];
+                    if(ar.max[seasSelectAR]!=0){
+                        for(arSelect in 1:ar.max[seasSelectAR]){
+                            m <- m + 1;
+                            if(silentText==FALSE){
+                                cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
+                                cat(paste0(round((m)/nModels,2)*100,"%"));
+                            }
+                            ar.test[seasSelectAR] <- ar.max[seasSelectAR] - arSelect + 1;
+                            nParamAR <- sum(ar.test);
+                            nParamNew <- nParamOriginal + nParamAR;
+
+                            if(silent[1]=="d"){
+                                cat("AR: ");cat(ar.test);cat(", ");
+                            }
+                            testModel <- ssarima(dataI, orders=list(ar=ar.test,i=0,ma=0), lags=lags,
+                                                 constant=FALSE, initial=initialType, cfType=cfType,
+                                                 h=h, holdout=FALSE,
+                                                 intervals=intervals, level=level,
+                                                 intermittent=intermittent, imodel=imodel,
+                                                 bounds=bounds, silent=TRUE,
+                                                 xreg=NULL, xregDo="use", initialX=initialX,
+                                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                            ICValue <- icCorrector(testModel$ICs[ic], nParamAR, obsInsample, nParamNew);
+                            if(combine){
+                                testForecasts[[m]] <- matrix(NA,h,3);
+                                testForecasts[[m]][,1] <- testModel$forecast;
+                                testForecasts[[m]][,2] <- testModel$lower;
+                                testForecasts[[m]][,3] <- testModel$upper;
+                                testFitted[[m]] <- testModel$fitted;
+                                testICs[[m]] <- ICValue;
+                                testLevels[[m]] <- 3;
+                                testStates[[m]] <- testModel$states;
+                                testTransition[[m]] <- testModel$transition;
+                                testPersistence[[m]] <- testModel$persistence;
+                            }
+                            if(silent[1]=="d"){
+                                cat(ICValue); cat("\n");
+                            }
+                            if(ICValue < bestICAR){
+                                bestICAR <- ICValue;
+                                ar.best.local <- ar.test;
+                                if(ICValue < bestIC){
+                                    bestIC <- ICValue;
+                                    i.best <- i.orders[d,];
+                                    ar.best <- ar.test;
+                                    ma.best <- ma.test;
+                                }
+                            }
+                            else{
+                                if(workFast){
+                                    m <- m + ar.test[seasSelectAR] - 1;
+                                    ar.test <- ar.best.local;
+                                    break;
+                                }
+                                else{
+                                    ar.test <- ar.best.local;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    m <- m + 1;
+    if(silentText==FALSE){
+        cat(paste0(rep("\b",nchar(round(m/nModels,2)*100)+1),collapse=""));
+        cat(paste0(round((m)/nModels,2)*100,"%"));
+    }
+
+#### Test the constant ####
+    if(constantCheck){
+        if(any(c(ar.best,i.best,ma.best)!=0)){
+            testModel <- ssarima(data, orders=list(ar=(ar.best),i=(i.best),ma=(ma.best)), lags=(lags),
+                                 constant=FALSE, initial=initialType, cfType=cfType,
+                                 h=h, holdout=holdout, cumulative=cumulative,
+                                 intervals=intervals, level=level,
+                                 intermittent=intermittent, imodel=imodel,
+                                 bounds=bounds, silent=TRUE,
+                                 xreg=xreg, xregDo=xregDo, initialX=initialX,
+                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+            ICValue <- testModel$ICs[ic];
+            if(combine){
+                testForecasts[[m]] <- matrix(NA,h,3);
+                testForecasts[[m]][,1] <- testModel$forecast;
+                testForecasts[[m]][,2] <- testModel$lower;
+                testForecasts[[m]][,3] <- testModel$upper;
+                testFitted[[m]] <- testModel$fitted;
+                testICs[[m]] <- ICValue;
+                testLevels[[m]] <- 1;
+                testStates[[m]] <- testModel$states;
+                testTransition[[m]] <- testModel$transition;
+                testPersistence[[m]] <- testModel$persistence;
+            }
+            # cat("Constant: ");print(ICValue);
+            if(ICValue < bestIC){
+                bestModel <- testModel;
+                constantValue <- FALSE;
+            }
+            else{
+                constantValue <- TRUE;
+            }
         }
     }
 
@@ -629,17 +719,15 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
         bestModel <- structure(bestModel,class="smooth");
     }
     else{
-        if(constant){
-            #### Reestimate the best model in order to get rid of bias ####
-            bestModel <- ssarima(data, orders=list(ar=(ar.best),i=(i.best),ma=(ma.best)), lags=(lags),
-                                 constant=TRUE, initial=initialType, cfType=cfType,
-                                 h=h, holdout=holdout, cumulative=cumulative,
-                                 intervals=intervals, level=level,
-                                 intermittent=intermittent, imodel=imodel,
-                                 bounds=bounds, silent=TRUE,
-                                 xreg=xreg, xregDo=xregDo, initialX=initialX,
-                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
-        }
+        #### Reestimate the best model in order to get rid of bias ####
+        bestModel <- ssarima(data, orders=list(ar=(ar.best),i=(i.best),ma=(ma.best)), lags=(lags),
+                             constant=constantValue, initial=initialType, cfType=cfType,
+                             h=h, holdout=holdout, cumulative=cumulative,
+                             intervals=intervals, level=level,
+                             intermittent=intermittent, imodel=imodel,
+                             bounds=bounds, silent=TRUE,
+                             xreg=xreg, xregDo=xregDo, initialX=initialX,
+                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
 
         y.fit <- bestModel$fitted;
         y.for <- bestModel$forecast;

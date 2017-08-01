@@ -11,7 +11,7 @@ es(data, model = "ZZZ", persistence = NULL, phi = NULL,
   intervals = c("none", "parametric", "semiparametric", "nonparametric"),
   level = 0.95, intermittent = c("none", "auto", "fixed", "croston", "tsb",
   "sba"), imodel = "MNN", bounds = c("usual", "admissible", "none"),
-  silent = c("none", "all", "graph", "legend", "output"), xreg = NULL,
+  silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
   xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
   persistenceX = NULL, transitionX = NULL, ...)
 }
@@ -40,8 +40,8 @@ The parameter \code{model} can also be a vector of names of models for a
 finer tuning (pool of models). For example, \code{model=c("ANN","AAA")} will
 estimate only two models and select the best of them.
 
-Also \code{model} can accept a previously estimated ES model and use all its
-parameters.
+Also \code{model} can accept a previously estimated ES or ETS (from forecast
+package) model and use all its parameters.
 
 Keep in mind that model selection with "Z" components uses Branch and Bound
 algorithm and may skip some models that could have slightly smaller

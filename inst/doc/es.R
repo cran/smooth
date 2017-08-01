@@ -56,3 +56,11 @@ es(M3$N2457$x, model="ZZZ", h=18, holdout=TRUE, xreg=xregExpander(x), xregDo="se
 ## ----es_N2457_xreg_formula-----------------------------------------------
 formula(ourModel)
 
+## ----ets_es, message=FALSE, warning=FALSE--------------------------------
+etsModel <- forecast::ets(M3$N2457$x)
+esModel <- es(M3$N2457$x, model=etsModel, h=18)
+
+## ----ets_es_forecast, message=FALSE, warning=FALSE-----------------------
+forecast(etsModel,h=18,level=0.95)
+forecast(esModel,h=18,level=0.95)
+

@@ -1,7 +1,7 @@
 utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","datafreq","initialType",
                          "yot","maxlag","silent","allowMultiplicative","modelCurrent",
                          "nParamIntermittent","cfTypeOriginal","matF","matw","pt.for","errors.mat",
-                         "iprob","results","s2","FI","intermittent","normalizer",
+                         "iprob","results","s2","FI","intermittent","normalizer","varVec",
                          "persistenceEstimate","initial","multisteps","ot",
                          "silentText","silentGraph","silentLegend"));
 
@@ -63,8 +63,8 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' finer tuning (pool of models). For example, \code{model=c("ANN","AAA")} will
 #' estimate only two models and select the best of them.
 #'
-#' Also \code{model} can accept a previously estimated ES model and use all its
-#' parameters.
+#' Also \code{model} can accept a previously estimated ES or ETS (from forecast
+#' package) model and use all its parameters.
 #'
 #' Keep in mind that model selection with "Z" components uses Branch and Bound
 #' algorithm and may skip some models that could have slightly smaller
@@ -233,7 +233,7 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
                intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                intermittent=c("none","auto","fixed","croston","tsb","sba"), imodel="MNN",
                bounds=c("usual","admissible","none"),
-               silent=c("none","all","graph","legend","output"),
+               silent=c("all","graph","legend","output","none"),
                xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 # Copyright (C) 2015 - 2016  Ivan Svetunkov
@@ -293,6 +293,57 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
         if(any(unlist(gregexpr("C",model))!=-1)){
             initial <- "o";
         }
+    }
+    else if(any(class(model)=="ets")){
+        # Extract smoothing parameters
+        i <- 1;
+        persistence <- coef(model)[i];
+        if(model$components[2]!="N"){
+            i <- i+1;
+            persistence <- c(persistence,coef(model)[i]);
+            if(model$components[3]!="N"){
+                i <- i+1;
+                persistence <- c(persistence,coef(model)[i]);
+            }
+        }
+        else{
+            if(model$components[3]!="N"){
+                i <- i+1;
+                persistence <- c(persistence,coef(model)[i]);
+            }
+        }
+
+        # Damping parameter
+        if(model$components[4]=="TRUE"){
+            i <- i+1;
+            phi <- coef(model)[i];
+        }
+
+        # Initials
+        i <- i+1;
+        initial <- coef(model)[i];
+        if(model$components[2]!="N"){
+            i <- i+1;
+            initial <- c(initial,coef(model)[i]);
+        }
+
+        # Initials of seasonal component
+        if(model$components[3]!="N"){
+            if(model$components[2]!="N"){
+                initialSeason <- rev(model$states[1,-c(1:2)]);
+            }
+            else{
+                initialSeason <- rev(model$states[1,-c(1)]);
+            }
+        }
+        model <- modelType(model);
+    }
+    else if(any(class(model)=="character")){
+        # Everything is okay
+    }
+    else{
+        warning("A model of an unknown class was provided. Switching to 'ZZZ'.",call.=FALSE);
+        model <- "ZZZ";
     }
 
 # Add all the variables in ellipsis to current environment
@@ -471,16 +522,7 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
 
     if(xregEstimate){
         if(initialXEstimate){
-            if(Etype=="A" & modelDo!="estimate"){
-                vecat <- matrix(y[2:obsInsample],nrow=obsInsample-1,ncol=ncol(matxt)) / diff(matxt[1:obsInsample,]);
-                vecat[is.infinite(vecat)] <- NA;
-                vecat <- colSums(vecat,na.rm=T);
-            }
-            else{
-                vecat <- matat[maxlag,];
-            }
-
-            C <- c(C,vecat);
+            C <- c(C,matatOriginal[1,xregNames]);
             CLower <- c(CLower,rep(-Inf,nExovars));
             CUpper <- c(CUpper,rep(Inf,nExovars));
         }
@@ -623,7 +665,8 @@ EstimatorES <- function(...){
         }
     }
 
-    nParam <- 1 + nComponents + damped + (nComponents + (maxlag - 1) * (Stype!="N")) * (initialType!="b") + (!is.null(xreg)) * nExovars + (updateX)*(nExovars^2 + nExovars);
+    nParam <- (1 + nComponents*persistenceEstimate + damped + (nComponents + (maxlag-1) * (Stype!="N")) * (initialType!="b")
+               + !is.null(xreg) * nExovars + (updateX)*(nExovars^2 + nExovars));
 
     # Change cfType for model selection
     if(multisteps){
@@ -992,7 +1035,7 @@ PoolEstimatorES <- function(silent=FALSE,...){
 ##### Function selects the best es() based on IC #####
 CreatorES <- function(silent=FALSE,...){
     if(modelDo=="select"){
-        if(all(cfType!=c("MSE","Rounded"))){
+        if(all(cfType!=c("MSE","Rounded","TSB"))){
             warning(paste0("'",cfType,"' is used as cost function instead of 'MSE'. The results of model selection may be wrong."),call.=FALSE);
         }
         environment(PoolEstimatorES) <- environment();
@@ -1009,7 +1052,7 @@ CreatorES <- function(silent=FALSE,...){
         return(listToReturn);
     }
     else if(modelDo=="combine"){
-        if(all(cfType!=c("MSE","Rounded"))){
+        if(all(cfType!=c("MSE","Rounded","TSB"))){
             warning(paste0("'",cfType,"' is used as cost function instead of 'MSE'. The produced combinations weights may be wrong."),call.=FALSE);
         }
         environment(PoolEstimatorES) <- environment();
@@ -1058,7 +1101,8 @@ CreatorES <- function(silent=FALSE,...){
         cfObjective <- CF(C);
 
         # Number of parameters
-        nParam <- 1 + nComponents + damped + (nComponents + (maxlag-1) * (Stype!="N")) * (initialType!="b") + !is.null(xreg) * nExovars + (updateX)*(nExovars^2 + nExovars);
+        nParam <- (1 + nComponents*persistenceEstimate + damped + (nComponents + (maxlag-1) * (Stype!="N")) * (initialType!="b")
+                   + !is.null(xreg) * nExovars + (updateX)*(nExovars^2 + nExovars));
 
 # Change cfType for model selection
         if(multisteps){
@@ -1159,7 +1203,7 @@ CreatorES <- function(silent=FALSE,...){
     xregdata <- ssXreg(data=data, Etype=Etype, xreg=xreg, updateX=updateX, ot=ot,
                        persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
                        obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates,
-                       maxlag=basicparams$maxlag, h=h, silent=silentText);
+                       maxlag=basicparams$maxlag, h=h, xregDo=xregDo, silent=silentText);
 
     if(xregDo=="u"){
         nExovars <- xregdata$nExovars;
@@ -1280,7 +1324,7 @@ CreatorES <- function(silent=FALSE,...){
                 modelsPool <- modelsPool[substr(modelsPool,2,2)=="N"];
             }
 
-            warning("Not enough observations for the fit of ETS(",model,")! Fitting what we can...",call.=FALSE,immediate.=TRUE);
+            warning("Not enough observations for the fit of ETS(",model,")! Fitting what we can...",call.=FALSE);
             if(modelDo=="combine"){
                 model <- "CNN";
                 if(length(modelsPool)>2){
@@ -1294,6 +1338,15 @@ CreatorES <- function(silent=FALSE,...){
                 modelDo <- "select"
                 model <- "ZZZ";
             }
+        }
+        else if(obsNonzero==3){
+            modelsPool <- c("ANN");
+            if(allowMultiplicative){
+                modelsPool <- c(modelsPool,"MNN");
+            }
+            persistence <- 0;
+            persistenceEstimate <- FALSE
+            warning("We did not have enough observations, so persistence value was set to zero.",call.=FALSE);
         }
         else{
             stop("Not enough observations... Even for fitting of ETS('ANN')!",call.=FALSE);
@@ -1323,7 +1376,8 @@ CreatorES <- function(silent=FALSE,...){
             BasicMakerES(ParentEnvironment=environment());
 
             # Number of parameters
-            nParam <- nComponents + damped + (nComponents + (maxlag-1) * (Stype!="N")) * (initialType!="b") + !is.null(xreg) * nExovars + (updateX)*(nExovars^2 + nExovars);
+            nParam <- (nComponents*persistenceEstimate + damped + (nComponents + (maxlag-1) * (Stype!="N")) * (initialType!="b")
+                       + !is.null(xreg) * nExovars + (updateX)*(nExovars^2 + nExovars));
             if(!is.null(providedC)){
                 if(nParam!=length(providedC)){
                     warning(paste0("Number of parameters to optimise differes from the length of C:",nParam," vs ",length(providedC),".\n",
@@ -1410,7 +1464,7 @@ CreatorES <- function(silent=FALSE,...){
         Etype <- EtypeOriginal;
         Ttype <- TtypeOriginal;
         Stype <- StypeOriginal;
-        if(all(cfType!=c("MSE","Rounded"))){
+        if(all(cfType!=c("MSE","Rounded","TSB"))){
             warning(paste0("'",cfType,"' is used as cost function instead of 'MSE'. A wrong intermittent model may be selected"),call.=FALSE);
         }
         if(!silentText){
@@ -1718,22 +1772,28 @@ CreatorES <- function(silent=FALSE,...){
         }
 
 # Add PLS
-        errormeasuresNames <- names(errormeasures);
-        if(all(intermittent!=c("n","none"))){
-            errormeasures <- c(errormeasures, suppressWarnings(pls(actuals=y.holdout, forecasts=y.for, Etype=Etype,
-                                                                   sigma=s2, trace=FALSE, iprob=pt[obsInsample+c(1:h)], rounded=rounded)));
-        }
-        else{
-            if(multisteps){
-                sigma <- t(errors.mat) %*% errors.mat / obsInsample;
+### Currently PLS can only be returned when intervals=TRUE because of the varVec
+        if(intervals){
+            errormeasuresNames <- names(errormeasures);
+            if(all(intermittent!=c("n","none"))){
+                errormeasures <- c(errormeasures,
+                                   suppressWarnings(pls(actuals=y.holdout, forecasts=y.for, Etype=Etype,
+                                                        sigma=s2, trace=FALSE, iprob=imodel$forecast,
+                                                        varVec=varVec, rounded=rounded)));
             }
             else{
-                sigma <- s2;
+                if(multisteps){
+                    sigma <- t(errors.mat) %*% errors.mat / obsInsample;
+                }
+                else{
+                    sigma <- s2;
+                }
+                errormeasures <- c(errormeasures, suppressWarnings(pls(actuals=y.holdout, forecasts=y.for, Etype=Etype,
+                                                                       sigma=sigma, trace=multisteps, iprob=rep(1,h),
+                                                                       varVec=varVec, rounded=rounded)));
             }
-            errormeasures <- c(errormeasures, suppressWarnings(pls(actuals=y.holdout, forecasts=y.for, Etype=Etype,
-                                                                   sigma=sigma, trace=multisteps, iprob=pt[obsInsample+c(1:h)], rounded=rounded)));
+            names(errormeasures) <- c(errormeasuresNames,"PLS");
         }
-        names(errormeasures) <- c(errormeasuresNames,"PLS");
 
         if(cumulative){
             y.holdout <- ts(sum(y.holdout),start=start(y.for),frequency=datafreq);
@@ -1791,7 +1851,7 @@ CreatorES <- function(silent=FALSE,...){
         model <- list(model=modelname,formula=esFormula,timeElapsed=Sys.time()-startTime,
                       states=matvt,persistence=persistence,phi=phi,transition=matF,
                       initialType=initialType,initial=initialValue,initialSeason=initialSeason,
-                      nParam=nParam,
+                      nParam=nParam+nParamExo+nParamIntermittent,
                       fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
                       errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
                       actuals=data,holdout=y.holdout,imodel=imodel,
