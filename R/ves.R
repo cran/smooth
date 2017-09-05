@@ -1,7 +1,7 @@
 utils::globalVariables(c("nParamMax","nComponentsAll","nComponentsNonSeasonal","nSeries","modelIsSeasonal","obsInSample","obsAll",
                          "modelLags","persistenceEstimate","persistenceType","persistenceValue","damped","dampedEstimate","dampedType",
                          "transitionType","initialEstimate","initialSeasonEstimate","initialSeasonValue","initialSeasonType",
-                         "modelIsMultiplicative","matG","matW","A","Sigma","yFitted","yLower","yUpper"));
+                         "modelIsMultiplicative","matG","matW","A","Sigma","yFitted","PI","dataDeltat"));
 
 #' Vector Exponential Smoothing in SSOE state-space model
 #'
@@ -85,7 +85,7 @@ utils::globalVariables(c("nParamMax","nComponentsAll","nComponentsNonSeasonal","
 #' model.
 #' @param initial Can be either character or a vector / matrix of initial states.
 #' If it is character, then it can be \code{"individual"}, individual values of
-#' the intial non-seasonal components are udes, or \code{"group"}, meaning that
+#' the initial non-seasonal components are used, or \code{"group"}, meaning that
 #' the initials for all the time series are set to be equal to the same value.
 #' If vector of states is provided, then it is automatically transformed into
 #' a matrix, assuming that these values are provided for the whole group.
@@ -112,13 +112,13 @@ utils::globalVariables(c("nParamMax","nComponentsAll","nComponentsNonSeasonal","
 #' \item \code{nParam} - The number of estimated parameters;
 #' \item \code{actuals} - The matrix with the original data;
 #' \item \code{fitted} - The matrix of the fitted values;
-#' \item \code{holdout} - The matrix with the holdoud values (if \code{holdout=TRUE} in
+#' \item \code{holdout} - The matrix with the holdout values (if \code{holdout=TRUE} in
 #' the estimation);
 #' \item \code{residuals} - The matrix of the residuals of the model;
 #' \item \code{Sigma} - The covariance matrix of the errors (estimated with the correction
 #' for the number of degrees of freedom);
 #' \item \code{forecast} - The matrix of point forecasts;
-#' \item \code{lower} and \code{upper} - The bounds of the prediction intervals;
+#' \item \code{PI} - The bounds of the prediction intervals;
 #' \item \code{intervals} - The type of the constructed prediction intervals;
 #' \item \code{level} - The level of the confidence for the prediction intervals;
 #' \item \code{ICs} - The values of the information criteria;
@@ -148,15 +148,12 @@ ves <- function(data, model="ANN", persistence=c("group","independent","dependen
                 initial=c("individual","group"), initialSeason=c("group","individual"),
                 cfType=c("likelihood","diagonal","trace"),
                 ic=c("AICc","AIC","BIC"), h=10, holdout=FALSE,
-                intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
+                intervals=c("none","conditional","unconditional","independent"), level=0.95,
+                cumulative=FALSE,
                 intermittent=c("none","auto","fixed","tsb"),
                 bounds=c("admissible","none"),
-                silent=c("none","all","graph","output"), ...){
+                silent=c("all","graph","output","none"), ...){
 # Copyright (C) 2017 - Inf  Ivan Svetunkov
-
-### This should be done as expanded es() function with matrix of states (rows - time, cols - states),
-### large transition matrix and a persistence matrix. The returned value of the fit is vector.
-### So the vfitter can be based on amended version fitter.
 
 # Start measuring the time of calculations
     startTime <- Sys.time();
@@ -178,7 +175,7 @@ ves <- function(data, model="ANN", persistence=c("group","independent","dependen
         measurement <- model$measurement;
         initial <- model$initial;
         initialSeason <- model$initialSeason;
-        nParamOriginal <- model$nParam;
+        # nParamOriginal <- model$nParam;
         # if(is.null(xreg)){
         #     xreg <- model$xreg;
         # }
@@ -190,9 +187,9 @@ ves <- function(data, model="ANN", persistence=c("group","independent","dependen
         # }
         model <- modelType(model);
     }
-    else{
-        nParamOriginal <- NULL;
-    }
+    # else{
+        # nParamOriginal <- NULL;
+    # }
 
 # Add all the variables in ellipsis to current environment
     list2env(list(...),environment());
@@ -404,12 +401,8 @@ BasicMakerVES <- function(...){
     }
     else{
         XValues <- rbind(rep(1,obsInSample),c(1:obsInSample));
-        # if(Ttype!="M"){
-            initialValue <- y %*% t(XValues) %*% solve(XValues %*% t(XValues));
-        # }
-        # else{
-        #     initialValue <- log(y) %*% t(XValues) %*% solve(XValues %*% t(XValues));
-        # }
+        initialValue <- y %*% t(XValues) %*% solve(XValues %*% t(XValues));
+
         if(Ttype=="N"){
             initialValue <- matrix(initialValue[,-2],nSeries,1);
         }
@@ -481,7 +474,7 @@ BasicInitialiserVES <- function(matvt,matF,matG,matW,A){
             persistenceValue <- persistenceBuffer;
         }
         # Dependent values
-        else{
+        else if(persistenceType=="d"){
             persistenceValue <- A[1:(nComponentsAll*nSeries^2)];
             nCoefficients <- nComponentsAll*nSeries^2;
         }
@@ -520,7 +513,8 @@ BasicInitialiserVES <- function(matvt,matF,matG,matW,A){
     }
 
     ### Measurement matrix
-    if(dampedEstimate){
+    # Needs to be filled in with dampedValue even if dampedValue has been provided by a user
+    if(damped){
         for(i in 1:nSeries){
             matW[i,nComponentsNonSeasonal+nComponentsAll*(i-1)] <- dampedValue[i];
         }
@@ -609,7 +603,7 @@ EstimatorVES <- function(...){
 
     # First part is for the covariance matrix
     if(cfType=="l"){
-        nParam <- nSeries * (nSeries + 1) + length(A);
+        nParam <- nSeries * (nSeries + 1) / 2 + length(A);
     }
     else if(cfType=="d"){
         nParam <- nSeries + length(A);
@@ -656,21 +650,30 @@ CreatorVES <- function(silent=FALSE,...){
             }
         }
         A <- c(A,initialValue);
-        A <- c(A,initialSeason);
+        A <- c(A,initialSeasonValue);
 
         cfObjective <- CF(A);
 
         # Number of parameters
-        # nParam <- nSeries + length(A);
+        # First part is for the covariance matrix
+        if(cfType=="l"){
+            nParam <- nSeries * (nSeries + 1) / 2;
+        }
+        else if(cfType=="d"){
+            nParam <- nSeries;
+        }
+        else{
+            nParam <- nSeries;
+        }
 
-        ICValues <- vICFunction(nParam=nParamOriginal,A=A,Etype=Etype);
+        ICValues <- vICFunction(nParam=nParam,A=A,Etype=Etype);
         logLik <- ICValues$llikelihood;
         ICs <- ICValues$ICs;
         icBest <- ICs[ic];
 
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,
                              cfObjective=cfObjective,A=A,ICs=ICs,icBest=icBest,
-                             nParam=nParamOriginal,logLik=logLik);
+                             nParam=nParam,logLik=logLik);
         return(listToReturn);
     }
 }
@@ -688,6 +691,7 @@ CreatorVES <- function(silent=FALSE,...){
     else{
         modelDo <- "nothing";
         modelCurrent <- model;
+        bounds <- "n";
     }
 
 ##### Now do estimation and model selection #####
@@ -729,14 +733,29 @@ CreatorVES <- function(silent=FALSE,...){
     }
     if(persistenceEstimate){
         persistenceValue <- matG;
+        if(persistenceType=="g"){
+            parametersNumber[1,1] <- parametersNumber[1,1] + nComponentsAll;
+        }
+        else if(persistenceType=="i"){
+            parametersNumber[1,1] <- parametersNumber[1,1] + nSeries*nComponentsAll;
+        }
+        else{
+            parametersNumber[1,1] <- parametersNumber[1,1] + length(matG);
+        }
     }
     rownames(persistenceValue) <- paste0(paste0("Series",rep(c(1:nSeries),each=nComponentsAll)), ", ", persistenceNames);
 
 # This is needed anyway for the reusability of the model
     transitionValue <- matF;
+    if(transitionEstimate){
+        parametersNumber[1,1] <- parametersNumber[1,1] + length(transitionValue);
+    }
 
     if(damped){
         rownames(dampedValue) <- paste0("Series",c(1:nSeries));
+        if(dampedEstimate){
+            parametersNumber[1,1] <- parametersNumber[1,1] + length(unique(as.vector(dampedValue)));
+        }
     }
 
     initialPlaces <- nComponentsAll*(c(1:nSeries)-1)+1;
@@ -748,6 +767,7 @@ CreatorVES <- function(silent=FALSE,...){
     }
     if(initialEstimate){
         initialValue <- matrix(matvt[initialPlaces,maxlag],nComponentsNonSeasonal*nSeries,1);
+        parametersNumber[1,1] <- parametersNumber[1,1] + length(unique(as.vector(initialValue)));
     }
     rownames(initialValue) <- paste0(paste0("Series",rep(c(1:nSeries),each=nComponentsNonSeasonal)), ", ", initialNames);
 
@@ -755,34 +775,46 @@ CreatorVES <- function(silent=FALSE,...){
         if(initialSeasonEstimate){
             initialPlaces <- nComponentsAll*(c(1:nSeries)-1)+nComponentsAll;
             initialSeasonValue <- matrix(matvt[initialPlaces,1:maxlag],nSeries,maxlag);
+            parametersNumber[1,1] <- parametersNumber[1,1] + length(unique(as.vector(initialSeasonValue)));
         }
         rownames(initialSeasonValue) <- paste0("Series",c(1:nSeries));
         colnames(initialSeasonValue) <- paste0("Seasonal",c(1:maxlag));
     }
 
-    matvt <- ts(t(matvt),start=(time(data)[1] - deltat(data)*maxlag),frequency=datafreq);
+    matvt <- ts(t(matvt),start=(time(data)[1] - dataDeltat*maxlag),frequency=datafreq);
     yFitted <- ts(t(yFitted),start=start(data),frequency=datafreq);
     errors <- ts(t(errors),start=start(data),frequency=datafreq);
-    yForecast <- ts(t(yForecast),start=time(data)[obsInSample]+deltat(data),frequency=datafreq);
 
-    if(modelIsMultiplicative){
-        yFitted <- exp(yFitted);
-        yForecast <- exp(yForecast);
+    yForecast <- ts(t(yForecast),start=time(data)[obsInSample] + dataDeltat,frequency=datafreq);
+    forecastStart <- start(yForecast)
+    if(any(intervalsType==c("i","u"))){
+        PI <-  ts(PI,start=forecastStart,frequency=datafreq);
     }
 
     if(cfType=="l"){
         cfType <- "likelihood";
+        parametersNumber[1,1] <- parametersNumber[1,1] + nSeries * (nSeries + 1) / 2;
     }
     else if(cfType=="d"){
         cfType <- "diagonal";
+        parametersNumber[1,1] <- parametersNumber[1,1] + nSeries;
     }
     else{
         cfType <- "trace";
+        parametersNumber[1,1] <- parametersNumber[1,1] + nSeries;
     }
+
+    # if(is.null(nParamOriginal)){
+        parametersNumber[1,4] <- sum(parametersNumber[1,1:3]);
+        parametersNumber[2,4] <- sum(parametersNumber[2,1:3]);
+    # }
+    # else{
+        # parametersNumber <- nParamOriginal;
+    # }
 
 ##### Now let's deal with the holdout #####
     if(holdout){
-        yHoldout <- ts(data[(obsInSample+1):obsAll,],start=start(yForecast),frequency=datafreq);
+        yHoldout <- ts(data[(obsInSample+1):obsAll,],start=forecastStart,frequency=datafreq);
         errormeasures <- NA;
     }
     else{
@@ -805,18 +837,43 @@ CreatorVES <- function(silent=FALSE,...){
     # This is a temporary solution
     if(!silentGraph){
         pages <- ceiling(nSeries / 5);
+        parDefault <- par(no.readonly=TRUE);
         for(j in 1:pages){
             par(mfcol=c(min(5,floor(nSeries/j)),1));
             for(i in 1:nSeries){
+                if(any(intervalsType==c("u","i"))){
+                    plotRange <- range(min(data[,i],yForecast[,i],yFitted[,i],PI[,i*2-1]),
+                                       max(data[,i],yForecast[,i],yFitted[,i],PI[,i*2]));
+                }
+                else{
+                    plotRange <- range(min(data[,i],yForecast[,i],yFitted[,i]),
+                                       max(data[,i],yForecast[,i],yFitted[,i]));
+                }
                 plot(data[,i],main=paste0(modelname,", series ", i),ylab="Y",
-                     ylim=range(min(data[,i],yForecast[,i],yFitted[,i]),
-                                max(data[,i],yForecast[,i],yFitted[,i])),
+                     ylim=plotRange,
                      xlim=range(time(data[,i])[1],time(yForecast)[max(h,1)]));
-                lines(yForecast[,i],col="blue",lwd=2);
                 lines(yFitted[,i],col="purple",lwd=2,lty=2);
-                abline(v=deltat(yForecast)*(start(yForecast)[2]-2)+start(yForecast)[1],col="red",lwd=2);
+                if(h>1){
+                    if(any(intervalsType==c("u","i"))){
+                        lines(PI[,i*2-1],col="darkgrey",lwd=3,lty=2);
+                        lines(PI[,i*2],col="darkgrey",lwd=3,lty=2);
+
+                        polygon(c(seq(dataDeltat*(forecastStart[2]-1)+forecastStart[1],dataDeltat*(end(yForecast)[2]-1)+end(yForecast)[1],dataDeltat),
+                                  rev(seq(dataDeltat*(forecastStart[2]-1)+forecastStart[1],dataDeltat*(end(yForecast)[2]-1)+end(yForecast)[1],dataDeltat))),
+                                c(as.vector(PI[,i*2]), rev(as.vector(PI[,i*2-1]))), col = "lightgray", border=NA, density=10);
+                    }
+                    lines(yForecast[,i],col="blue",lwd=2);
+                }
+                else{
+                    if(any(intervalsType==c("u","i"))){
+                        points(PI[,i*2-1],col="darkgrey",lwd=3,pch=4);
+                        points(PI[,i*2],col="darkgrey",lwd=3,pch=4);
+                    }
+                    points(yForecast[,i],col="blue",lwd=2,pch=4);
+                }
+                abline(v=dataDeltat*(forecastStart[2]-2)+forecastStart[1],col="red",lwd=2);
             }
-            par(mfcol=c(1,1));
+            par(parDefault);
         }
     }
 
@@ -825,9 +882,9 @@ CreatorVES <- function(silent=FALSE,...){
                   states=matvt,persistence=persistenceValue,transition=transitionValue,
                   measurement=matW, phi=dampedValue, coefficients=A,
                   initialType=initialType,initial=initialValue,initialSeason=initialSeasonValue,
-                  nParam=nParam,
+                  nParam=parametersNumber,
                   actuals=data,fitted=yFitted,holdout=yHoldout,residuals=errors,Sigma=Sigma,
-                  forecast=yForecast,lower=yLower,upper=yUpper,intervals=intervalsType,level=level,
+                  forecast=yForecast,PI=PI,intervals=intervalsType,level=level,
                   ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,accuracy=errormeasures);
     return(structure(model,class=c("vsmooth","smooth")));
 }

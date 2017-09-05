@@ -34,25 +34,32 @@ modelType.vsmooth <- function(object, ...){
 #' @export
 print.vsmooth <- function(x, ...){
     holdout <- any(!is.na(x$holdout));
-    intervals <- any(!is.na(x$lower));
+    intervals <- any(!is.na(x$PI));
 
-    if(all(holdout,intervals)){
-        insideintervals <- sum((x$holdout <= x$upper) & (x$holdout >= x$lower)) / length(x$forecast) * 100;
-    }
-    else{
-        insideintervals <- NULL;
-    }
+    # if(all(holdout,intervals)){
+    #     insideintervals <- sum((x$holdout <= x$upper) & (x$holdout >= x$lower)) / length(x$forecast) * 100;
+    # }
+    # else{
+    #     insideintervals <- NULL;
+    # }
 
     intervalsType <- x$intervals;
 
     cat(paste0("Time elapsed: ",round(as.numeric(x$timeElapsed,units="secs"),2)," seconds\n"));
     cat(paste0("Model estimated: ",x$model,"\n"));
     if(!is.null(x$nParam)){
-        if(x$nParam==1){
-            cat(paste0(x$nParam," parameter was estimated in the process\n"));
+        if(x$nParam[1,4]==1){
+            cat(paste0(x$nParam[1,4]," parameter was estimated in the process\n"));
         }
         else{
-            cat(paste0(x$nParam," parameters were estimated in the process\n"));
+            cat(paste0(x$nParam[1,4]," parameters were estimated in the process\n"));
+        }
+
+        if(x$nParam[2,4]>1){
+            cat(paste0(x$nParam[2,4]," parameters were provided\n"));
+        }
+        else if(x$nParam[2,4]>0){
+            cat(paste0(x$nParam[2,4]," parameter was provided\n"));
         }
     }
 
@@ -68,17 +75,14 @@ print.vsmooth <- function(x, ...){
     print(x$ICs);
 
     if(intervals){
-        if(x$intervals=="p"){
-            intervalsType <- "parametric";
+        if(x$intervals=="c"){
+            intervalsType <- "conditional";
         }
-        else if(x$intervals=="sp"){
-            intervalsType <- "semiparametric";
+        else if(x$intervals=="u"){
+            intervalsType <- "unconditional";
         }
-        else if(x$intervals=="np"){
-            intervalsType <- "nonparametric";
-        }
-        else if(x$intervals=="a"){
-            intervalsType <- "asymmetric";
+        else if(x$intervals=="i"){
+            intervalsType <- "independent";
         }
         cat(paste0(x$level*100,"% ",intervalsType," prediction intervals were constructed\n"));
     }

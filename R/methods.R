@@ -31,9 +31,9 @@ AICc <- function(object, ...) UseMethod("AICc")
 #' These functions allow extracting orders and lags for \code{ssarima()}, \code{ges()} and \code{sma()}
 #' and type of model from \code{es()} and \code{ces()}.
 #'
-#' \code{orders()} and \code{lags()} are usefull only for SSARIMA, GES and SMA. They return \code{NA} for other functions.
+#' \code{orders()} and \code{lags()} are useful only for SSARIMA, GES and SMA. They return \code{NA} for other functions.
 #' This can also be applied to \code{arima()}, \code{Arima()} and \code{auto.arima()} functions from stats and forecast packages.
-#' \code{modelType()} is usefull only for ETS and CES. They return \code{NA} for other functions.
+#' \code{modelType()} is useful only for ETS and CES. They return \code{NA} for other functions.
 #' This can also be applied to \code{ets()} function from forecast package.
 #'
 #' @aliases orders orders.default
@@ -97,7 +97,7 @@ model.type <- function(object, ...){
 #' @export
 logLik.smooth <- function(object,...){
     obs <- nobs(object);
-    structure(object$logLik,nobs=obs,df=object$nParam,class="logLik");
+    structure(object$logLik,nobs=obs,df=nParam(object),class="logLik");
 }
 #' @export
 logLik.smooth.sim <- function(object,...){
@@ -107,7 +107,7 @@ logLik.smooth.sim <- function(object,...){
 #' @export
 logLik.iss <- function(object,...){
     obs <- nobs(object);
-    structure(object$logLik,nobs=obs,df=object$nParam,class="logLik");
+    structure(object$logLik,nobs=obs,df=nParam(object),class="logLik");
 }
 
 #' @importFrom stats nobs
@@ -134,7 +134,7 @@ nobs.iss <- function(object, ...){
 
 #' Number of parameters in the model
 #'
-#' This function returns the number of parameters in the estimated model
+#' This function returns the number of estimated parameters in the model
 #'
 #' This is a very basic and a simple function which does what it says:
 #' extracts number of parameters in the estimated model.
@@ -162,8 +162,18 @@ nParam.default <- function(object, ...){
     return(length(coefficients(object))+1);
 }
 
+#' @method nParam smooth
+#' @export
 nParam.smooth <- function(object, ...){
-    return(object$nParam);
+    nParamReturn <- object$nParam[1,4];
+    return(nParamReturn);
+}
+
+#' @method nParam iss
+#' @export
+nParam.iss <- function(object, ...){
+    nParamReturn <- object$nParam;
+    return(nParamReturn);
 }
 
 #' Point likelihood values

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2017-08-01" />
+<meta name="date" content="2017-09-04" />
 
 <title>ssarima() - State-Space ARIMA</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">ssarima() - State-Space ARIMA</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2017-08-01</em></h4>
+<h4 class="date"><em>2017-09-04</em></h4>
 
 
 
@@ -80,7 +80,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">require</span>(smooth)
 <span class="kw">require</span>(Mcomp)</code></pre></div>
 <p>The default call constructs ARIMA(0,1,1):</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
 <pre><code>## Time elapsed: 0.01 seconds
 ## Model estimated: ARIMA(0,1,1)
 ## Matrix of MA terms:
@@ -95,8 +95,8 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ##      AIC     AICc      BIC 
 ## 2089.553 2089.660 2095.042</code></pre>
 <p>Some more complicated model can be defined using parameter <code>orders</code> the following way:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3$N2457$x, <span class="dt">orders=</span><span class="kw">list</span>(<span class="dt">ar=</span><span class="kw">c</span>(<span class="dv">0</span>,<span class="dv">1</span>),<span class="dt">i=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>),<span class="dt">ma=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>)),<span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>),<span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.05 seconds
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">orders=</span><span class="kw">list</span>(<span class="dt">ar=</span><span class="kw">c</span>(<span class="dv">0</span>,<span class="dv">1</span>),<span class="dt">i=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>),<span class="dt">ma=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>)),<span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>),<span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
+<pre><code>## Time elapsed: 0.16 seconds
 ## Model estimated: SARIMA(0,1,1)[1](1,0,1)[12]
 ## Matrix of AR terms:
 ##       Lag 12
@@ -114,8 +114,8 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## 2070.945 2071.308 2081.925</code></pre>
 <p>This would construct us seasonal ARIMA(0,1,1)(1,0,1)_12.</p>
 <p>We could try selecting orders manually, but this can also be done automatically via <code>auto.ssarima()</code> function:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ssarima</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
-<pre><code>## Time elapsed: 3.17 seconds
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
+<pre><code>## Time elapsed: 3.34 seconds
 ## Model estimated: SARIMA(0,1,2)[1](0,0,2)[12] with drift
 ## Matrix of MA terms:
 ##        Lag 1 Lag 12
@@ -131,8 +131,8 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ##      AIC     AICc      BIC 
 ## 2056.971 2057.749 2073.441</code></pre>
 <p>Automatic order selection in SSARIMA with optimised initials does not work well and in general is not recommended. This is partially because of the possible high number of parameters in some models and partially because of potential overfitting of first observations when non-zero order of AR is selected. This problem can be seen on example of another time series (which has complicated seasonality):</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ssarima</span>(M3$N1683$x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">initial=</span><span class="st">&quot;backcasting&quot;</span>)</code></pre></div>
-<pre><code>## Time elapsed: 2.87 seconds
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ssarima</span>(M3<span class="op">$</span>N1683<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">initial=</span><span class="st">&quot;backcasting&quot;</span>)</code></pre></div>
+<pre><code>## Time elapsed: 2.73 seconds
 ## Model estimated: SARIMA(0,0,3)[1](3,0,0)[12] with constant
 ## Matrix of AR terms:
 ##       Lag 12
@@ -144,7 +144,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## MA(1) 0.221
 ## MA(2) 0.173
 ## MA(3) 0.235
-## Constant value is: 1311.342
+## Constant value is: 1311.346
 ## Initial values were produced using backcasting.
 ## 8 parameters were estimated in the process
 ## Residuals standard deviation: 390.997
@@ -153,8 +153,8 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## Information criteria:
 ##      AIC     AICc      BIC 
 ## 1603.418 1604.873 1624.875</code></pre>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ssarima</span>(M3$N1683$x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">initial=</span><span class="st">&quot;optimal&quot;</span>)</code></pre></div>
-<pre><code>## Time elapsed: 5.15 seconds
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ssarima</span>(M3<span class="op">$</span>N1683<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">initial=</span><span class="st">&quot;optimal&quot;</span>)</code></pre></div>
+<pre><code>## Time elapsed: 5.28 seconds
 ## Model estimated: ARIMA(0,0,3) with constant
 ## Matrix of MA terms:
 ##       Lag 1
@@ -172,8 +172,8 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## 1622.778 1624.233 1644.235</code></pre>
 <p>As can be seen from the second graph, ssarima with optimal initial does not select seasonal model and reverts to ARIMA(0,0,3) with constant. In theory this can be due to implemented order selection algorithm, however if we estimate all the model in the pool separately, we will see that this model is optimal for this time series when this type of initials is used.</p>
 <p>A power of <code>ssarima()</code> function is that it can estimate SARIMA models with multiple seasonalities. For example, SARIMA(0,1,1)(0,0,1)_6(1,0,1)_12 model can be estimated the following way:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3$N2457$x, <span class="dt">orders=</span><span class="kw">list</span>(<span class="dt">ar=</span><span class="kw">c</span>(<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>),<span class="dt">i=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>),<span class="dt">ma=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>)),<span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">6</span>,<span class="dv">12</span>),<span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.11 seconds
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">orders=</span><span class="kw">list</span>(<span class="dt">ar=</span><span class="kw">c</span>(<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>),<span class="dt">i=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>),<span class="dt">ma=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>)),<span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">6</span>,<span class="dv">12</span>),<span class="dt">h=</span><span class="dv">18</span>)</code></pre></div>
+<pre><code>## Time elapsed: 0.39 seconds
 ## Model estimated: SARIMA(0,1,1)[1](0,0,1)[6](1,0,1)[12]
 ## Matrix of AR terms:
 ##       Lag 12
@@ -191,30 +191,31 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## 2069.364 2069.914 2083.089</code></pre>
 <p>It probably does not make much sense for this type of data, it would make more sense on high frequency data (for example, <code>taylor</code> series from <code>forecast</code> package). However, keep in mind that multiple seasonal ARIMAs are very slow in estimation and are very capricious. So it is really hard to obtain an appropriate and efficient multiple seasonal ARIMA model.</p>
 <p>Now let’s introduce some artificial exogenous variables:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">x &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">rnorm</span>(<span class="kw">length</span>(M3$N2457$x),<span class="dv">50</span>,<span class="dv">3</span>),<span class="kw">rnorm</span>(<span class="kw">length</span>(M3$N2457$x),<span class="dv">100</span>,<span class="dv">7</span>))</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">x &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">rnorm</span>(<span class="kw">length</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x),<span class="dv">50</span>,<span class="dv">3</span>),<span class="kw">rnorm</span>(<span class="kw">length</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x),<span class="dv">100</span>,<span class="dv">7</span>))</code></pre></div>
 <p>If we save model:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ourModel &lt;-<span class="st"> </span><span class="kw">auto.ssarima</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x, <span class="dt">updateX=</span><span class="ot">TRUE</span>)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ourModel &lt;-<span class="st"> </span><span class="kw">auto.ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x, <span class="dt">updateX=</span><span class="ot">TRUE</span>)</code></pre></div>
 <p>we can then reuse it:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3$N2457$x, <span class="dt">model=</span>ourModel, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">FALSE</span>, <span class="dt">xreg=</span>x, <span class="dt">updateX=</span><span class="ot">TRUE</span>, <span class="dt">intervals=</span><span class="ot">TRUE</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.26 seconds
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span>ourModel, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">FALSE</span>, <span class="dt">xreg=</span>x, <span class="dt">updateX=</span><span class="ot">TRUE</span>, <span class="dt">intervals=</span><span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>## Time elapsed: 0.3 seconds
 ## Model estimated: SARIMAX(0,0,2)[1](0,0,2)[12] with constant
 ## Matrix of MA terms:
 ##       Lag 1 Lag 12
 ## MA(1) 0.107    0.1
-## MA(2) 0.100    0.1
-## Constant value is: 6557.209
+## MA(2) 0.101    0.1
+## Constant value is: -575.037
 ## Initial values were provided by user.
-## 40 parameters were estimated in the process
-## Residuals standard deviation: 3041.723
+## 1 parameter was estimated in the process
+## 39 parameters were provided
+## Residuals standard deviation: 2476.924
 ## Xreg coefficients were estimated in a crazy style
-## Cost function type: MSE; Cost function value: 6033965.229
+## Cost function type: MSE; Cost function value: 6081801.115
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC 
-## 2201.841 2246.165 2311.638 
+## 2124.749 2124.785 2127.494 
 ## 95% parametric prediction intervals were constructed</code></pre>
 <p>Finally, we can combine several SARIMA models:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">FALSE</span>, <span class="dt">intervals=</span><span class="ot">TRUE</span>, <span class="dt">combine=</span><span class="ot">TRUE</span>)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">FALSE</span>, <span class="dt">intervals=</span><span class="ot">TRUE</span>, <span class="dt">combine=</span><span class="ot">TRUE</span>)</code></pre></div>
 <pre><code>## Time elapsed: 0.01 seconds
 ## Model estimated: ARIMA(0,1,1)
 ## Matrix of MA terms:

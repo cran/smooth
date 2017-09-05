@@ -39,7 +39,9 @@
 #' smoothing parameters live.
 #' \item \code{order} - order of moving average.
 #' \item \code{initialType} - Type of initial values used.
-#' \item \code{nParam} - number of estimated parameters.
+#' \item \code{nParam} - table with the number of estimated / provided parameters.
+#' If a previous model was reused, then its initials are reused and the number of
+#' provided parameters will take this into account.
 #' \item \code{fitted} - the fitted values of ETS.
 #' \item \code{forecast} - the point forecast of ETS.
 #' \item \code{lower} - the lower bound of prediction interval. When
@@ -141,6 +143,24 @@ sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC"),
         if(obsInsample < order){
             stop("Sorry, but we don't have enough observations for that order.",call.=FALSE);
         }
+
+        if(!is.numeric(order)){
+            stop("The provided order is not numeric.",call.=FALSE);
+        }
+        else{
+            if(length(order)!=1){
+                warning("The order should be a scalar. Using the first provided value.",call.=FALSE);
+                order <- order[1];
+            }
+
+            if(order<1){
+                stop("The order of the model must be a positive number.",call.=FALSE);
+            }
+        }
+        orderSelect <- FALSE;
+    }
+    else{
+        orderSelect <- TRUE;
     }
 
 # sd of residuals + a parameter... nComponents not included.
@@ -209,9 +229,8 @@ CreatorSMA <- function(silentText=FALSE,...){
     environment(ssForecaster) <- environment();
     environment(ssFitter) <- environment();
 
-    if(is.null(order)){
-        # maxOrder <- min(36,obsInsample/2);
-        maxOrder <- obsInsample;
+    if(orderSelect){
+        maxOrder <- min(200,obsInsample);
         ICs <- rep(NA,maxOrder);
         smaValuesAll <- list(NA);
         for(i in 1:maxOrder){
@@ -231,6 +250,9 @@ CreatorSMA <- function(silentText=FALSE,...){
 ##### Fit simple model and produce forecast #####
     ssFitter(ParentEnvironment=environment());
     ssForecaster(ParentEnvironment=environment());
+
+    parametersNumber[1,1] <- 2;
+    parametersNumber[1,4] <- 2;
 
 ##### Do final check and make some preparations for output #####
 
@@ -280,7 +302,7 @@ CreatorSMA <- function(silentText=FALSE,...){
 ##### Return values #####
     model <- list(model=modelname,timeElapsed=Sys.time()-startTime,
                   states=matvt,transition=matF,persistence=vecg,
-                  order=order, initialType=initialType, nParam=nParam,
+                  order=order, initialType=initialType, nParam=parametersNumber,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
                   actuals=data,holdout=y.holdout,imodel=NULL,

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2017-08-01" />
+<meta name="date" content="2017-09-04" />
 
 <title>ges() - Generalised Exponential Smoothing</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">ges() - Generalised Exponential Smoothing</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2017-08-01</em></h4>
+<h4 class="date"><em>2017-09-04</em></h4>
 
 
 
@@ -82,7 +82,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>You may note that <code>Mcomp</code> depends on <code>forecast</code> package and if you load both <code>forecast</code> and <code>smooth</code>, then you will have a message that <code>forecast()</code> function is masked from the environment. There is nothing to be worried about - <code>smooth</code> uses this function for consistency purposes and has exactly the same original <code>forecast()</code> as in the <code>forecast</code> package. The inclusion of this function in <code>smooth</code> was done only in order not to include <code>forecast</code> in dependencies of the package.</p>
 <p>Generalised Exponential Smoothing is a next step from CES. It is a state-space model in which all the matrices and vectors are estimated. It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GES<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our example with monthly data N2457, we will have GES<span class="math inline">\((1^1,1^{12})\)</span>:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</code></pre></div>
 <pre><code>## Time elapsed: 0.63 seconds
 ## Model estimated: GES(1[1],1[12])
 ## Persistence vector g:
@@ -94,7 +94,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## [2,] 4.224 1.100
 ## Measurement vector w: 1.01, 0.102
 ## Initial values were optimised.
-## 22 parameters were estimated in the process
+## 14 parameters were estimated in the process
 ## Residuals standard deviation: 1301.123
 ## Cost function type: MSE; Cost function value: 1308959.686
 ## 
@@ -105,7 +105,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## MPE: -6.7%; Bias: 29.6%; MAPE: 38%; SMAPE: 34.2%
 ## MASE: 2.185; sMAE: 89.2%; RelMAE: 0.934; sMSE: 129.2%</code></pre>
 <p>But some different orders and lags can be specified. For example:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>))</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>))</code></pre></div>
 <pre><code>## Time elapsed: 0.41 seconds
 ## Model estimated: GES(2[1],1[12])
 ## Persistence vector g:
@@ -118,7 +118,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## [3,] 0.686  0.037 1.090
 ## Measurement vector w: 0.306, 1.996, 0.691
 ## Initial values were optimised.
-## 30 parameters were estimated in the process
+## 15 parameters were estimated in the process
 ## Residuals standard deviation: 1464.722
 ## Cost function type: MSE; Cost function value: 1481880.923
 ## 
@@ -129,7 +129,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## MPE: 24%; Bias: 82.4%; MAPE: 35.1%; SMAPE: 44.3%
 ## MASE: 2.647; sMAE: 108%; RelMAE: 1.131; sMSE: 219.4%</code></pre>
 <p>Function <code>auto.ges()</code> is not yet implemented in <code>smooth</code>, but manual selection allows to conclude that GES<span class="math inline">\((1^1)\)</span> has the lowest AIC amongst other possible GES models:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>), <span class="dt">intervals=</span><span class="ot">TRUE</span>)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>), <span class="dt">intervals=</span><span class="ot">TRUE</span>)</code></pre></div>
 <pre><code>## Time elapsed: 0.13 seconds
 ## Model estimated: GES(1[1])
 ## Persistence vector g:
@@ -140,7 +140,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## [1,] 1.011
 ## Measurement vector w: 0.714
 ## Initial values were optimised.
-## 5 parameters were estimated in the process
+## 2 parameters were estimated in the process
 ## Residuals standard deviation: 1430.36
 ## Cost function type: MSE; Cost function value: 1940469.186
 ## 
@@ -156,8 +156,8 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>In addition to standard values that other functions accept, GES accepts predefined values for transition matrix, measurement and persistence vectors. For example, something more common can be passed to the function:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">    transition &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>),<span class="dv">3</span>,<span class="dv">3</span>)
     measurement &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>)
-    <span class="kw">ges</span>(M3$N2457$x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>), <span class="dt">transition=</span>transition, <span class="dt">measurement=</span>measurement)</code></pre></div>
-<pre><code>## Time elapsed: 0.25 seconds
+    <span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>), <span class="dt">transition=</span>transition, <span class="dt">measurement=</span>measurement)</code></pre></div>
+<pre><code>## Time elapsed: 0.28 seconds
 ## Model estimated: GES(2[1],1[12])
 ## Persistence vector g:
 ##       [,1]  [,2]  [,3]
@@ -169,13 +169,14 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## [3,]    0    0    1
 ## Measurement vector w: 1, 1, 1
 ## Initial values were optimised.
-## 30 parameters were estimated in the process
-## Residuals standard deviation: 1693.661
+## 15 parameters were estimated in the process
+## 12 parameters were provided
+## Residuals standard deviation: 1559.733
 ## Cost function type: MSE; Cost function value: 1981326.617
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC 
-## 1741.704 1769.886 1818.945 
+## 1717.704 1726.473 1764.049 
 ## Forecast errors:
 ## MPE: 14.4%; Bias: 74.6%; MAPE: 34.5%; SMAPE: 39.1%
 ## MASE: 2.456; sMAE: 100.2%; RelMAE: 1.049; sMSE: 183.6%</code></pre>
