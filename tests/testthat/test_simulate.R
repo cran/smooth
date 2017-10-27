@@ -1,17 +1,17 @@
 context("Tests for simulate() functions");
 
 #### ETS ####
-testData <- sim.es("MNN", 12, bounds="a", obs=100, silent=TRUE);
+testData <- sim.es("MNN", frequency=12, bounds="a", obs=100, silent=TRUE);
 test_that("ETS(MNN) simulated with admissible bounds", {
     expect_match(testData$model, "MNN");
 })
 
-testData <- sim.es("AAdM", 12, phi=0.9, obs=120);
+testData <- sim.es("AAdM", frequency=12, phi=0.9, obs=120);
 test_that("ETS(AAdM) simulated with phi=0.9", {
     expect_match(testData$model, "AAdM");
 })
 
-testData <- sim.es("MNN", 12, obs=120, nsim=100, iprob=0.2);
+testData <- sim.es("MNN", frequency=12, obs=120, nsim=100, iprob=0.2);
 test_that("iETS(MNN) simulated with iprob=0.2 and nsim=100", {
     expect_match(testData$model, "MNN");
 })
@@ -57,4 +57,9 @@ test_that("GES(1[1]) simulated from estimated model", {
 
 test_that("GES(1[1]) with intermittent data", {
     expect_match(sim.ges(nsim=10,obs=100,iprob=0.2)$model, "iGES");
+})
+
+#### SMA ####
+test_that("SMA(10) with intermittent data", {
+    expect_match(sim.sma(10,nsim=10,obs=100,iprob=0.2)$model, "iSMA");
 })

@@ -941,13 +941,14 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
     int obs = vecYt.n_rows;
     int obsall = matrixVt.n_cols;
     unsigned int nComponents = matrixVt.n_rows;
-    unsigned int maxlag = max(lags);
-    int lagslength = lags.n_rows;
+    arma::uvec lagsInternal = lags;
+    unsigned int maxlag = max(lagsInternal);
+    int lagslength = lagsInternal.n_rows;
 
-    lags = lags * nComponents;
+    lagsInternal = lagsInternal * nComponents;
 
     for(int i=0; i<lagslength; i=i+1){
-        lags(i) = lags(i) + (lagslength - i - 1);
+        lagsInternal(i) = lagsInternal(i) + (lagslength - i - 1);
     }
 
     arma::uvec lagrows(lagslength, arma::fill::zeros);
@@ -957,7 +958,7 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
     arma::vec bufferforat(vecGX.n_rows);
 
     for (unsigned int i=maxlag; i<obs+maxlag; i=i+1) {
-        lagrows = i * nComponents - lags + nComponents - 1;
+        lagrows = i * nComponents - lagsInternal + nComponents - 1;
 
 /* # Measurement equation and the error term */
         vecYfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
@@ -995,7 +996,7 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
     }
 
     for (int i=obs+maxlag; i<obsall; i=i+1) {
-        lagrows = i * nComponents - lags + nComponents - 1;
+        lagrows = i * nComponents - lagsInternal + nComponents - 1;
         matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
         matrixAt.col(i) = matrixFX * matrixAt.col(i-1);
     }
@@ -1039,11 +1040,12 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
     int obs = vecYt.n_rows;
     int obsall = matrixVt.n_cols;
     unsigned int nComponents = matrixVt.n_rows;
-    unsigned int maxlag = max(lags);
-    int lagslength = lags.n_rows;
     arma::uvec lagsModifier = lags;
+    arma::uvec lagsInternal = lags;
+    unsigned int maxlag = max(lagsInternal);
+    int lagslength = lagsInternal.n_rows;
 
-    lags = lags * nComponents;
+    lagsInternal = lagsInternal * nComponents;
 
     for(int i=0; i<lagslength; i=i+1){
         lagsModifier(i) = lagslength - i - 1;
@@ -1058,7 +1060,7 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
     for(int j=0; j<=nloops; j=j+1){
 /* ### Go forward ### */
         for (unsigned int i=maxlag; i<obs+maxlag; i=i+1) {
-            lagrows = i * nComponents - (lags + lagsModifier) + nComponents - 1;
+            lagrows = i * nComponents - (lagsInternal + lagsModifier) + nComponents - 1;
 
 /* # Measurement equation and the error term */
             vecYfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
@@ -1096,7 +1098,7 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
         }
 
         for (int i=obs+maxlag; i<obsall; i=i+1) {
-            lagrows = i * nComponents - (lags + lagsModifier) + nComponents - 1;
+            lagrows = i * nComponents - (lagsInternal + lagsModifier) + nComponents - 1;
             matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
             matrixAt.col(i) = matrixFX * matrixAt.col(i-1);
         }
@@ -1108,7 +1110,7 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
 
 /* ### Now go back ### */
         for (unsigned int i=obs+maxlag-1; i>=maxlag; i=i-1) {
-            lagrows = i * nComponents + lags - lagsModifier + nComponents - 1;
+            lagrows = i * nComponents + lagsInternal - lagsModifier + nComponents - 1;
 
 /* # Measurement equation and the error term */
             vecYfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
@@ -1141,7 +1143,7 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
         }
 /* # Fill in the head of the matrices */
         for (int i=maxlag-1; i>=0; i=i-1) {
-            lagrows = i * nComponents + lags - lagsModifier + nComponents - 1;
+            lagrows = i * nComponents + lagsInternal - lagsModifier + nComponents - 1;
             matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
             matrixAt.col(i) = matrixFX * matrixAt.col(i+1);
         }
@@ -1368,7 +1370,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
                  arma::mat const &matrixXt, arma::mat &matrixAt, arma::mat const &matrixFX, arma::vec const &vecGX, arma::vec const &vecOt){
 // # Make decomposition functions shut up!
     std::ostream nullstream(0);
-    arma::set_stream_err2(nullstream);
+    arma::set_cerr_stream(nullstream);
 
     arma::uvec nonzeroes = find(vecOt>0);
     int obs = nonzeroes.n_rows;
@@ -1700,28 +1702,32 @@ RcppExport SEXP costfunc(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP vecg,
     if(boundtype=='u'){
 // alpha in (0,1)
         if((vecG(0)>1) || (vecG(0)<0)){
-            vecG.zeros();
-            matrixVt.zeros();
+            // vecG.zeros();
+            // matrixVt.zeros();
+            return wrap(1E+300);
         }
         if(T!='N'){
 // beta in (0,alpha)
             if((vecG(1)>vecG(0)) || (vecG(1)<0)){
-                vecG.zeros();
-                matrixVt.zeros();
+                // vecG.zeros();
+                // matrixVt.zeros();
+                return wrap(1E+300);
             }
             if(S!='N'){
 // gamma in (0,1-alpha)
                 if((vecG(2)>(1-vecG(0))) || (vecG(2)<0)){
-                    vecG.zeros();
-                    matrixVt.zeros();
+                    // vecG.zeros();
+                    // matrixVt.zeros();
+                    return wrap(1E+300);
                 }
             }
         }
         if(S!='N'){
 // gamma in (0,1-alpha)
             if((vecG(1)>(1-vecG(0))) || (vecG(1)<0)){
-                vecG.zeros();
-                matrixVt.zeros();
+                // vecG.zeros();
+                // matrixVt.zeros();
+                return wrap(1E+300);
             }
         }
     }

@@ -126,3 +126,13 @@ plot(x)
 plot(ourData)
 par(mfcol=c(1,1))
 
+## ----sim_sma_(10)--------------------------------------------------------
+ourSimulation <- sim.sma(10,frequency=12, obs=240, nsim=1)
+plot(ourSimulation)
+
+## ----simulate_smooth_sma-------------------------------------------------
+x <- ts(rnorm(100,100,5), frequency=12)
+ourModel <- sma(x)
+ourData <- simulate(ourModel, nsim=50, obs=1000)
+plot(ourData)
+

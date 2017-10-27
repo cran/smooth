@@ -198,6 +198,9 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)),
         lags <- as.numeric(substring(model,unlist(gregexpr("\\[",model))+1,unlist(gregexpr("\\]",model))-1));
     }
 
+    orders <- orders[order(lags)];
+    lags <- sort(lags);
+
 ##### Set environment for ssInput and make all the checks #####
     environment(ssInput) <- environment();
     ssInput("ges",ParentEnvironment=environment());
@@ -237,7 +240,7 @@ ElementsGES <- function(C){
 
             for(i in 1:nComponents){
                 vt[(maxlag - modellags + 1)[i]:maxlag,i] <- vtvalues[((cumsum(c(0,modellags))[i]+1):cumsum(c(0,modellags))[i+1])];
-                vt[is.na(vt[1:maxlag,i]),i] <- rep(rev(vt[(maxlag - modellags + 1)[i]:maxlag,i]),
+                vt[is.na(vt[1:maxlag,i]),i] <- rep(vt[(maxlag - modellags + 1)[i]:maxlag,i],
                                                    ceiling((maxlag - modellags + 1) / modellags)[i])[is.na(vt[1:maxlag,i])];
             }
         }
@@ -315,41 +318,40 @@ CreatorGES <- function(silentText=FALSE,...){
     if(any((initialType=="o"),(measurementEstimate),(transitionEstimate),(persistenceEstimate),
        (initialXEstimate),(FXEstimate),(gXEstimate))){
 
-        C <- NULL;
+        if(is.null(providedC)){
+            C <- NULL;
 # matw, matF, vecg, vt
-        if(measurementEstimate){
-            C <- c(C,rep(1,nComponents));
-        }
-        if(transitionEstimate){
-            #C <- c(C,as.vector(test$transition));
-            #C <- c(C,rep(1,nComponents^2 - length(test$transition)))
-            C <- c(C,rep(1,nComponents^2));
-            #C <- c(C,c(diag(1,nComponents)));
-        }
-        if(persistenceEstimate){
-            C <- c(C,rep(0.1,nComponents));
-        }
-        if(initialType=="o"){
-            C <- c(C,intercept);
-            if((orders %*% lags)>1){
-                C <- c(C,slope);
+            if(measurementEstimate){
+                C <- c(C,rep(1,nComponents));
             }
-            if((orders %*% lags)>2){
-                C <- c(C,yot[1:(orders %*% lags-2),]);
+            if(transitionEstimate){
+                C <- c(C,rep(1,nComponents^2));
             }
-        }
+            if(persistenceEstimate){
+                C <- c(C,rep(0.1,nComponents));
+            }
+            if(initialType=="o"){
+                C <- c(C,intercept);
+                if((orders %*% lags)>1){
+                    C <- c(C,slope);
+                }
+                if((orders %*% lags)>2){
+                    C <- c(C,yot[1:(orders %*% lags-2),]);
+                }
+            }
 
 # initials, transition matrix and persistence vector
-        if(xregEstimate){
-            if(initialXEstimate){
-                C <- c(C,matat[maxlag,]);
-            }
-            if(updateX){
-                if(FXEstimate){
-                    C <- c(C,c(diag(nExovars)));
+            if(xregEstimate){
+                if(initialXEstimate){
+                    C <- c(C,matat[maxlag,]);
                 }
-                if(gXEstimate){
-                    C <- c(C,rep(0,nExovars));
+                if(updateX){
+                    if(FXEstimate){
+                        C <- c(C,c(diag(nExovars)));
+                    }
+                    if(gXEstimate){
+                        C <- c(C,rep(0,nExovars));
+                    }
                 }
             }
         }
@@ -489,7 +491,14 @@ CreatorGES <- function(silentText=FALSE,...){
         vtvalues <- c(vtvalues,slope);
     }
     if((orders %*% lags)>2){
-        vtvalues <- c(vtvalues,yot[1:(orders %*% lags-2),]);
+        if(orders %*% lags-2 > obsInsample){
+            vtTail <- orders %*% lags-2 - obsInsample;
+            vtvalues <- c(vtvalues,yot[1:obsInsample,]);
+            vtvalues <- c(vtvalues,rep(yot[obsInsample],vtTail));
+        }
+        else{
+            vtvalues <- c(vtvalues,yot[1:(orders %*% lags-2),]);
+        }
     }
 
     vt <- matrix(NA,maxlag,nComponents);
@@ -499,6 +508,30 @@ CreatorGES <- function(silentText=FALSE,...){
                                            ceiling((maxlag - modellags + 1) / modellags)[i])[is.na(vt[1:maxlag,i])];
     }
     matvt[1:maxlag,] <- vt;
+
+#### Deal with provided C ####
+    ellipsis <- list(...);
+    if(any(names(ellipsis)=="C")){
+        providedC <- ellipsis$C;
+    }
+    else{
+        providedC <- NULL;
+    }
+
+    if(!is.null(providedC)){
+        nParam <- (nComponents*measurementEstimate + nComponents*persistenceEstimate +
+                       (nComponents^2)*transitionEstimate);
+        if(initialType=="o"){
+            nParam <- nParam + orders %*% lags;
+        }
+
+        if(length(providedC)!=nParam){
+            warning(paste0("Number of parameters to optimise differes from the length of C: ",nParam," vs ",length(providedC),".\n",
+                           "We will have to drop parameter C."),call.=FALSE);
+            providedC <- NULL;
+        }
+        C <- providedC;
+    }
 
 ##### Start the calculations #####
     environment(intermittentParametersSetter) <- environment();
@@ -647,8 +680,13 @@ CreatorGES <- function(silentText=FALSE,...){
 ##### Do final check and make some preparations for output #####
 
 # Write down initials of states vector and exogenous
+    parametersNumber[1,1] <- (nComponents*measurementEstimate + nComponents*persistenceEstimate +
+        (nComponents^2)*transitionEstimate);
+    # parametersNumber[2,1] <- (nComponents*(!measurementEstimate) + nComponents*(!persistenceEstimate) +
+    #                               (nComponents^2)*(!transitionEstimate));
+
     if(initialType!="p"){
-        initialValue <- matvt[1:maxlag,];
+        initialValue <- matrix(matvt[1:maxlag,],maxlag);
         if(initialType!="b"){
             parametersNumber[1,1] <- parametersNumber[1,1] + orders %*% lags;
         }

@@ -88,9 +88,9 @@
 #'
 #' @export sim.ssarima
 sim.ssarima <- function(orders=list(ar=0,i=1,ma=1), lags=1,
+                        obs=10, nsim=1,
                         frequency=1, AR=NULL, MA=NULL, constant=FALSE,
                         initial=NULL, bounds=c("admissible","none"),
-                        obs=10, nsim=1,
                         randomizer=c("rnorm","runif","rbeta","rt"),
                         iprob=1, ...){
 # Function generates data using SSARIMA in Single Source of Error as a data generating process.
@@ -466,11 +466,12 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     if(componentsNumber>0){
         if(initialGenerate){
             matInitialValue[1:componentsNumber,] <- runif(componentsNumber*nsim,0,1000);
+            arrvt[1:componentsNumber,1,] <- matInitialValue[1:componentsNumber,];
         }
         else{
             matInitialValue[1:componentsNumber,] <- rep(initialValue,nsim);
+            arrvt[1,1:componentsNumber,] <- matInitialValue[1:componentsNumber,];
         }
-        arrvt[1:componentsNumber,1,] <- matInitialValue[1:componentsNumber,];
     }
 
     if(ARRequired){
@@ -525,11 +526,15 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
 
         arrF[,,i] <- elements$matF;
         matg[,i] <- elements$vecg;
-        arrvt[,,i] <- elements$matvt;
 
 # A correction in order to make sense out of generated initial components
         if(initialGenerate){
+            arrvt[,,i] <- elements$matvt;
             arrvt[1,,i] <- matrixPowerWrap(as.matrix(arrF[,,i]),componentsNumber+1) %*% arrvt[1,,i];
+        }
+
+        if(constantRequired){
+            arrvt[1,persistenceLength,i] <- elements$matvt[1,persistenceLength];
         }
     }
 

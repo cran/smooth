@@ -915,24 +915,32 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
         }
         else{
             if(smoothType=="es"){
-                if(length(initialValue)>2){
-                    warning(paste0("Length of initial vector is wrong! It should not be greater than 2.\n",
-                                   "Values of initial vector will be estimated."),call.=FALSE);
+                if(modelDo!="estimate"){
+                    warning(paste0("Predefined initials vector can only be used with preselected ETS model.\n",
+                                   "Changing to estimation of initials."),call.=FALSE);
                     initialValue <- NULL;
                     initialType <- "o";
                 }
                 else{
-                    if(length(initialValue) != (1*(Ttype!="N") + 1)){
-                        warning(paste0("Length of initial vector is wrong! It should be ",(1*(Ttype!="N") + 1),
-                                       " instead of ",length(initialValue),".\n",
+                    if(length(initialValue)>2){
+                        warning(paste0("Length of initial vector is wrong! It should not be greater than 2.\n",
                                        "Values of initial vector will be estimated."),call.=FALSE);
                         initialValue <- NULL;
                         initialType <- "o";
                     }
                     else{
-                        initialType <- "p";
-                        initialValue <- initial;
-                        parametersNumber[2,1] <- parametersNumber[2,1] + length(initial);
+                        if(length(initialValue) != (1*(Ttype!="N") + 1)){
+                            warning(paste0("Length of initial vector is wrong! It should be ",(1*(Ttype!="N") + 1),
+                                           " instead of ",length(initialValue),".\n",
+                                           "Values of initial vector will be estimated."),call.=FALSE);
+                            initialValue <- NULL;
+                            initialType <- "o";
+                        }
+                        else{
+                            initialType <- "p";
+                            initialValue <- initial;
+                            parametersNumber[2,1] <- parametersNumber[2,1] + length(initial);
+                        }
                     }
                 }
             }
@@ -1905,7 +1913,9 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
             # Vector of final variances
             varVec <- rep(NA,h);
             if(cumulative){
-                covarVec <- rep(0,h);
+                # covarVec <- rep(0,h);
+                cumVarVec <- rep(0,h);
+                cumVarVec[1:min(h,maxlag)] <- s2 * (h - 1:min(h,maxlag) + 1);
             }
 
 #### Pure multiplicative models ####
@@ -1958,15 +1968,15 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
                         varVec[i] <- measurementnew %*% matrixOfVarianceOfStatesLagged %*% t(measurementnew) + s2;
                         if(cumulative){
                             # This is just an approximation!
-                            covarVec[i] <- measurementnew %*% transitionnew %*% persistence;
+                            cumVarVec[i] <- ((measurementnew %*% matrixOfVarianceOfStatesLagged %*% t(measurementnew)) + s2) * m;
+                            m <- m-1;
                         }
                     }
                 }
 
                 ### Cumulative variance is different.
                 if(cumulative){
-                    # varVec <- sum(varVec) + 2*s2*sum(covarVec*c(0,h:2));
-                    varVec <- (1 + sum((1 + c((h-1):1)*covarVec[2:h])^2))*s2;
+                    varVec <- sum(cumVarVec);
 
                     if(any(iprob!=1)){
                         quants <- qlnormBin(iprob, level=level, meanVec=log(sum(y.for)), sdVec=sqrt(varVec), Etype="M");
@@ -1994,13 +2004,51 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
             }
 #### Multiplicative error and additive trend / seasonality
             # else if(Etype=="M" & all(c(Ttype,Stype)!="M") & all(c(Ttype,Stype)!="N")){
-            #     varVec[1:min(h,maxlag)] <- s2;
-            #     for(i in 1:h){
-            #
-            #     }
             # }
 #### Pure Additive models ####
             else{
+                ### This is an example of the correct variance estimation for h=10
+                ### This needs to be implemented here at some point
+                # y <- sim.es("ANA",frequency=4,obs=120)
+                # test <- ges(y$data,orders=c(1,1,1),lags=c(1,4,9),intervals=T,h=10)
+                #
+                # F1 <- test$transition
+                # F2 <- test$transition
+                # F1[,-1] <- 0
+                # F2[,-2] <- 0
+                # g <- test$persistence
+                # w1 <- test$measurement
+                # w2 <- test$measurement
+                # w1[,-1] <- 0
+                # w2[,-2] <- 0
+                #
+                # vecVar <- rep(1,10)
+                # vecVar[1] <- (w1 %*% (matrixPowerWrap(F1,8) %*% g + F2 %*% matrixPowerWrap(F1,4) %*% g + matrixPowerWrap(F2,2) %*% g) +
+                #                   w2 %*% (matrixPowerWrap(F1,5) %*% g + F2 %*% matrixPowerWrap(F1,1) %*% g))
+                #
+                # vecVar[2] <- (w1 %*% (matrixPowerWrap(F1,7) %*% g + F2 %*% matrixPowerWrap(F1,3) %*% g) +
+                #                   w2 %*% (matrixPowerWrap(F1,4) %*% g + F2 %*% g))
+                #
+                # vecVar[3] <- (w1 %*% (matrixPowerWrap(F1,6) %*% g + F2 %*% matrixPowerWrap(F1,2) %*% g) +
+                #                   w2 %*% (matrixPowerWrap(F1,3) %*% g))
+                #
+                # vecVar[4] <- (w1 %*% (matrixPowerWrap(F1,5) %*% g + F2 %*% matrixPowerWrap(F1,1) %*% g) +
+                #                   w2 %*% (matrixPowerWrap(F1,2) %*% g))
+                #
+                # vecVar[5] <- (w1 %*% (matrixPowerWrap(F1,4) %*% g + F2 %*% g) +
+                #                   w2 %*% (matrixPowerWrap(F1,1) %*% g))
+                #
+                # vecVar[6] <- (w1 %*% (matrixPowerWrap(F1,3) %*% g) +
+                #                   w2 %*% g)
+                #
+                # vecVar[7:10] <- c(w1 %*% (matrixPowerWrap(F1,2) %*% g),
+                #                   w1 %*% (matrixPowerWrap(F1,1) %*% g),
+                #                   w1 %*% g,
+                #                   1)
+                #
+                # vecVar <- vecVar^2
+                # sum(vecVar) * test$s2
+
                 # Array of variance of states
                 matrixOfVarianceOfStates <- array(0,c(nComponents,nComponents,h+maxlag));
                 matrixOfVarianceOfStates[,,1:maxlag] <- persistence %*% t(persistence) * s2;
@@ -2030,6 +2078,7 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
                 # This is needed for the first observations, where we do not care about the transition equation
                 varVec[1:min(h,maxlag)] <- s2;
 
+                m <- h-1;
                 for(j in 1:chunkslength){
                     selectionmat[modellags==chuncksofhorizon[j],] <- chuncksofhorizon[j];
                     selectionmat[,modellags==chuncksofhorizon[j]] <- chuncksofhorizon[j];
@@ -2049,17 +2098,15 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
                         matrixOfVarianceOfStates[,,i] <- transitionnew %*% matrixOfVarianceOfStatesLagged %*% t(transitionnew) + persistence %*% t(persistence) * s2;
                         varVec[i] <- measurementnew %*% matrixOfVarianceOfStatesLagged %*% t(measurementnew) + s2;
                         if(cumulative){
-                            covarVec[i] <- measurementnew %*% transitionnew %*% persistence;
+                            cumVarVec[i] <- ((measurementnew %*% matrixOfVarianceOfStatesLagged %*% t(measurementnew)) + s2) * m;
+                            m <- m-1;
                         }
                     }
                 }
 
                 ### Cumulative variance is different.
                 if(cumulative){
-                    #c(0,h:2) - here 0 is needed to exclude the h=1, where there's no autocovariance.
-                    # varVec <- sum(varVec) + (1 + 2*sum(covarVec*c(0,h:2)) +
-                    #                              sum((c(0,h:2)^2-1)*covarVec^2))*s2;
-                    varVec <- (1 + sum((1 + c((h-1):1)*covarVec[2:h])^2))*s2;
+                    varVec <- sum(cumVarVec);
                 }
 
                 if(any(iprob!=1)){
@@ -2194,7 +2241,8 @@ ssForecaster <- function(...){
                 simulateIntervals <- FALSE;
             }
 
-            if(cumulative & Etype=="M"){
+            if(cumulative){
+               # & Etype=="M"){
                # & intervalsType=="p"){ <--- this is temporary. We do not know what cumulative means for multiplicative models.
                 simulateIntervals <- TRUE;
             }
