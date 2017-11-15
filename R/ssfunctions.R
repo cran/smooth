@@ -562,6 +562,15 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
         modellags <- matrix(rep(lags,times=orders),ncol=1);
         maxlag <- max(modellags);
         nComponents <- sum(orders);
+
+        type <- substr(type[1],1,1);
+        if(type=="M"){
+            y <- log(y);
+            modelIsMultiplicative <- TRUE;
+        }
+        else{
+            modelIsMultiplicative <- FALSE;
+        }
     }
     else if(smoothType=="es"){
         maxlag <- datafreq * (Stype!="N") + 1 * (Stype=="N");
@@ -647,16 +656,43 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
 
     ##### Cost function type #####
     cfType <- cfType[1];
-    if(any(cfType==c("GMSTFE","MSTFE","TFL","MSEh","aGMSTFE","aMSTFE","aTFL","aMSEh"))){
+    if(any(cfType==c("MSEh","TMSE","GTMSE","MAEh","TMAE","GTMAE","HAMh","THAM","GTHAM",
+                     "TFL","aMSEh","aTMSE","aGTMSE","aTFL"))){
         multisteps <- TRUE;
     }
-    else if(any(cfType==c("MSE","MAE","HAM","TSB"))){
+    else if(any(cfType==c("MSE","MAE","HAM","TSB","Rounded"))){
         multisteps <- FALSE;
     }
     else{
-        warning(paste0("Strange cost function specified: ",cfType,". Switching to 'MSE'."),call.=FALSE);
-        cfType <- "MSE";
-        multisteps <- FALSE;
+        if(cfType=="MSTFE"){
+            warning(paste0("This estimator has recently been renamed from \"MSTFE\" to \"TMSE\". ",
+                           "Please, use the new name."),call.=FALSE);
+            multisteps <- TRUE;
+            cfType <- "TMSE";
+        }
+        else if(cfType=="GMSTFE"){
+            warning(paste0("This estimator has recently been renamed from \"GMSTFE\" to \"GTMSE\". ",
+                           "Please, use the new name."),call.=FALSE);
+            multisteps <- TRUE;
+            cfType <- "GTMSE";
+        }
+        else if(cfType=="aMSTFE"){
+            warning(paste0("This estimator has recently been renamed from \"aMSTFE\" to \"aTMSE\". ",
+                           "Please, use the new name."),call.=FALSE);
+            multisteps <- TRUE;
+            cfType <- "aTMSE";
+        }
+        else if(cfType=="aGMSTFE"){
+            warning(paste0("This estimator has recently been renamed from \"aGMSTFE\" to \"aGTMSE\". ",
+                           "Please, use the new name."),call.=FALSE);
+            multisteps <- TRUE;
+            cfType <- "aGTMSE";
+        }
+        else{
+            warning(paste0("Strange cost function specified: ",cfType,". Switching to 'MSE'."),call.=FALSE);
+            cfType <- "MSE";
+            multisteps <- FALSE;
+        }
     }
     cfTypeOriginal <- cfType;
 
@@ -752,16 +788,31 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
 
             iprob <- pt.for[1];
             # "p" stand for "provided", meaning that we have been provided the future data
-            intermittent <- "p";
+            intermittent <- "provided";
             nParamIntermittent <- 0;
         }
     }
     else{
         intermittent <- intermittent[1];
-        if(all(intermittent!=c("n","f","c","t","a","s","none","fixed","croston","tsb","auto","sba"))){
-            warning(paste0("Strange type of intermittency defined: '",intermittent,"'. Switching to 'fixed'."),
-                    call.=FALSE);
-            intermittent <- "f";
+        if(all(intermittent!=c("n","f","i","p","a","s","none","fixed","interval","probability","auto","sba"))){
+            ##### !!! This stuff should be removed by 2.5.0 #####
+            if(any(intermittent==c("c","croston"))){
+                warning(paste0("You are using the old value of intermittent parameter. ",
+                               "Please, use 'i' instead of '",intermittent,"'."),
+                        call.=FALSE);
+                intermittent <- "i";
+            }
+            else if(any(intermittent==c("t","tsb"))){
+                warning(paste0("You are using the old value of intermittent parameter. ",
+                               "Please, use 'p' instead of '",intermittent,"'."),
+                        call.=FALSE);
+                intermittent <- "p";
+            }
+            else{
+                warning(paste0("Strange type of intermittency defined: '",intermittent,"'. Switching to 'fixed'."),
+                        call.=FALSE);
+                intermittent <- "f";
+            }
         }
         intermittent <- substring(intermittent[1],1,1);
 
@@ -1157,12 +1208,12 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     }
 
     # Stop if number of observations is less than horizon and multisteps is chosen.
-    if((multisteps==TRUE) & (obsNonzero < h+1) & all(cfType!=c("aMSEh","aTFL","aMSTFE","aGMSTFE"))){
+    if((multisteps==TRUE) & (obsNonzero < h+1) & all(cfType!=c("aMSEh","aTMSE","aGTMSE","aTFL"))){
         warning(paste0("Do you seriously think that you can use ",cfType,
                        " with h=",h," on ",obsNonzero," non-zero observations?!"),call.=FALSE);
         stop("Not enough observations for multisteps cost function.",call.=FALSE);
     }
-    else if((multisteps==TRUE) & (obsNonzero < 2*h) & all(cfType!=c("aMSEh","aTFL","aMSTFE","aGMSTFE"))){
+    else if((multisteps==TRUE) & (obsNonzero < 2*h) & all(cfType!=c("aMSEh","aTMSE","aGTMSE","aTFL"))){
         warning(paste0("Number of observations is really low for a multisteps cost function! ",
                        "We will, try but cannot guarantee anything..."),call.=FALSE);
     }
@@ -1268,7 +1319,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
         assign("measurementEstimate",measurementEstimate,ParentEnvironment);
         assign("orders",orders,ParentEnvironment);
         assign("lags",lags,ParentEnvironment);
-        assign("ic",ic,ParentEnvironment);
+        assign("modelIsMultiplicative",modelIsMultiplicative,ParentEnvironment);
     }
     else if(smoothType=="ssarima"){
         assign("ar.orders",ar.orders,ParentEnvironment);
@@ -1289,7 +1340,6 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
         assign("seasonality",seasonality,ParentEnvironment);
         assign("A",A,ParentEnvironment);
         assign("B",B,ParentEnvironment);
-        assign("ic",ic,ParentEnvironment);
     }
 
     if(any(smoothType==c("es","ges"))){
@@ -1440,7 +1490,8 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
 
     ##### Cost function type #####
     cfType <- cfType[1];
-    if(any(cfType==c("GMSTFE","MSTFE","TFL","MSEh","aGMSTFE","aMSTFE","aTFL","aMSEh"))){
+    if(any(cfType==c("MSEh","TMSE","GTMSE","MAEh","TMAE","GTMAE","HAMh","THAM","GTHAM",
+                     "TFL","aMSEh","aTMSE","aGTMSE","aTFL"))){
         multisteps <- TRUE;
     }
     else if(any(cfType==c("MSE","MAE","HAM"))){
@@ -1505,6 +1556,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
 
     ##### intermittent #####
     if(is.numeric(intermittent)){
+        obsNonzero <- sum((y!=0)*1);
         # If it is data, then it should either correspond to the whole sample (in-sample + holdout) or be equal to forecating horizon.
         if(all(length(c(intermittent))!=c(h,obsAll))){
             warning(paste0("Length of the provided future occurrences is ",length(c(intermittent)),
@@ -1523,35 +1575,35 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
     else{
         obsNonzero <- sum((y!=0)*1);
         intermittent <- intermittent[1];
-        if(all(intermittent!=c("n","f","c","t","a","s","none","fixed","croston","tsb","auto","sba"))){
+        if(all(intermittent!=c("n","f","i","p","a","s","none","fixed","interval","probability","auto","sba"))){
             warning(paste0("Strange type of intermittency defined: '",intermittent,"'. Switching to 'fixed'."),
                     call.=FALSE);
             intermittent <- "f";
         }
-        intermittent <- substring(intermittent[1],1,1);
-        environment(intermittentParametersSetter) <- environment();
-        intermittentParametersSetter(intermittent,ParentEnvironment=environment());
+        intermittent <- substring(intermittent,1,1);
+        if(any(intermittent!="n")){
+            obsNonzero <- sum((y!=0)*1);
+            environment(intermittentParametersSetter) <- environment();
+            intermittentParametersSetter(intermittent,ParentEnvironment=environment());
 
-        if(obsNonzero <= nParamIntermittent){
-            warning(paste0("Not enough observations for estimation of occurence probability.\n",
-                           "Switching to simpler model."),
-                    call.=FALSE);
-            if(obsNonzero > 1){
-                intermittent <- "f";
-                nParamIntermittent <- 1;
-                intermittentParametersSetter(intermittent,ParentEnvironment=environment());
-            }
-            else{
-                intermittent <- "n";
-                intermittentParametersSetter(intermittent,ParentEnvironment=environment());
+            if(obsNonzero <= nParamIntermittent){
+                warning(paste0("Not enough observations for estimation of occurence probability.\n",
+                               "Switching to simpler model."),
+                        call.=FALSE);
+                if(obsNonzero > 1){
+                    intermittent <- "f";
+                    nParamIntermittent <- 1;
+                    intermittentParametersSetter(intermittent,ParentEnvironment=environment());
+                }
+                else{
+                    intermittent <- "n";
+                    intermittentParametersSetter(intermittent,ParentEnvironment=environment());
+                }
             }
         }
-    }
-
-    # If the data is not intermittent, let's assume that the parameter was switched unintentionally.
-    if(all(pt==1) & all(intermittent!=c("n","p"))){
-        intermittent <- "n";
-        imodelProvided <- FALSE;
+        else{
+            obsNonzero <- obsInsample;
+        }
     }
 
     ##### Define xregDo #####
@@ -2790,28 +2842,23 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
 
     cat(paste0("Time elapsed: ",round(as.numeric(timeelapsed,units="secs"),2)," seconds\n"));
     cat(paste0("Model estimated: ",modelname,"\n"));
-    if(all(intermittent!=c("n","p","none","provided"))){
+    if(all(intermittent!=c("n","none","provided"))){
         if(any(intermittent==c("f","fixed"))){
             intermittent <- "Fixed probability";
         }
-        else if(any(intermittent==c("c","croston"))){
-            intermittent <- "Croston";
+        else if(any(intermittent==c("i","interval"))){
+            intermittent <- "Interval-based";
         }
-        else if(any(intermittent==c("t","tsb"))){
-            intermittent <- "TSB";
+        else if(any(intermittent==c("p","probability"))){
+            intermittent <- "Probability-based";
         }
         else if(any(intermittent==c("s","sba"))){
-            intermittent <- "Croston with SBA";
+            intermittent <- "SBA";
         }
         cat(paste0("Intermittent model type: ",intermittent));
-        # if(iprob!=1){
-        #     cat(paste0(", ",round(iprob,3),"\n"));
-        # }
-        # else{
-            cat("\n");
-        # }
+        cat("\n");
     }
-    else if(any(intermittent==c("p","provided"))){
+    else if(any(intermittent==c("provided"))){
         cat(paste0("Intermittent data provided for holdout.\n"));
     }
 

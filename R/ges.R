@@ -44,6 +44,9 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' model will have two states: the first will have lag 1 and the second will
 #' have lag 12. The length of \code{lags} must correspond to the length of
 #' \code{orders}.
+#' @param type Type of model. Can either be \code{"A"} - additive - or
+#' \code{"M"} - multiplicative. The latter means that the GES is fitted on
+#' log-transformed data.
 #' @param transition Transition matrix \eqn{F}. Can be provided as a vector.
 #' Matrix will be formed using the default \code{matrix(transition,nc,nc)},
 #' where \code{nc} is the number of components in state vector. If \code{NULL},
@@ -127,8 +130,8 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' \dontrun{ges(rnorm(118,100,3),orders=c(1,1,1),lags=c(1,3,5),h=18,holdout=TRUE,initial="o")}
 #'
 #' # Simpler model estiamted using trace forecast error cost function and its analytical analogue
-#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="n",cfType="MSTFE")
-#' ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="n",cfType="aMSTFE")}
+#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="n",cfType="TMSE")
+#' ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="n",cfType="aTMSE")}
 #'
 #' # Introduce exogenous variables
 #' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118))}
@@ -137,8 +140,8 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118),updateX=TRUE)}
 #'
 #' # Do the same but now let's shrink parameters...
-#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,xreg=c(1:118),updateX=TRUE,cfType="MSTFE")
-#' ourModel <- ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,cfType="aMSTFE")}
+#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,xreg=c(1:118),updateX=TRUE,cfType="TMSE")
+#' ourModel <- ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,cfType="aTMSE")}
 #'
 #' # Or select the most appropriate one
 #' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118),xregDo="s")
@@ -148,20 +151,20 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' plot(forecast(ourModel))}
 #'
 #' @export ges
-ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)),
+ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
                 persistence=NULL, transition=NULL, measurement=NULL,
                 initial=c("optimal","backcasting"), ic=c("AICc","AIC","BIC"),
-                cfType=c("MSE","MAE","HAM","GMSTFE","MSTFE","MSEh","TFL"),
+                cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE"),
                 h=10, holdout=FALSE, cumulative=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-                intermittent=c("none","auto","fixed","croston","tsb","sba"), imodel="MNN",
+                intermittent=c("none","auto","fixed","interval","probability","sba"), imodel="MNN",
                 bounds=c("admissible","none"),
                 silent=c("all","graph","legend","output","none"),
                 xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                 updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
 # General Exponential Smoothing function. Crazy thing...
 #
-#    Copyright (C) 2016  Ivan Svetunkov
+#    Copyright (C) 2016 - Inf Ivan Svetunkov
 
 # Start measuring the time of calculations
     startTime <- Sys.time();
@@ -177,6 +180,11 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)),
         else if(gregexpr("GES",model$model)==-1){
             stop("The provided model is not GES.",call.=FALSE);
         }
+
+        if(gregexpr("MGES",model$model)!=-1){
+            type <- "M";
+        }
+
         if(!is.null(model$imodel)){
             imodel <- model$imodel;
         }
@@ -453,7 +461,7 @@ CreatorGES <- function(silentText=FALSE,...){
 
 # Check number of parameters vs data
     nParamExo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
-    nParamIntermittent <- all(intermittent!=c("n","p"))*1;
+    nParamIntermittent <- all(intermittent!=c("n","provided"))*1;
     nParamMax <- nParamMax + nParamExo + nParamIntermittent;
 
     if(xregDo=="u"){
@@ -469,7 +477,7 @@ CreatorGES <- function(silentText=FALSE,...){
         if(xregDo=="select"){
             if(obsNonzero <= (nParamMax - nParamExo)){
                 stop(paste0("Not enough observations for the reasonable fit. Number of parameters is ",
-                            nParamMax," while the number of observations is ",obsNonzero - nParamExo,"!"),call.=FALSE);
+                            nParamMax + nParamExo," while the number of observations is ",obsNonzero,"!"),call.=FALSE);
             }
             else{
                 warning(paste0("The potential number of exogenous variables is higher than the number of observations. ",
@@ -491,10 +499,10 @@ CreatorGES <- function(silentText=FALSE,...){
         vtvalues <- c(vtvalues,slope);
     }
     if((orders %*% lags)>2){
-        if(orders %*% lags-2 > obsInsample){
-            vtTail <- orders %*% lags-2 - obsInsample;
-            vtvalues <- c(vtvalues,yot[1:obsInsample,]);
-            vtvalues <- c(vtvalues,rep(yot[obsInsample],vtTail));
+        if(orders %*% lags-2 > obsNonzero){
+            vtTail <- orders %*% lags-2 - obsNonzero;
+            vtvalues <- c(vtvalues,yot[1:obsNonzero,]);
+            vtvalues <- c(vtvalues,rep(yot[obsNonzero],vtTail));
         }
         else{
             vtvalues <- c(vtvalues,yot[1:(orders %*% lags-2),]);
@@ -677,6 +685,21 @@ CreatorGES <- function(silentText=FALSE,...){
     ssFitter(ParentEnvironment=environment());
     ssForecaster(ParentEnvironment=environment());
 
+    if(modelIsMultiplicative){
+        y <- exp(y);
+        y.fit <- exp(y.fit);
+        y.for <- exp(y.for);
+        y.low <- exp(y.low);
+        y.high <- exp(y.high);
+
+        environment(likelihoodFunction) <- environment();
+        environment(ICFunction) <- environment();
+
+        ICValues <- ICFunction(nParam=nParam+nParamIntermittent,C=C,Etype="M");
+        ICs <- ICValues$ICs;
+        logLik <- ICValues$llikelihood;
+    }
+
 ##### Do final check and make some preparations for output #####
 
 # Write down initials of states vector and exogenous
@@ -709,24 +732,21 @@ CreatorGES <- function(silentText=FALSE,...){
     # Write down the probabilities from intermittent models
     pt <- ts(c(as.vector(pt),as.vector(pt.for)),start=start(data),frequency=datafreq);
     # Write down the number of parameters of imodel
-    if(all(intermittent!=c("n","p")) & !imodelProvided){
+    if(all(intermittent!=c("n","provided")) & !imodelProvided){
         parametersNumber[1,3] <- imodel$nParam;
     }
     # Make nice names for intermittent
     if(intermittent=="f"){
         intermittent <- "fixed";
     }
-    else if(intermittent=="c"){
-        intermittent <- "croston";
+    else if(intermittent=="i"){
+        intermittent <- "interval";
     }
-    else if(intermittent=="t"){
-        intermittent <- "tsb";
+    else if(intermittent=="p"){
+        intermittent <- "probability";
     }
     else if(intermittent=="n"){
         intermittent <- "none";
-    }
-    else if(intermittent=="p"){
-        intermittent <- "provided";
     }
 
 # Make some preparations
@@ -773,6 +793,10 @@ CreatorGES <- function(silentText=FALSE,...){
     modelname <- paste0(modelname,"(",paste(orders,"[",lags,"]",collapse=",",sep=""),")");
     if(all(intermittent!=c("n","none"))){
         modelname <- paste0("i",modelname);
+    }
+
+    if(modelIsMultiplicative){
+        modelname <- paste0("M",modelname);
     }
 
 ##### Print output #####

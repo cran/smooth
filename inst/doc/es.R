@@ -29,7 +29,7 @@ es(M3$N2457$x, model=modelType(ourModel), h=18, holdout=FALSE, persistence=ourMo
 es(M3$N2457$x, model=modelType(ourModel), h=18, holdout=FALSE, initial=1500, silent="graph")
 
 ## ----es_N2457_aMSTFE-----------------------------------------------------
-es(M3$N2457$x, h=18, holdout=TRUE, cfType="aMSTFE", bounds="a", ic="BIC", intervals=TRUE)
+es(M3$N2457$x, h=18, holdout=TRUE, cfType="aTMSE", bounds="a", ic="BIC", intervals=TRUE)
 
 ## ----es_N2457_combine----------------------------------------------------
 es(M3$N2457$x, model="CCN", h=18, holdout=TRUE, silent="graph")

@@ -4,7 +4,7 @@
 \alias{iss}
 \title{Intermittent State Space}
 \usage{
-iss(data, intermittent = c("none", "fixed", "croston", "tsb", "sba"),
+iss(data, intermittent = c("none", "fixed", "interval", "probability", "sba"),
   ic = c("AICc", "AIC", "BIC"), h = 10, holdout = FALSE, model = NULL,
   persistence = NULL, initial = NULL, xreg = NULL)
 }
@@ -64,13 +64,16 @@ state-space models.
 \examples{
 
     y <- rpois(100,0.1)
-    iss(y, intermittent="t")
+    iss(y, intermittent="p")
 
-    iss(y, intermittent="c", persistence=0.1)
+    iss(y, intermittent="i", persistence=0.1)
 
 }
 \references{
 \itemize{
+\item Svetunkov Ivan and Boylan John E. (2017). Multiplicative
+State-Space Models for Intermittent Time Series. Working Paper of
+Department of Management Science, Lancaster University, 2017:4 , 1-43.
 \item Teunter R., Syntetos A., Babai Z. (2011). Intermittent demand:
 Linking forecasting to inventory obsolescence. European Journal of
 Operational Research, 214, 606-615.

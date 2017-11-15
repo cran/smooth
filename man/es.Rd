@@ -6,14 +6,14 @@
 \usage{
 es(data, model = "ZZZ", persistence = NULL, phi = NULL,
   initial = c("optimal", "backcasting"), initialSeason = NULL,
-  ic = c("AICc", "AIC", "BIC"), cfType = c("MSE", "MAE", "HAM", "GMSTFE",
-  "MSTFE", "MSEh", "TFL"), h = 10, holdout = FALSE, cumulative = FALSE,
+  ic = c("AICc", "AIC", "BIC"), cfType = c("MSE", "MAE", "HAM", "MSEh",
+  "TMSE", "GTMSE"), h = 10, holdout = FALSE, cumulative = FALSE,
   intervals = c("none", "parametric", "semiparametric", "nonparametric"),
-  level = 0.95, intermittent = c("none", "auto", "fixed", "croston", "tsb",
-  "sba"), imodel = "MNN", bounds = c("usual", "admissible", "none"),
-  silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
-  xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
-  persistenceX = NULL, transitionX = NULL, ...)
+  level = 0.95, intermittent = c("none", "auto", "fixed", "interval",
+  "probability", "sba"), imodel = "MNN", bounds = c("usual", "admissible",
+  "none"), silent = c("all", "graph", "legend", "output", "none"),
+  xreg = NULL, xregDo = c("use", "select"), initialX = NULL,
+  updateX = FALSE, persistenceX = NULL, transitionX = NULL, ...)
 }
 \arguments{
 \item{data}{Vector or ts object, containing data needed to be forecasted.}
@@ -110,12 +110,12 @@ parametric intervals are constructed, while the latter is equivalent to
 \item{intermittent}{Defines type of intermittent model used. Can be: 1.
 \code{none}, meaning that the data should be considered as non-intermittent;
 2. \code{fixed}, taking into account constant Bernoulli distribution of
-demand occurrences; 3. \code{croston}, based on Croston, 1972 method with
-SBA correction; 4. \code{tsb}, based on Teunter et al., 2011 method. 5.
-\code{auto} - automatic selection of intermittency type based on information
-criteria. The first letter can be used instead. 6. \code{"sba"} -
-Syntetos-Boylan Approximation for Croston's method (bias correction)
-discussed in Syntetos and Boylan, 2005.}
+demand occurrences; 3. \code{interval}, Interval-based model, underlying
+Croston, 1972 method; 4. \code{probability}, Probability-based model,
+underlying Teunter et al., 2011 method. 5. \code{auto} - automatic selection
+of intermittency type based on information criteria. The first letter can be
+used instead. 6. \code{"sba"} - Syntetos-Boylan Approximation for Croston's
+method (bias correction) discussed in Syntetos and Boylan, 2005.}
 
 \item{imodel}{Type of ETS model used for the modelling of the time varying
 probability. Object of the class "iss" can be provided here, and its parameters
@@ -291,7 +291,7 @@ library(Mcomp)
 
 # See how holdout and trace parameters influence the forecast
 es(M3$N1245$x,model="AAdN",h=8,holdout=FALSE,cfType="MSE")
-\dontrun{es(M3$N2568$x,model="MAM",h=18,holdout=TRUE,cfType="MSTFE")}
+\dontrun{es(M3$N2568$x,model="MAM",h=18,holdout=TRUE,cfType="TMSE")}
 
 # Model selection example
 es(M3$N1245$x,model="ZZN",ic="AIC",h=8,holdout=FALSE,bounds="a")
@@ -318,7 +318,7 @@ es(M3$N1587$x,model=ourModel,h=18,intervals="p")
 # Exogenous variables in ETS example
 \dontrun{x <- cbind(c(rep(0,25),1,rep(0,43)),c(rep(0,10),1,rep(0,58)))
 y <- ts(c(M3$N1457$x,M3$N1457$xx),frequency=12)
-es(y,h=18,holdout=TRUE,xreg=x,cfType="aMSTFE",intervals="np")
+es(y,h=18,holdout=TRUE,xreg=x,cfType="aTMSE",intervals="np")
 ourModel <- es(ts(c(M3$N1457$x,M3$N1457$xx),frequency=12),h=18,holdout=TRUE,xreg=x,updateX=TRUE)}
 
 # This will be the same model as in previous line but estimated on new portion of data
@@ -326,10 +326,10 @@ ourModel <- es(ts(c(M3$N1457$x,M3$N1457$xx),frequency=12),h=18,holdout=TRUE,xreg
 
 # Intermittent data example
 x <- rpois(100,0.2)
-# Croston's method with the best ETS for demand sizes
-es(x,"ZZN",intermittent="croston")
-# TSB based on iETS(M,N,N)
-es(x,"MNN",intermittent="tsb")
+# Intervals-based model (Croston's method) with the best ETS for demand sizes
+es(x,"ZZN",intermittent="i")
+# Intervals-based model (TSB) on iETS(M,N,N)
+es(x,"MNN",intermittent="p")
 # Constant probability based on iETS(M,N,N)
 es(x,"MNN",intermittent="fixed")
 # Best type of intermittent model based on iETS(Z,Z,N)
@@ -350,6 +350,9 @@ Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
 }
 
 \itemize{
+\item Svetunkov Ivan and Boylan John E. (2017). Multiplicative
+State-Space Models for Intermittent Time Series. Working Paper of
+Department of Management Science, Lancaster University, 2017:4 , 1-43.
 \item Teunter R., Syntetos A., Babai Z. (2011). Intermittent demand:
 Linking forecasting to inventory obsolescence. European Journal of
 Operational Research, 214, 606-615.

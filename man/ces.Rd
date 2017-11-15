@@ -6,11 +6,11 @@
 \usage{
 ces(data, seasonality = c("none", "simple", "partial", "full"),
   initial = c("optimal", "backcasting"), A = NULL, B = NULL,
-  ic = c("AICc", "AIC", "BIC"), cfType = c("MSE", "MAE", "HAM", "GMSTFE",
-  "MSTFE", "MSEh", "TFL"), h = 10, holdout = FALSE, cumulative = FALSE,
+  ic = c("AICc", "AIC", "BIC"), cfType = c("MSE", "MAE", "HAM", "MSEh",
+  "TMSE", "GTMSE"), h = 10, holdout = FALSE, cumulative = FALSE,
   intervals = c("none", "parametric", "semiparametric", "nonparametric"),
-  level = 0.95, intermittent = c("none", "auto", "fixed", "croston", "tsb",
-  "sba"), imodel = "MNN", bounds = c("admissible", "none"),
+  level = 0.95, intermittent = c("none", "auto", "fixed", "interval",
+  "probability", "sba"), imodel = "MNN", bounds = c("admissible", "none"),
   silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
   xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
   persistenceX = NULL, transitionX = NULL, ...)
@@ -90,12 +90,12 @@ parametric intervals are constructed, while the latter is equivalent to
 \item{intermittent}{Defines type of intermittent model used. Can be: 1.
 \code{none}, meaning that the data should be considered as non-intermittent;
 2. \code{fixed}, taking into account constant Bernoulli distribution of
-demand occurrences; 3. \code{croston}, based on Croston, 1972 method with
-SBA correction; 4. \code{tsb}, based on Teunter et al., 2011 method. 5.
-\code{auto} - automatic selection of intermittency type based on information
-criteria. The first letter can be used instead. 6. \code{"sba"} -
-Syntetos-Boylan Approximation for Croston's method (bias correction)
-discussed in Syntetos and Boylan, 2005.}
+demand occurrences; 3. \code{interval}, Interval-based model, underlying
+Croston, 1972 method; 4. \code{probability}, Probability-based model,
+underlying Teunter et al., 2011 method. 5. \code{auto} - automatic selection
+of intermittency type based on information criteria. The first letter can be
+used instead. 6. \code{"sba"} - Syntetos-Boylan Approximation for Croston's
+method (bias correction) discussed in Syntetos and Boylan, 2005.}
 
 \item{imodel}{Type of ETS model used for the modelling of the time varying
 probability. Object of the class "iss" can be provided here, and its parameters
@@ -238,7 +238,7 @@ ces(y,h=18,holdout=TRUE,seasonality="f",intervals="p")}
 
 \dontrun{x <- cbind(c(rep(0,25),1,rep(0,43)),c(rep(0,10),1,rep(0,58)))
 ces(ts(c(M3$N1457$x,M3$N1457$xx),frequency=12),h=18,holdout=TRUE,
-    intervals="np",xreg=x,cfType="MSTFE")}
+    intervals="np",xreg=x,cfType="TMSE")}
 
 # Exogenous variables in CES
 \dontrun{x <- cbind(c(rep(0,25),1,rep(0,43)),c(rep(0,10),1,rep(0,58)))

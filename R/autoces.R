@@ -1,7 +1,5 @@
 utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"));
 
-
-
 #' Complex Exponential Smoothing Auto
 #'
 #' Function estimates CES in state-space form with information potential equal
@@ -56,10 +54,10 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' @export auto.ces
 auto.ces <- function(data, models=c("none","simple","full"),
                 initial=c("optimal","backcasting"), ic=c("AICc","AIC","BIC"),
-                cfType=c("MSE","MAE","HAM","GMSTFE","MSTFE","MSEh","TFL"),
+                cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE"),
                 h=10, holdout=FALSE, cumulative=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-                intermittent=c("none","auto","fixed","croston","tsb","sba"), imodel="MNN",
+                intermittent=c("none","auto","fixed","interval","probability","sba"), imodel="MNN",
                 bounds=c("admissible","none"),
                 silent=c("all","graph","legend","output","none"),
                 xreg=NULL, xregDo=c("use","select"), initialX=NULL,
@@ -104,7 +102,7 @@ auto.ces <- function(data, models=c("none","simple","full"),
         if(initialType=="o"){
             nParamMax <- nParamMax + 2;
         }
-        if(obsInsample <= nParamMax){
+        if(obsNonzero <= nParamMax){
             stop(paste0("The sample is too small. We need at least ",nParamMax + 1," observations."),call.=FALSE);
         }
     }
@@ -113,7 +111,7 @@ auto.ces <- function(data, models=c("none","simple","full"),
         if(initialType=="o"){
             nParamMax <- nParamMax + 2 + datafreq;
         }
-        if(obsInsample <= nParamMax){
+        if(obsNonzero <= nParamMax){
             warning("The sample is too small. We cannot use partial seasonal model.",call.=FALSE);
             models <- models[models!="p"];
         }
@@ -123,7 +121,7 @@ auto.ces <- function(data, models=c("none","simple","full"),
         if(initialType=="o"){
             nParamMax <- nParamMax + 2*datafreq;
         }
-        if(obsInsample <= nParamMax){
+        if(obsNonzero <= nParamMax){
             warning("The sample is too small. We cannot use simple seasonal model.",call.=FALSE);
             models <- models[models!="s"];
         }
@@ -133,7 +131,7 @@ auto.ces <- function(data, models=c("none","simple","full"),
         if(initialType=="o"){
             nParamMax <- nParamMax + 2 + 2*datafreq;
         }
-        if(obsInsample <= nParamMax){
+        if(obsNonzero <= nParamMax){
             warning("The sample is too small. We cannot use full seasonal model.",call.=FALSE);
             models <- models[models!="f"];
         }
@@ -161,17 +159,17 @@ auto.ces <- function(data, models=c("none","simple","full"),
     }
 
 # Check the number of observations and number of parameters.
-    if(any(models=="F") & (obsInsample <= datafreq*2 + 2 + 4 + 1)){
-        warning("Sorry, but you don't have enough observations for CES(F).",call.=FALSE);
-        models <- models[models!="F"];
+    if(any(models=="f") & (obsNonzero <= datafreq*2 + 2 + 4 + 1)){
+        warning("Sorry, but you don't have enough observations for CES(f).",call.=FALSE);
+        models <- models[models!="f"];
     }
-    if(any(models=="P") & (obsInsample <= datafreq + 2 + 3 + 1)){
-        warning("Sorry, but you don't have enough observations for CES(P).",call.=FALSE);
-        models <- models[models!="P"];
+    if(any(models=="p") & (obsNonzero <= datafreq + 2 + 3 + 1)){
+        warning("Sorry, but you don't have enough observations for CES(p).",call.=FALSE);
+        models <- models[models!="p"];
     }
-    if(any(models=="S") & (obsInsample <= datafreq*2 + 2 + 1)){
-        warning("Sorry, but you don't have enough observations for CES(S).",call.=FALSE);
-        models <- models[models!="S"];
+    if(any(models=="s") & (obsNonzero <= datafreq*2 + 2 + 1)){
+        warning("Sorry, but you don't have enough observations for CES(s).",call.=FALSE);
+        models <- models[models!="s"];
     }
 
     CESModel <- as.list(models);

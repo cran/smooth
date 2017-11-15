@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2017-10-27" />
+<meta name="date" content="2017-11-15" />
 
 <title>ges() - Generalised Exponential Smoothing</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">ges() - Generalised Exponential Smoothing</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2017-10-27</em></h4>
+<h4 class="date"><em>2017-11-15</em></h4>
 
 
 
@@ -83,7 +83,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>Generalised Exponential Smoothing is a next step from CES. It is a state-space model in which all the matrices and vectors are estimated. It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GES<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our example with monthly data N2457, we will have GES<span class="math inline">\((1^1,1^{12})\)</span>:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.59 seconds
+<pre><code>## Time elapsed: 0.61 seconds
 ## Model estimated: GES(1[1],1[12])
 ## Persistence vector g:
 ##       [,1]   [,2]
@@ -106,31 +106,31 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## MASE: 2.185; sMAE: 89.2%; RelMAE: 0.934; sMSE: 129.2%</code></pre>
 <p>But some different orders and lags can be specified. For example:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>))</code></pre></div>
-<pre><code>## Time elapsed: 0.35 seconds
+<pre><code>## Time elapsed: 0.43 seconds
 ## Model estimated: GES(2[1],1[12])
 ## Persistence vector g:
-##       [,1]  [,2]   [,3]
-## [1,] 0.286 0.028 -0.095
+##       [,1] [,2]  [,3]
+## [1,] 0.094 0.04 0.091
 ## Transition matrix F: 
-##       [,1]   [,2]  [,3]
-## [1,] 0.793 -0.816 0.228
-## [2,] 0.393  0.360 0.175
-## [3,] 0.686  0.037 1.090
-## Measurement vector w: 0.306, 1.996, 0.691
+##       [,1]   [,2]   [,3]
+## [1,] 0.594 -0.509  0.228
+## [2,] 0.605  0.597 -0.001
+## [3,] 0.236  0.104  1.043
+## Measurement vector w: 0.82, 1.57, 0.704
 ## Initial values were optimised.
 ## 30 parameters were estimated in the process
-## Residuals standard deviation: 1464.722
-## Cost function type: MSE; Cost function value: 1481880.923
+## Residuals standard deviation: 1567.062
+## Cost function type: MSE; Cost function value: 1696193.851
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC 
-## 1713.530 1741.712 1790.771 
+## 1726.632 1754.814 1803.873 
 ## Forecast errors:
-## MPE: 24%; Bias: 82.4%; MAPE: 35.1%; SMAPE: 44.3%
-## MASE: 2.647; sMAE: 108%; RelMAE: 1.131; sMSE: 219.4%</code></pre>
+## MPE: 21.5%; Bias: 84.1%; MAPE: 35.6%; SMAPE: 42.3%
+## MASE: 2.586; sMAE: 105.5%; RelMAE: 1.104; sMSE: 193.9%</code></pre>
 <p>Function <code>auto.ges()</code> is not yet implemented in <code>smooth</code>, but manual selection allows to conclude that GES<span class="math inline">\((1^1)\)</span> has the lowest AIC amongst other possible GES models:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>), <span class="dt">intervals=</span><span class="ot">TRUE</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.12 seconds
+<pre><code>## Time elapsed: 0.13 seconds
 ## Model estimated: GES(1[1])
 ## Persistence vector g:
 ##       [,1]
@@ -160,8 +160,8 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <pre><code>## Time elapsed: 0.22 seconds
 ## Model estimated: GES(2[1],1[12])
 ## Persistence vector g:
-##       [,1]  [,2]  [,3]
-## [1,] 0.172 0.004 0.083
+##       [,1]  [,2]   [,3]
+## [1,] 0.147 0.003 -0.025
 ## Transition matrix F: 
 ##      [,1] [,2] [,3]
 ## [1,]    1    1    0
@@ -171,15 +171,15 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## Initial values were optimised.
 ## 18 parameters were estimated in the process
 ## 12 parameters were provided
-## Residuals standard deviation: 1559.733
-## Cost function type: MSE; Cost function value: 1981326.617
+## Residuals standard deviation: 1483.907
+## Cost function type: MSE; Cost function value: 1793364.893
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC 
-## 1717.704 1726.473 1764.049 
+## 1708.036 1716.805 1754.380 
 ## Forecast errors:
-## MPE: 14.4%; Bias: 74.6%; MAPE: 34.5%; SMAPE: 39.1%
-## MASE: 2.456; sMAE: 100.2%; RelMAE: 1.049; sMSE: 183.6%</code></pre>
+## MPE: 17.6%; Bias: 78.8%; MAPE: 35.7%; SMAPE: 41.7%
+## MASE: 2.58; sMAE: 105.3%; RelMAE: 1.102; sMSE: 199.8%</code></pre>
 <p>The resulting model will be equivalent to ETS(A,A,A). However due to different initialisation of optimisers and different method of number of parameters calculation, <code>ges()</code> above and <code>es(y, &quot;AAA&quot;, h=h, holdout=TRUE)</code> will lead to different models.</p>
 
 

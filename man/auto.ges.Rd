@@ -4,12 +4,12 @@
 \alias{auto.ges}
 \title{Automatic GES}
 \usage{
-auto.ges(data, orderMax = 3, lagMax = frequency(data),
-  initial = c("backcasting", "optimal"), ic = c("AICc", "AIC", "BIC"),
-  cfType = c("MSE", "MAE", "HAM", "GMSTFE", "MSTFE", "MSEh", "TFL"), h = 10,
+auto.ges(data, orderMax = 3, lagMax = frequency(data), type = c("A", "M",
+  "Z"), initial = c("backcasting", "optimal"), ic = c("AICc", "AIC", "BIC"),
+  cfType = c("MSE", "MAE", "HAM", "MSEh", "TMSE", "GTMSE"), h = 10,
   holdout = FALSE, cumulative = FALSE, intervals = c("none", "parametric",
   "semiparametric", "nonparametric"), level = 0.95, intermittent = c("none",
-  "auto", "fixed", "croston", "tsb", "sba"), imodel = "MNN",
+  "auto", "fixed", "interval", "probability", "sba"), imodel = "MNN",
   bounds = c("admissible", "none"), silent = c("all", "graph", "legend",
   "output", "none"), xreg = NULL, xregDo = c("use", "select"),
   initialX = NULL, updateX = FALSE, persistenceX = NULL,
@@ -24,6 +24,11 @@ increasing number of parameters in the models with higher orders.}
 
 \item{lagMax}{The value of the maximum lag to check. This should usually be
 a maximum frequency of the data.}
+
+\item{type}{Type of model. Can either be \code{"Additive"} or
+\code{"Multiplicative"}. The latter means that the GES is fitted on
+log-transformed data. If \code{"Z"}, then this is selected automatically,
+which may slow down things twice.}
 
 \item{initial}{Can be either character or a vector of initial states. If it
 is character, then it can be \code{"optimal"}, meaning that the initial
@@ -78,12 +83,12 @@ parametric intervals are constructed, while the latter is equivalent to
 \item{intermittent}{Defines type of intermittent model used. Can be: 1.
 \code{none}, meaning that the data should be considered as non-intermittent;
 2. \code{fixed}, taking into account constant Bernoulli distribution of
-demand occurrences; 3. \code{croston}, based on Croston, 1972 method with
-SBA correction; 4. \code{tsb}, based on Teunter et al., 2011 method. 5.
-\code{auto} - automatic selection of intermittency type based on information
-criteria. The first letter can be used instead. 6. \code{"sba"} -
-Syntetos-Boylan Approximation for Croston's method (bias correction)
-discussed in Syntetos and Boylan, 2005.}
+demand occurrences; 3. \code{interval}, Interval-based model, underlying
+Croston, 1972 method; 4. \code{probability}, Probability-based model,
+underlying Teunter et al., 2011 method. 5. \code{auto} - automatic selection
+of intermittency type based on information criteria. The first letter can be
+used instead. 6. \code{"sba"} - Syntetos-Boylan Approximation for Croston's
+method (bias correction) discussed in Syntetos and Boylan, 2005.}
 
 \item{imodel}{Type of ETS model used for the modelling of the time varying
 probability. Object of the class "iss" can be provided here, and its parameters
@@ -177,6 +182,9 @@ Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
 }
 
 \itemize{
+\item Svetunkov Ivan and Boylan John E. (2017). Multiplicative
+State-Space Models for Intermittent Time Series. Working Paper of
+Department of Management Science, Lancaster University, 2017:4 , 1-43.
 \item Teunter R., Syntetos A., Babai Z. (2011). Intermittent demand:
 Linking forecasting to inventory obsolescence. European Journal of
 Operational Research, 214, 606-615.

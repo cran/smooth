@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2017-10-27" />
+<meta name="date" content="2017-11-15" />
 
 <title>ves() - Vector Exponential Smoothing</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">ves() - Vector Exponential Smoothing</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2017-10-27</em></h4>
+<h4 class="date"><em>2017-11-15</em></h4>
 
 
 
@@ -82,7 +82,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">Y &lt;-<span class="st"> </span><span class="kw">cbind</span>(M3<span class="op">$</span>N2570<span class="op">$</span>x,M3<span class="op">$</span>N2571<span class="op">$</span>x);</code></pre></div>
 <p><code>ves()</code> function allows constructing Vector Exponential Smoothing in either pure additive or pure multiplicative form. The function has several elements that can either be individual or grouped. The former means that all the time series use the same value. For example, <code>persistence=&quot;g&quot;</code> means that the smoothing parameters for all the series are the same. A simple call for <code>ves()</code> results in estimation of VES(A,N,N) with grouped smoothing parameters, transition matrix and individual initials:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ves</span>(Y, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.18 seconds
+<pre><code>## Time elapsed: 0.11 seconds
 ## Model estimated: VES(ANN)
 ## 6 parameters were estimated in the process
 ## Cost function type: likelihood; Cost function value: 16.97
@@ -95,11 +95,11 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ourModel &lt;-<span class="st"> </span><span class="kw">ves</span>(Y, <span class="st">&quot;AAN&quot;</span>, <span class="dt">persistence=</span><span class="st">&quot;d&quot;</span>, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</code></pre></div>
 <p>The resulting persistence matrix contains more values than the individual one:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ourModel<span class="op">$</span>persistence</code></pre></div>
-<pre><code>##                       [,1]        [,2]
-## Series1, level  1.08051496 -0.09565549
-## Series1, trend  0.14205263 -0.13665785
-## Series2, level -0.09355411  0.81511955
-## Series2, trend  0.24243604 -0.09620579</code></pre>
+<pre><code>##                      [,1]       [,2]
+## Series1, level  1.1673064 -0.1399368
+## Series1, trend  0.1562461 -0.1307950
+## Series2, level -0.1754469  0.8538636
+## Series2, trend  0.2861769 -0.1098028</code></pre>
 <p>Note that some of the values of smoothing parameters are negative and the others are greater than one. This is a normal behaviour for VES model in this implementation. Currently we only have bounds derived from the stability region (<code>bounds=&quot;admissible&quot;</code>) and we do not do traditional restriction yet (and not sure if we ever will).</p>
 <p>Curently we have pure additive and pure multiplicative models only, and I don’t intend introducing mixed models for VES at all, because I think that they are evil. The multiplicative model implemented in VES is in fact just an additive model applied to the data in logarithms. Let’s see how the damped trend multiplicative seasonal model with individual damping and smoothing parameters looks like:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ourModel &lt;-<span class="st"> </span><span class="kw">ves</span>(Y, <span class="st">&quot;MMdM&quot;</span>, <span class="dt">phi=</span><span class="st">&quot;i&quot;</span>, <span class="dt">persistence=</span><span class="st">&quot;i&quot;</span>, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</code></pre></div>
