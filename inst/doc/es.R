@@ -7,10 +7,10 @@ require(smooth)
 require(Mcomp)
 
 ## ----es_N2457------------------------------------------------------------
-es(M3$N2457$x, h=18, holdout=TRUE)
+es(M3$N2457$x, h=18, holdout=TRUE, silent=FALSE)
 
 ## ----es_N2457_with_intervals---------------------------------------------
-es(M3$N2457$x, h=18, holdout=TRUE, intervals=TRUE)
+es(M3$N2457$x, h=18, holdout=TRUE, intervals=TRUE, silent=FALSE)
 
 ## ----es_N2457_save_model-------------------------------------------------
 ourModel <- es(M3$N2457$x, h=18, holdout=TRUE, silent="all")
@@ -63,4 +63,7 @@ esModel <- es(M3$N2457$x, model=etsModel, h=18)
 ## ----ets_es_forecast, message=FALSE, warning=FALSE-----------------------
 forecast(etsModel,h=18,level=0.95)
 forecast(esModel,h=18,level=0.95)
+
+## ----es_N2457_M3---------------------------------------------------------
+es(M3$N2457, intervals=TRUE, silent=FALSE)
 

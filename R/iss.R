@@ -36,7 +36,15 @@ intermittentParametersSetter <- function(intermittent="n",...){
             else{
                 pt <- matrix(imodel$fitted,obsInsample,1);
             }
-            pt.for <- matrix(imodel$forecast,h,1);
+
+            if(length(imodel$forecast)>=h){
+                pt.for <- matrix(imodel$forecast[1:h],h,1);
+            }
+            else{
+                pt.for <- matrix(c(imodel$forecast,
+                                   rep(imodel$forecast[1],h-length(imodel$forecast))),h,1);
+            }
+
             iprob <- c(pt,pt.for);
         }
     }
@@ -44,7 +52,7 @@ intermittentParametersSetter <- function(intermittent="n",...){
         obsNonzero <- obsInsample;
     }
 
-    if(intermittent!="n"){
+    if(all(intermittent!=c("n","l"))){
 # If number of observations is low, set intermittency to "none"
         if(obsNonzero < 5){
             warning(paste0("Not enough non-zero observations for intermittent state-space model. We need at least 5.\n",
@@ -123,7 +131,7 @@ intermittentMaker <- function(intermittent="n",...){
 #' \code{"croston"} - estimated using Croston, 1972 method and \code{"TSB"} -
 #' Teunter et al., 2011 method., \code{"sba"} - Syntetos-Boylan Approximation
 #' for Croston's method (bias correction) discussed in Syntetos and Boylan,
-#' 2005.
+#' 2005, \code{"logistic"} - probability based on logit model.
 #' @param ic Information criteria to use in case of model selection.
 #' @param h Forecast horizon.
 #' @param holdout If \code{TRUE}, holdout sample of size \code{h} is taken from
@@ -132,6 +140,8 @@ intermittentMaker <- function(intermittent="n",...){
 #' be either \code{"ANN"} or \code{"MNN"}.
 #' @param persistence Persistence vector. If \code{NULL}, then it is estimated.
 #' @param initial Initial vector. If \code{NULL}, then it is estimated.
+#' @param initialSeason Initial vector of seasonal components. If \code{NULL},
+#' then it is estimated.
 #' @param xreg Vector of matrix of exogenous variables, explaining some parts
 #' of occurrence variable (probability).
 #' @return The object of class "iss" is returned. It contains following list of
@@ -149,6 +159,7 @@ intermittentMaker <- function(intermittent="n",...){
 #' \item \code{actuals} - actual values of probabilities (zeros and ones).
 #' \item \code{persistence} - the vector of smoothing parameters;
 #' \item \code{initial} - initial values of the state vector;
+#' \item \code{initialSeason} - the matrix of initials seasonal states;
 #' }
 #' @seealso \code{\link[forecast]{ets}, \link[forecast]{forecast},
 #' \link[smooth]{es}}
@@ -162,12 +173,15 @@ intermittentMaker <- function(intermittent="n",...){
 #'     iss(y, intermittent="i", persistence=0.1)
 #'
 #' @export iss
-iss <- function(data, intermittent=c("none","fixed","interval","probability","sba"),ic=c("AICc","AIC","BIC"),
-                h=10, holdout=FALSE, model=NULL, persistence=NULL, initial=NULL, xreg=NULL){
-# Function estimates and returns mean and variance of probability for intermittent State-Space model based on the chosen method
+iss <- function(data, intermittent=c("none","fixed","interval","probability","sba","logistic"),
+                ic=c("AICc","AIC","BIC"), h=10, holdout=FALSE,
+                model=NULL, persistence=NULL, initial=NULL, initialSeason=NULL, xreg=NULL){
+# Function returns intermittent State-Space model
+#### Add initialSeason to the output? ####
     intermittent <- substring(intermittent[1],1,1);
-    if(all(intermittent!=c("n","f","i","p","s"))){
+    if(all(intermittent!=c("n","f","i","p","s","l"))){
         intermittent <- "f";
+        warning(paste0("Unknown value of intermittent provided: '",intermittent,"'."));
     }
     if(intermittent=="s"){
         intermittent <- "i";
@@ -176,6 +190,8 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
     else{
         sbaCorrection <- FALSE;
     }
+
+    ic <- ic[1];
 
     if(class(data)=="smooth.sim"){
         data <- data$data;
@@ -189,8 +205,6 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
     otAll <- abs((data!=0)*1);
     iprob <- mean(ot);
     obsOnes <- sum(ot);
-# Sizes of demand
-    yot <- matrix(y[y!=0],obsOnes,1);
 
     if(!is.null(model)){
         # If chosen model is "AAdN" or anything like that, we are taking the appropriate values
@@ -219,7 +233,7 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         Stype <- "N";
     }
 
-    if(Stype!="N"){
+    if(Stype!="N" & intermittent!="l"){
         Stype <- "N";
         substr(model,nchar(model),nchar(model)) <- "N";
         warning("Sorry, but we do not deal with seasonal models in iss yet.",call.=FALSE);
@@ -241,7 +255,7 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         output <- list(model=model, fitted=pt, forecast=pt.for, states=pt,
                        variance=pt.for*(1-pt.for), logLik=logLik, nParam=1,
                        residuals=errors, actuals=otAll,
-                       persistence=NULL, initial=initial);
+                       persistence=NULL, initial=initial, initialSeason=NULL);
     }
 #### Croston's method ####
     else if(intermittent=="i"){
@@ -263,7 +277,7 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         newh <- obsInsample - newh + h;
         crostonModel <- es(iyt,model=model,silent=TRUE,h=newh,
                            persistence=persistence,initial=initial,
-                           ic=ic,xreg=xreg);
+                           ic=ic,xreg=xreg,initialSeason=initialSeason);
 
         pt <- rep((crostonModel$fitted),zeroes);
         tailNumber <- obsInsample - length(pt);
@@ -288,7 +302,8 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         output <- list(model=model, fitted=pt, forecast=pt.for, states=states,
                        variance=pt.for*(1-pt.for), logLik=logLik, nParam=nParam(crostonModel),
                        residuals=crostonModel$residuals, actuals=otAll,
-                       persistence=crostonModel$persistence, initial=crostonModel$initial);
+                       persistence=crostonModel$persistence, initial=crostonModel$initial,
+                       initialSeason=crostonModel$initialSeason);
     }
 #### TSB method ####
     else if(intermittent=="p"){
@@ -306,7 +321,8 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         iy_kappa <- iyt*(1 - 2*kappa) + kappa;
 
         tsbModel <- es(iy_kappa,model,persistence=persistence,initial=initial,
-                       ic=ic,silent=TRUE,h=h,cfType="TSB",xreg=xreg);
+                       ic=ic,silent=TRUE,h=h,cfType="TSB",xreg=xreg,
+                       initialSeason=initialSeason);
 
         # Correction so we can return from those iy_kappa values
         tsbModel$fitted <- (tsbModel$fitted - kappa) / (1 - 2*kappa);
@@ -331,7 +347,71 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         output <- list(model=model, fitted=tsbModel$fitted, forecast=tsbModel$forecast, states=tsbModel$states,
                        variance=tsbModel$forecast*(1-tsbModel$forecast), logLik=logLik(tsbModel), nParam=nParam(tsbModel)-1,
                        residuals=tsbModel$residuals, actuals=otAll,
-                       persistence=tsbModel$persistence, initial=tsbModel$initial);
+                       persistence=tsbModel$persistence, initial=tsbModel$initial,
+                       initialSeason=tsbModel$initialSeason);
+    }
+#### Logistic ####
+    else if(intermittent=="l"){
+        if(is.null(model)){
+            model <- "YYY";
+        }
+        if(is.null(initial)){
+            initial <- "o";
+        }
+
+        # If the underlying model is pure multiplicative, use error "L", otherwise use "D"
+        if(all(c(substr(model,1,1)!="A", substr(model,2,2)!="A"),
+                 substr(model,nchar(model),nchar(model))!="A") &
+           all(c(substr(model,1,1)!="X", substr(model,2,2)!="X"),
+                 substr(model,nchar(model),nchar(model))!="X") &
+           all(c(substr(model,1,1)!="Z", substr(model,2,2)!="Z"),
+                 substr(model,nchar(model),nchar(model))!="Z")){
+            cfType <- "LogisticL";
+        }
+        else if(all(c(substr(model,1,1)!="Z", substr(model,2,2)!="Z"),
+                 substr(model,nchar(model),nchar(model))!="Z")){
+            cfType <- "LogisticD";
+        }
+        else{
+            cfType <- "LogisticZ";
+        }
+        ##### Need to introduce also the one with ZZZ #####
+
+        iyt <- ts(matrix(ot,obsInsample,1),frequency=frequency(data));
+
+        if(cfType=="LogisticZ"){
+            logisticModel <- list(NA);
+
+            cfType <- "LogisticD";
+            modelNew <- gsub("Z","X",model);
+            logisticModel[[1]] <- es(iyt,modelNew,persistence=persistence,initial=initial,
+                                 ic=ic,silent=TRUE,h=h,cfType=cfType,xreg=xreg,
+                                 initialSeason=initialSeason);
+
+            cfType <- "LogisticL";
+            modelNew <- gsub("Z","Y",model);
+            logisticModel[[2]] <- es(iyt,modelNew,persistence=persistence,initial=initial,
+                                 ic=ic,silent=TRUE,h=h,cfType=cfType,xreg=xreg,
+                                 initialSeason=initialSeason);
+
+            if(logisticModel[[1]]$ICs[ic] < logisticModel[[2]]$ICs[ic]){
+                logisticModel <- logisticModel[[1]];
+            }
+            else{
+                logisticModel <- logisticModel[[2]];
+            }
+        }
+        else{
+            logisticModel <- es(iyt,model,persistence=persistence,initial=initial,
+                                ic=ic,silent=TRUE,h=h,cfType=cfType,xreg=xreg,
+                                initialSeason=initialSeason);
+        }
+
+        output <- list(model=modelType(logisticModel), fitted=logisticModel$fitted, forecast=logisticModel$forecast, states=logisticModel$states,
+                       variance=logisticModel$forecast*(1-logisticModel$forecast), logLik=logLik(logisticModel), nParam=nParam(logisticModel),
+                       residuals=logisticModel$residuals, actuals=otAll,
+                       persistence=logisticModel$persistence, initial=logisticModel$initial,
+                       initialSeason=logisticModel$initialSeason);
     }
 #### None ####
     else{
@@ -341,8 +421,10 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         output <- list(model=NULL, fitted=pt, forecast=pt.for, states=pt,
                        variance=rep(0,h), logLik=NA, nParam=0,
                        residuals=errors, actuals=pt,
-                       persistence=NULL, initial=NULL);
+                       persistence=NULL, initial=NULL, initialSeason=NULL);
     }
     output$intermittent <- intermittent;
+    output$logLik <- (sum(log(output$fitted[y==1])) +
+                      sum(log(1-output$fitted[y==0])));
     return(structure(output,class="iss"));
 }

@@ -10,9 +10,9 @@ es(data, model = "ZZZ", persistence = NULL, phi = NULL,
   "TMSE", "GTMSE"), h = 10, holdout = FALSE, cumulative = FALSE,
   intervals = c("none", "parametric", "semiparametric", "nonparametric"),
   level = 0.95, intermittent = c("none", "auto", "fixed", "interval",
-  "probability", "sba"), imodel = "MNN", bounds = c("usual", "admissible",
-  "none"), silent = c("all", "graph", "legend", "output", "none"),
-  xreg = NULL, xregDo = c("use", "select"), initialX = NULL,
+  "probability", "sba", "logistic"), imodel = "MNN", bounds = c("usual",
+  "admissible", "none"), silent = c("all", "graph", "legend", "output",
+  "none"), xreg = NULL, xregDo = c("use", "select"), initialX = NULL,
   updateX = FALSE, persistenceX = NULL, transitionX = NULL, ...)
 }
 \arguments{
@@ -115,7 +115,9 @@ Croston, 1972 method; 4. \code{probability}, Probability-based model,
 underlying Teunter et al., 2011 method. 5. \code{auto} - automatic selection
 of intermittency type based on information criteria. The first letter can be
 used instead. 6. \code{"sba"} - Syntetos-Boylan Approximation for Croston's
-method (bias correction) discussed in Syntetos and Boylan, 2005.}
+method (bias correction) discussed in Syntetos and Boylan, 2005. 7.
+\code{"logistic"} - the probability is estimated based on logistic regression
+model principles.}
 
 \item{imodel}{Type of ETS model used for the modelling of the time varying
 probability. Object of the class "iss" can be provided here, and its parameters
@@ -174,7 +176,12 @@ ellipsis as well. In this case they will be used for optimisation. \code{C}
 sets the initial values before the optimisation, \code{CLower} and
 \code{CUpper} define lower and upper bounds for the search inside of the
 specified \code{bounds}. These values should have exactly the length equal
-to the number of parameters to estimate.}
+to the number of parameters to estimate.
+You can also pass two parameters to the optimiser: 1. \code{maxeval} - maximum
+number of evaluations to carry on; 2. \code{xtol_rel} - the precision of the
+optimiser. The default values used in es() are \code{maxeval=500} and
+\code{xtol_rel=1e-8}. You can read more about these parameters in the
+documentation of \link[nloptr]{nloptr} function.}
 }
 \value{
 Object of class "smooth" is returned. It contains the list of the
@@ -213,6 +220,7 @@ it is returned just for the information.
 \item \code{actuals} - original data.
 \item \code{holdout} - holdout part of the original data.
 \item \code{imodel} - model of the class "iss" if intermittent model was estimated.
+If the model is non-intermittent, then imodel is \code{NULL}.
 \item \code{xreg} - provided vector or matrix of exogenous variables. If \code{xregDo="s"},
 then this value will contain only selected exogenous variables.
 \item \code{updateX} - boolean, defining, if the states of exogenous variables were

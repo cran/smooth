@@ -1,3 +1,34 @@
+smooth v2.3.0 (Release data: 2017-12-23)
+==============
+
+Changes:
+* New function, viss() - vector intermittent state-space model. Allows modelling occurrence probability of several variables simultaneously.
+* New initialisation for es(), ges() and ces(). This should help getting more accurate initial states in cases of high frequency data.
+* The user can now control the optimiser via maxeval and xtol_rel provided in ellipsis of es() and ges() functions.
+
+Bugfixes:
+* smooth functions would return errors in case when some xreg variables were dropped and only one would be left.
+* ETSX(Z,Z,Z) did not work when xreg contained negative data. Now it should.
+* Number of parameters in case of xregDo="select" was incorrect.
+
+
+smooth v2.2.2 (Release data: 2017-12-15)
+==============
+
+Changes:
+* Updated vignettes.
+* New probability type for intermittent models - "logistic".
+* In the case when we don't have binary xreg for the holdout, we now consider it as random and forecast it using iss().
+* graphmaker() now only resets par() when legend=TRUE. This allows using layout and producing several plots with the function on one canvas.
+* xregExpander() now uses iss() function in case of binary data.
+* Updated an example in stepwise() function.
+* ves() function now uses warning() instead of message() everywhere.
+* iss() now also accepts and returns initialSeason (works with intermittent="l" only).
+
+Bugfixes:
+* Fixed Likelihood calculation for TSB probability model.
+
+
 smooth v2.2.1 (Release data: 2017-11-15)
 ==============
 

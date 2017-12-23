@@ -68,6 +68,12 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     if(any(class(data)=="smooth.sim")){
         data <- data$data;
     }
+    else if(class(data)=="Mdata"){
+        h <- data$h;
+        holdout <- TRUE;
+        data <- ts(c(data$x,data$xx),start=start(data$x),frequency=frequency(data$x));
+    }
+
     if(!is.numeric(data)){
         stop("The provided data is not a vector or ts object! Can't construct any model!", call.=FALSE);
     }
@@ -145,7 +151,12 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
                                          substr(model,3,3)=="C" | substr(model,4,4)=="C");
                 modelsPool <- model[!modelsPoolCombiner];
                 if(any(modelsPoolCombiner)){
-                    model <- "CCC";
+                    if(any(substr(model,nchar(model),nchar(model))!="N")){
+                        model <- "CCC";
+                    }
+                    else{
+                        model <- "CCN";
+                    }
                 }
                 else{
                     model <- "ZZZ";
@@ -660,7 +671,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
                      "TFL","aMSEh","aTMSE","aGTMSE","aTFL"))){
         multisteps <- TRUE;
     }
-    else if(any(cfType==c("MSE","MAE","HAM","TSB","Rounded"))){
+    else if(any(cfType==c("MSE","MAE","HAM","TSB","Rounded","LogisticD","LogisticL"))){
         multisteps <- FALSE;
     }
     else{
@@ -794,7 +805,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     }
     else{
         intermittent <- intermittent[1];
-        if(all(intermittent!=c("n","f","i","p","a","s","none","fixed","interval","probability","auto","sba"))){
+        if(all(intermittent!=c("n","f","i","p","a","s","l","none","fixed","interval","probability","auto","sba","logistic"))){
             ##### !!! This stuff should be removed by 2.5.0 #####
             if(any(intermittent==c("c","croston"))){
                 warning(paste0("You are using the old value of intermittent parameter. ",
@@ -819,7 +830,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
         environment(intermittentParametersSetter) <- environment();
         intermittentParametersSetter(intermittent,ParentEnvironment=environment());
 
-        if(obsNonzero <= nParamIntermittent){
+        if(obsNonzero <= nParamIntermittent & intermittent!="l"){
             warning(paste0("Not enough observations for estimation of occurence probability.\n",
                            "Switching to simpler model."),
                     call.=FALSE);
@@ -848,6 +859,9 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     if(any(smoothType==c("es"))){
         # Check if multiplicative models can be fitted
         allowMultiplicative <- !((any(y<=0) & intermittent=="n")| (intermittent!="n" & any(y<0)));
+        if(any(cfType==c("LogisticL","LogisticD"))){
+            allowMultiplicative <- TRUE;
+        }
         # If non-positive values are present, check if data is intermittent, if negatives are here, switch to additive models
         if(!allowMultiplicative){
             if(Etype=="M"){
@@ -1265,6 +1279,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
 
     ##### Return values to previous environment #####
     assign("h",h,ParentEnvironment);
+    assign("holdout",holdout,ParentEnvironment);
     assign("silentText",silentText,ParentEnvironment);
     assign("silentGraph",silentGraph,ParentEnvironment);
     assign("silentLegend",silentLegend,ParentEnvironment);
@@ -1422,6 +1437,12 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
     if(any(class(data)=="smooth.sim")){
         data <- data$data;
     }
+    else if(class(data)=="Mdata"){
+        h <- data$h;
+        holdout <- TRUE;
+        data <- ts(c(data$x,data$xx),start=start(data$x),frequency=frequency(data$x));
+    }
+
     if(!is.numeric(data)){
         stop("The provided data is not a vector or ts object! Can't build any model!", call.=FALSE);
     }
@@ -1494,7 +1515,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
                      "TFL","aMSEh","aTMSE","aGTMSE","aTFL"))){
         multisteps <- TRUE;
     }
-    else if(any(cfType==c("MSE","MAE","HAM"))){
+    else if(any(cfType==c("MSE","MAE","HAM","Rounded","TSB","LogisticD","LogisticL"))){
         multisteps <- FALSE;
     }
     else{
@@ -1575,7 +1596,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
     else{
         obsNonzero <- sum((y!=0)*1);
         intermittent <- intermittent[1];
-        if(all(intermittent!=c("n","f","i","p","a","s","none","fixed","interval","probability","auto","sba"))){
+        if(all(intermittent!=c("n","f","i","p","a","s","l","none","fixed","interval","probability","auto","sba","logistic"))){
             warning(paste0("Strange type of intermittency defined: '",intermittent,"'. Switching to 'fixed'."),
                     call.=FALSE);
             intermittent <- "f";
@@ -1586,7 +1607,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
             environment(intermittentParametersSetter) <- environment();
             intermittentParametersSetter(intermittent,ParentEnvironment=environment());
 
-            if(obsNonzero <= nParamIntermittent){
+            if(obsNonzero <= nParamIntermittent & intermittent!="l"){
                 warning(paste0("Not enough observations for estimation of occurence probability.\n",
                                "Switching to simpler model."),
                         call.=FALSE);
@@ -1619,6 +1640,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
 
     ##### Return values to previous environment #####
     assign("h",h,ParentEnvironment);
+    assign("holdout",holdout,ParentEnvironment);
     assign("silentText",silentText,ParentEnvironment);
     assign("silentGraph",silentGraph,ParentEnvironment);
     assign("silentLegend",silentLegend,ParentEnvironment);
@@ -1646,8 +1668,18 @@ ssFitter <- function(...){
     ellipsis <- list(...);
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
 
+    if(cfType=="LogisticL"){
+        EtypeNew <- "L";
+    }
+    else if(cfType=="LogisticD"){
+        EtypeNew <- "D";
+    }
+    else{
+        EtypeNew <- Etype;
+    }
+
     fitting <- fitterwrap(matvt, matF, matw, y, vecg,
-                          modellags, Etype, Ttype, Stype, initialType,
+                          modellags, EtypeNew, Ttype, Stype, initialType,
                           matxt, matat, matFX, vecgX, ot);
     statesNames <- colnames(matvt);
     matvt <- ts(fitting$matvt,start=(time(data)[1] - deltat(data)*maxlag),frequency=datafreq);
@@ -1655,7 +1687,7 @@ ssFitter <- function(...){
     y.fit <- ts(fitting$yfit,start=start(data),frequency=datafreq);
     errors <- ts(fitting$errors,start=start(data),frequency=datafreq);
 
-    if(Etype=="M" & any(matvt[,1]<0)){
+    if(EtypeNew=="M" & any(matvt[,1]<0)){
         matvt[matvt[,1]<0,1] <- 0.001;
         warning(paste0("Negative values produced in the level of state vector of model ",model,".\n",
                        "We had to substitute them by low values. Please, use a different model."),call.=FALSE);
@@ -2234,6 +2266,7 @@ ssForecaster <- function(...){
         warning(paste0("Number of degrees of freedom is negative. It looks like we have overfitted the data."),call.=FALSE);
         df <- obsNonzero;
     }
+
 # If error additive, estimate as normal. Otherwise - lognormal
     if(Etype=="A"){
         s2 <- as.vector(sum((errors*ot)^2)/df);
@@ -2429,6 +2462,17 @@ ssForecaster <- function(...){
         warning("Please check the input and report this error to the maintainer if it persists.",call.=FALSE);
     }
 
+    if(cfType=="LogisticL"){
+        y.for <- y.for / (1 + y.for);
+        y.low <- y.low / (1 + y.low);
+        y.high <- y.high / (1 + y.high);
+    }
+    else if(cfType=="LogisticD"){
+        y.for <- exp(y.for) / (1 + exp(y.for));
+        y.low <- exp(y.low) / (1 + exp(y.low));
+        y.high <- exp(y.high) / (1 + exp(y.high));
+    }
+
     assign("s2",s2,ParentEnvironment);
     assign("y.for",y.for,ParentEnvironment);
     assign("y.low",y.low,ParentEnvironment);
@@ -2472,7 +2516,13 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
             if(!is.null(xreg)){
                 if(length(xreg) < obsAll){
                     warning("xreg did not contain values for the holdout, so we had to predict missing values.", call.=FALSE);
-                    xregForecast <- es(xreg,h=obsAll-length(xreg),intermittent="auto",ic="AICc",silent=TRUE)$forecast;
+                    # If this is a binary variable, use iss function.
+                    if(all((xreg==0) | (xreg==1))){
+                        xregForecast <- iss(xreg,model="XXX",h=obsAll-length(xreg),intermittent="l",ic="AICc")$forecast;
+                    }
+                    else{
+                        xregForecast <- es(xreg,h=obsAll-length(xreg),intermittent="auto",ic="AICc",silent=TRUE)$forecast;
+                    }
                     xreg <- c(as.vector(xreg),as.vector(xregForecast));
                 }
                 else if(length(xreg) > obsAll){
@@ -2494,12 +2544,12 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                 matat <- matrix(NA,obsStates,1);
 # Fill in the initial values for exogenous coefs using OLS
                 if(is.null(initialX)){
-                    if(Etype=="A"){
-                        matat[1:maxlag,] <- cov(data[1:obsInsample][ot==1],xreg[1:obsInsample][ot==1])/var(xreg[1:obsInsample][ot==1]);
-                    }
-                    else{
+                    if(Etype=="M"){
                         matat[1:maxlag,] <- cov(log(data[1:obsInsample][ot==1]),
                                                 xreg[1:obsInsample][ot==1])/var(xreg[1:obsInsample][ot==1]);
+                    }
+                    else{
+                        matat[1:maxlag,] <- cov(data[1:obsInsample][ot==1],xreg[1:obsInsample][ot==1])/var(xreg[1:obsInsample][ot==1]);
                     }
                 }
                 if(is.null(names(xreg))){
@@ -2528,7 +2578,13 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                         cat(paste0(rep("\b",nchar(round((j-1)/nExovars,2)*100)+1),collapse=""));
                         cat(paste0(round(j/nExovars,2)*100,"%"));
                     }
-                    xregForecast[,j] <- es(xreg[,j],h=obsAll-nrow(xreg),intermittent="auto",ic="AICc",silent=TRUE)$forecast;
+
+                    if(all((xreg[,j]==0) | (xreg[,j]==1))){
+                        xregForecast[,j] <- iss(xreg[,j],model="XXX",h=obsAll-nrow(xreg),intermittent="l",ic="AICc")$forecast;
+                    }
+                    else{
+                        xregForecast[,j] <- es(xreg[,j],h=obsAll-nrow(xreg),intermittent="auto",ic="AICc",silent=TRUE)$forecast;
+                    }
                 }
                 xreg <- rbind(xreg,xregForecast);
                 if(!silent){
@@ -2542,7 +2598,7 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 
             xregEqualToData <- apply(xreg[1:obsInsample,]==data[1:obsInsample],2,all);
             if(any(xregEqualToData)){
-                warning("One of exogenous variables and the forecasted data are exactly the same. We have droped it.",
+                warning("One of exogenous variables and the forecasted data are exactly the same. We have dropped it.",
                         call.=FALSE);
                 xreg <- matrix(xreg[,!xregEqualToData],nrow=nrow(xreg),ncol=ncol(xreg)-1,dimnames=list(NULL,colnames(xreg[,!xregEqualToData])));
             }
@@ -2551,7 +2607,7 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 
 # If initialX is provided, then probably we don't need to check the xreg on variability and multicollinearity
             if(is.null(initialX)){
-                checkvariability <- apply(xreg[1:obsInsample,]==rep(xreg[1,],each=obsInsample),2,all);
+                checkvariability <- apply(matrix(xreg[1:obsInsample,][ot==1,]==rep(xreg[ot==1,][1,],each=sum(ot)),sum(ot),nExovars),2,all);
                 if(any(checkvariability)){
                     if(all(checkvariability)){
                         warning("None of exogenous variables has variability. Cannot do anything with that, so dropping out xreg.",
@@ -2617,14 +2673,14 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                 matxt <- as.matrix(xreg);
 # Fill in the initial values for exogenous coefs using OLS
                 if(is.null(initialX)){
-                    if(Etype=="A"){
+                    if(Etype=="M"){
                         matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,][ot==1,]) %*% mat.x[1:obsInsample,][ot==1,],tol=1e-50) %*%
-                                                      t(mat.x[1:obsInsample,][ot==1,]) %*% data[1:obsInsample][ot==1])[2:(nExovars+1)],
+                                                      t(mat.x[1:obsInsample,][ot==1,]) %*% log(data[1:obsInsample][ot==1]))[2:(nExovars+1)],
                                                 each=maxlag);
                     }
                     else{
                         matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,][ot==1,]) %*% mat.x[1:obsInsample,][ot==1,],tol=1e-50) %*%
-                                                      t(mat.x[1:obsInsample,][ot==1,]) %*% log(data[1:obsInsample][ot==1]))[2:(nExovars+1)],
+                                                      t(mat.x[1:obsInsample,][ot==1,]) %*% data[1:obsInsample][ot==1])[2:(nExovars+1)],
                                                 each=maxlag);
                     }
                 }
@@ -2750,9 +2806,12 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 ##### *Likelihood function* #####
 likelihoodFunction <- function(C){
 # This block is needed in order to make R CMD to shut up about "no visible binding..."
-    if(any(intermittent==c("n","p"))){
+    if(any(intermittent==c("n","provided"))){
         if(cfType=="TFL" | cfType=="aTFL"){
             return(- obsNonzero/2 *(h*log(2*pi*exp(1)) + CF(C)));
+        }
+        else if(any(cfType==c("LogisticD","LogisticL"))){
+            return(sum(log(pt[ot==1])) + sum(log(1-pt[ot==0])));
         }
         else{
             return(- obsNonzero/2 *(log(2*pi*exp(1)) + log(CF(C))));
@@ -2854,6 +2913,9 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
         }
         else if(any(intermittent==c("s","sba"))){
             intermittent <- "SBA";
+        }
+        else if(any(intermittent==c("l","logistic"))){
+            intermittent <- "Logistic";
         }
         cat(paste0("Intermittent model type: ",intermittent));
         cat("\n");

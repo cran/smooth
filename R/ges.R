@@ -58,6 +58,11 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' parameters.  \code{FI=TRUE} will make the function produce Fisher
 #' Information matrix, which then can be used to calculated variances of
 #' parameters of the model.
+#' You can also pass two parameters to the optimiser: 1. \code{maxeval} - maximum
+#' number of evaluations to carry on; 2. \code{xtol_rel} - the precision of the
+#' optimiser. The default values used in es() are \code{maxeval=5000} and
+#' \code{xtol_rel=1e-8}. You can read more about these parameters in the
+#' documentation of \link[nloptr]{nloptr} function.
 #' @return Object of class "smooth" is returned. It contains:
 #'
 #' \itemize{
@@ -91,6 +96,7 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' \item \code{actuals} - original data.
 #' \item \code{holdout} - holdout part of the original data.
 #' \item \code{imodel} - model of the class "iss" if intermittent model was estimated.
+#' If the model is non-intermittent, then imodel is \code{NULL}.
 #' \item \code{xreg} - provided vector or matrix of exogenous variables. If
 #' \code{xregDo="s"}, then this value will contain only selected exogenous variables.
 #' \item \code{updateX} - boolean, defining, if the states of exogenous variables
@@ -157,7 +163,8 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
                 cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE"),
                 h=10, holdout=FALSE, cumulative=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-                intermittent=c("none","auto","fixed","interval","probability","sba"), imodel="MNN",
+                intermittent=c("none","auto","fixed","interval","probability","sba","logistic"),
+                imodel="MNN",
                 bounds=c("admissible","none"),
                 silent=c("all","graph","legend","output","none"),
                 xreg=NULL, xregDo=c("use","select"), initialX=NULL,
@@ -365,11 +372,11 @@ CreatorGES <- function(silentText=FALSE,...){
         }
 
 # Optimise model. First run
-        res <- nloptr(C, CF, opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=1e-8, "maxeval"=5000));
+        res <- nloptr(C, CF, opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval));
         C <- res$solution;
 
 # Optimise model. Second run
-        res2 <- nloptr(C, CF, opts=list("algorithm"="NLOPT_LN_NELDERMEAD", "xtol_rel"=1e-10, "maxeval"=1000));
+        res2 <- nloptr(C, CF, opts=list("algorithm"="NLOPT_LN_NELDERMEAD", "xtol_rel"=xtol_rel/100, "maxeval"=maxeval/5));
         # This condition is needed in order to make sure that we did not make the solution worse
         if(res2$objective <= res$objective){
             res <- res2;
@@ -491,8 +498,8 @@ CreatorGES <- function(silentText=FALSE,...){
     }
 
 ##### Preset values of matvt ######
-    slope <- cov(yot[1:min(12,obsNonzero),],c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero)));
-    intercept <- sum(yot[1:min(12,obsNonzero),])/min(12,obsNonzero) - slope * (sum(c(1:min(12,obsNonzero)))/min(12,obsNonzero) - 1);
+    slope <- cov(yot[1:min(max(12,datafreq),obsNonzero),],c(1:min(max(12,datafreq),obsNonzero)))/var(c(1:min(max(12,datafreq),obsNonzero)));
+    intercept <- sum(yot[1:min(max(12,datafreq),obsNonzero),])/min(max(12,datafreq),obsNonzero) - slope * (sum(c(1:min(max(12,datafreq),obsNonzero)))/min(max(12,datafreq),obsNonzero) - 1);
 
     vtvalues <- intercept;
     if((orders %*% lags)>1){
@@ -539,6 +546,19 @@ CreatorGES <- function(silentText=FALSE,...){
             providedC <- NULL;
         }
         C <- providedC;
+    }
+
+    if(any(names(ellipsis)=="maxeval")){
+        maxeval <- ellipsis$maxeval;
+    }
+    else{
+        maxeval <- 5000;
+    }
+    if(any(names(ellipsis)=="xtol_rel")){
+        xtol_rel <- ellipsis$xtol_rel;
+    }
+    else{
+        xtol_rel <- 1e-8;
     }
 
 ##### Start the calculations #####
@@ -664,6 +684,10 @@ CreatorGES <- function(silentText=FALSE,...){
             colnames(matxt) <- colnames(matat) <- xregNames;
         }
         xreg <- matxt;
+        if(xregDo=="s"){
+            nParamExo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
+            parametersNumber[1,2] <- nParamExo;
+        }
     }
 # Prepare for fitting
     elements <- ElementsGES(C);
@@ -744,6 +768,9 @@ CreatorGES <- function(silentText=FALSE,...){
     }
     else if(intermittent=="p"){
         intermittent <- "probability";
+    }
+    else if(intermittent=="l"){
+        intermittent <- "logistic";
     }
     else if(intermittent=="n"){
         intermittent <- "none";

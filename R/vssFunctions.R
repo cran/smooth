@@ -101,8 +101,9 @@ vssInput <- function(smoothType=c("ves"),...){
     }
     # Define the actual values. Transpose the matrix!
     y <- matrix(data[1:obsInSample,],nSeries,obsInSample,byrow=TRUE);
-    datafreq <- frequency(data);
+    dataFreq <- frequency(data);
     dataDeltat <- deltat(data);
+    dataStart <- start(data);
 
     # Number of parameters to estimate / provided
     parametersNumber <- matrix(0,2,4,
@@ -123,7 +124,7 @@ vssInput <- function(smoothType=c("ves"),...){
             Stype <- substring(model,4,4);
             damped <- TRUE;
             if(substring(model,3,3)!="d"){
-                message(paste0("You have defined a strange model: ",model));
+                warning(paste0("You have defined a strange model: ",model));
                 sowhat(model);
                 model <- paste0(Etype,Ttype,"d",Stype);
             }
@@ -135,9 +136,9 @@ vssInput <- function(smoothType=c("ves"),...){
             damped <- FALSE;
         }
         else{
-            message(paste0("You have defined a strange model: ",model));
+            warning(paste0("You have defined a strange model: ",model));
             sowhat(model);
-            message("Switching to 'ZZZ'");
+            warning("Switching to 'ZZZ'");
             model <- "ZZZ";
 
             Etype <- "Z";
@@ -147,45 +148,41 @@ vssInput <- function(smoothType=c("ves"),...){
         }
 
         #### Check error type ####
-        if(all(Etype!=c("Z","X","Y","A","M","C"))){
-            warning(paste0("Wrong error type: ",Etype,". Should be 'Z', 'X', 'Y', 'A' or 'M'.\n",
-                           "Changing to 'Z'"),call.=FALSE);
-            Etype <- "Z";
+        if(all(Etype!=c("A","M","L"))){
+            warning(paste0("Wrong error type: ",Etype,". Should be 'A' or 'M'.\n",
+                           "Changing to 'A'"),call.=FALSE);
+            Etype <- "A";
         }
 
         #### Check trend type ####
-        if(all(Ttype!=c("Z","X","Y","N","A","M","C"))){
-            warning(paste0("Wrong trend type: ",Ttype,". Should be 'Z', 'X', 'Y', 'N', 'A' or 'M'.\n",
-                           "Changing to 'Z'"),call.=FALSE);
-            Ttype <- "Z";
+        if(all(Ttype!=c("N","A","M"))){
+            warning(paste0("Wrong trend type: ",Ttype,". Should be 'N', 'A' or 'M'.\n",
+                           "Changing to 'A'"),call.=FALSE);
+            Ttype <- "A";
         }
 
         #### Check seasonality type ####
         # Check if the data is ts-object
         if(!is.ts(data) & Stype!="N"){
-            if(!silentText){
-                message("The provided data is not ts object. Only non-seasonal models are available.");
-            }
+            warning("The provided data is not ts object. Only non-seasonal models are available.");
             Stype <- "N";
             substr(model,nchar(model),nchar(model)) <- "N";
         }
 
         # Check if seasonality makes sense
-        if(all(Stype!=c("Z","X","Y","N","A","M","C"))){
-            warning(paste0("Wrong seasonality type: ",Stype,". Should be 'Z', 'X', 'Y', 'N', 'A' or 'M'.",
-                           "Setting to 'Z'."),call.=FALSE);
-            if(datafreq==1){
+        if(all(Stype!=c("N","A","M"))){
+            warning(paste0("Wrong seasonality type: ",Stype,". Should be 'N', 'A' or 'M'.",
+                           "Setting to 'A'."),call.=FALSE);
+            if(dataFreq==1){
                 Stype <- "N";
             }
             else{
-                Stype <- "Z";
+                Stype <- "A";
             }
         }
-        if(all(Stype!="N",datafreq==1)){
-            if(all(Stype!=c("Z","X","Y"))){
-                warning(paste0("Cannot build the seasonal model on data with frequency 1.\n",
-                               "Switching to non-seasonal model: ETS(",substring(model,1,nchar(model)-1),"N)"));
-            }
+        if(Stype!="N" & dataFreq==1){
+            warning(paste0("Cannot build the seasonal model on data with frequency 1.\n",
+                           "Switching to non-seasonal model: ETS(",substring(model,1,nchar(model)-1),"N)"));
             Stype <- "N";
         }
 
@@ -197,11 +194,11 @@ vssInput <- function(smoothType=c("ves"),...){
             modelIsSeasonal <- TRUE;
         }
 
-        if(any(c(Etype,Ttype,Stype)=="Z")){
-            stop("Sorry we don't do model selection for VES yet.", call.=FALSE);
-        }
+        # if(any(c(Etype,Ttype,Stype)=="Z")){
+        #     stop("Sorry we don't do model selection for VES yet.", call.=FALSE);
+        # }
 
-        maxlag <- datafreq * modelIsSeasonal + 1 * (!modelIsSeasonal);
+        maxlag <- dataFreq * modelIsSeasonal + 1 * (!modelIsSeasonal);
 
         # Define the number of rows that should be in the matvt
         obsStates <- max(obsAll + maxlag, obsInSample + 2*maxlag);
@@ -209,6 +206,11 @@ vssInput <- function(smoothType=c("ves"),...){
         nComponentsNonSeasonal <- 1 + (Ttype!="N")*1;
         nComponentsAll <- nComponentsNonSeasonal + modelIsSeasonal*1;
     }
+
+    ##### intermittent #####
+    ##### !!!!! THIS WILL BE FIXED WHEN WE KNOW HOW TO DO THAT
+    intermittent <- substring(intermittent[1],1,1);
+    ot <- matrix(1,nrow=nSeries,ncol=obsInSample);
 
     if(any(c(Etype,Ttype,Stype)=="M") & all(y>0)){
         if(any(c(Etype,Ttype,Stype)=="A")){
@@ -221,7 +223,13 @@ vssInput <- function(smoothType=c("ves"),...){
         modelIsMultiplicative <- TRUE;
     }
     else{
-        modelIsMultiplicative <- FALSE;
+        if(any(c(Etype,Ttype,Stype)=="M") & intermittent=="n"){
+            warning("Sorry, but we cannot construct multiplicative model on non-positive data. Changing to additive.",call.=FALSE);
+            Etype <- "A";
+            Ttype <- ifelse(Ttype=="M","A",Ttype);
+            Stype <- ifelse(Stype=="M","A",Stype);
+        }
+        modelIsMultiplicative <- FALSE
     }
 
     #This is the estimation of covariance matrix
@@ -231,9 +239,7 @@ vssInput <- function(smoothType=c("ves"),...){
     # persistence type can be: "i" - independent, "d" - dependent, "g" - group.
     persistenceValue <- persistence;
     if(is.null(persistenceValue)){
-        if(silentText){
-            message("persistence value is not selected. Switching to group.");
-        }
+        warning("persistence value is not selected. Switching to group.");
         persistenceType <- "g";
         persistenceEstimate <- TRUE;
     }
@@ -315,9 +321,7 @@ vssInput <- function(smoothType=c("ves"),...){
     # transition type can be: "i" - independent, "d" - dependent, "g" - group.
     transitionValue <- transition;
     if(is.null(transitionValue)){
-        if(silentText){
-            message("transition value is not selected. Switching to group");
-        }
+        warning("transition value is not selected. Switching to group");
         transitionType <- "g";
         transitionEstimate <- FALSE;
     }
@@ -434,9 +438,7 @@ vssInput <- function(smoothType=c("ves"),...){
     if(transitionType!="p"){
         if(damped){
             if(is.null(dampedValue)){
-                if(silentText){
-                    message("phi value is not selected. Switching to group");
-                }
+                warning("phi value is not selected. Switching to group");
                 dampedType <- "g";
                 dampedEstimate <- TRUE;
             }
@@ -501,9 +503,7 @@ vssInput <- function(smoothType=c("ves"),...){
     # initial type can be: "i" - individual, "g" - group.
     initialValue <- initial;
     if(is.null(initialValue)){
-        if(silentText){
-            message("Initial value is not selected. Switching to individual.");
-        }
+        warning("Initial value is not selected. Switching to individual.");
         initialType <- "i";
         initialEstimate <- TRUE;
     }
@@ -566,14 +566,12 @@ vssInput <- function(smoothType=c("ves"),...){
     if(smoothType=="ves"){
     ##### initialSeason for VES #####
     # Here we should check if initialSeason is character or not...
-    # if length(initialSeason) == datafreq*nSeries, then ok
-    # if length(initialSeason) == datafreq, then use it for all nSeries
+    # if length(initialSeason) == dataFreq*nSeries, then ok
+    # if length(initialSeason) == dataFreq, then use it for all nSeries
         if(Stype!="N"){
             initialSeasonValue <- initialSeason;
             if(is.null(initialSeasonValue)){
-                if(silentText){
-                    message("Initial value is not selected. Switching to group.");
-                }
+                warning("Initial value is not selected. Switching to group.");
                 initialSeasonType <- "g";
                 initialSeasonEstimate <- TRUE;
             }
@@ -593,7 +591,7 @@ vssInput <- function(smoothType=c("ves"),...){
                 }
                 else if(is.numeric(initialSeasonValue)){
                     if(smoothType=="ves"){
-                        if(all(length(initialSeasonValue)!=c(datafreq,datafreq*nSeries))){
+                        if(all(length(initialSeasonValue)!=c(dataFreq,dataFreq*nSeries))){
                             warning(paste0("The length of initialSeason is wrong! It should correspond to the frequency of the data.",
                                            "Values of initialSeason will be estimated as a group."),call.=FALSE);
                             initialSeasonValue <- NULL;
@@ -601,7 +599,7 @@ vssInput <- function(smoothType=c("ves"),...){
                             initialSeasonEstimate <- TRUE;
                         }
                         else{
-                            initialSeasonValue <- matrix(initialSeasonValue,nSeries,datafreq);
+                            initialSeasonValue <- matrix(initialSeasonValue,nSeries,dataFreq);
                             initialSeasonType <- "p";
                             initialSeasonEstimate <- FALSE;
                             parametersNumber[2,1] <- parametersNumber[2,1] + length(unique(as.vector(initialSeasonValue)));
@@ -618,7 +616,7 @@ vssInput <- function(smoothType=c("ves"),...){
             }
 
             if(any(initialSeasonType==c("g","i"))){
-                nParamMax <- nParamMax + datafreq;
+                nParamMax <- nParamMax + dataFreq;
             }
         }
         else{
@@ -687,11 +685,6 @@ vssInput <- function(smoothType=c("ves"),...){
         level <- level / 100;
     }
 
-    ##### intermittent #####
-    ##### !!!!! THIS WILL BE FIXED WHEN WE KNOW HOW TO DO THAT
-    intermittent <- substring(intermittent[1],1,1);
-    ot <- matrix(1,nrow=nrow(y),ncol=ncol(y));
-
     ##### Check if multiplicative is applicable #####
     if(any(smoothType==c("ves"))){
         # Check if multiplicative models can be fitted
@@ -753,8 +746,9 @@ vssInput <- function(smoothType=c("ves"),...){
     assign("nParamMax",nParamMax,ParentEnvironment);
     assign("data",data,ParentEnvironment);
     assign("y",y,ParentEnvironment);
-    assign("datafreq",datafreq,ParentEnvironment);
+    assign("dataFreq",dataFreq,ParentEnvironment);
     assign("dataDeltat",dataDeltat,ParentEnvironment);
+    assign("dataStart",dataStart,ParentEnvironment);
     assign("parametersNumber",parametersNumber,ParentEnvironment);
 
     assign("model",model,ParentEnvironment);
@@ -817,9 +811,12 @@ vLikelihoodFunction <- function(A){
     if(Etype=="A"){
         return(- obsInSample/2 * (nSeries*log(2*pi*exp(1)) + CF(A)));
     }
-    else{
-        ### This is sort of an approximation of the correct likelihood. Need to check it.
+    else if(Etype=="M"){
         return(- obsInSample/2 * (nSeries*log(2*pi*exp(1)) + CF(A)) - sum(y));
+    }
+    else{
+        #### This is not derived yet ####
+        return(- obsInSample/2 * (nSeries*log(2*pi*exp(1)) + CF(A)));
     }
 }
 
@@ -1061,7 +1058,14 @@ vssForecaster <- function(...){
 
     if(modelIsMultiplicative){
         yForecast <- exp(yForecast);
+        PI <- exp(PI);
     }
+#
+#     if(Etype=="L"){
+#         yForecast[1,] <- 0
+#         yForecast <- exp(yForecast);
+#         yForecast <- yForecast / matrix((1 + colSums(yForecast[-1,])),nSeries,h,byrow=TRUE);
+#     }
 
     assign("Sigma",Sigma,ParentEnvironment);
     assign("yForecast",yForecast,ParentEnvironment);

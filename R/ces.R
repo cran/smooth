@@ -72,6 +72,7 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' \item \code{actuals} - The data provided in the call of the function.
 #' \item \code{holdout} - the holdout part of the original data.
 #' \item \code{imodel} - model of the class "iss" if intermittent model was estimated.
+#' If the model is non-intermittent, then imodel is \code{NULL}.
 #' \item \code{xreg} - provided vector or matrix of exogenous variables. If
 #' \code{xregDo="s"}, then this value will contain only selected exogenous
 #' variables.
@@ -141,7 +142,8 @@ ces <- function(data, seasonality=c("none","simple","partial","full"),
                 cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE"),
                 h=10, holdout=FALSE, cumulative=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-                intermittent=c("none","auto","fixed","interval","probability","sba"), imodel="MNN",
+                intermittent=c("none","auto","fixed","interval","probability","sba","logistic"),
+                imodel="MNN",
                 bounds=c("admissible","none"),
                 silent=c("all","graph","legend","output","none"),
                 xreg=NULL, xregDo=c("use","select"), initialX=NULL,
@@ -419,7 +421,7 @@ CreatorCES <- function(silentText=FALSE,...){
         matw <- matrix(c(1,0),1,2);
         matvt <- matrix(NA,obsStates,2);
         colnames(matvt) <- c("level","potential");
-        matvt[1,] <- c(mean(yot[1:min(10,obsNonzero)]),mean(yot[1:min(10,obsNonzero)])/1.1);
+        matvt[1,] <- c(mean(yot[1:min(max(10,datafreq),obsNonzero)]),mean(yot[1:min(max(10,datafreq),obsNonzero)])/1.1);
     }
     else if(seasonality=="s"){
         # Simple seasonality, lagged CES
@@ -650,6 +652,10 @@ CreatorCES <- function(silentText=FALSE,...){
             colnames(matxt) <- colnames(matat) <- xregNames;
         }
         xreg <- matxt;
+        if(xregDo=="s"){
+            nParamExo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
+            parametersNumber[1,2] <- nParamExo;
+        }
     }
 
 # Prepare for fitting
@@ -711,6 +717,9 @@ CreatorCES <- function(silentText=FALSE,...){
     }
     else if(intermittent=="p"){
         intermittent <- "probability";
+    }
+    else if(intermittent=="l"){
+        intermittent <- "logistic";
     }
     else if(intermittent=="n"){
         intermittent <- "none";

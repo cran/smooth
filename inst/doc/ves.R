@@ -10,14 +10,14 @@ require(Mcomp)
 Y <- cbind(M3$N2570$x,M3$N2571$x);
 
 ## ----ves_basic-----------------------------------------------------------
-ves(Y, h=18, holdout=TRUE)
+ves(Y, h=18, holdout=TRUE, silent=FALSE)
 
 ## ----ves_AAN_persistence_dep---------------------------------------------
-ourModel <- ves(Y, "AAN", persistence="d", h=18, holdout=TRUE)
+ourModel <- ves(Y, "AAN", persistence="d", h=18, holdout=TRUE, silent=FALSE)
 
 ## ----ves_AAN_persistence_dep_value---------------------------------------
 ourModel$persistence
 
-## ----ves_MMM-------------------------------------------------------------
+## ----ves_MMdM------------------------------------------------------------
 ourModel <- ves(Y, "MMdM", phi="i", persistence="i", h=18, holdout=TRUE)
 

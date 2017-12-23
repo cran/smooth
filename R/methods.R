@@ -102,7 +102,6 @@ logLik.iss <- function(object,...){
 }
 
 #' @importFrom stats nobs
-#' @method nobs smooth
 #' @export
 nobs.smooth <- function(object, ...){
     return(length(object$fitted));
@@ -117,7 +116,6 @@ nobs.smooth.sim <- function(object, ...){
         return(nrow(object$data));
     }
 }
-#' @method nobs iss
 #' @export
 nobs.iss <- function(object, ...){
     return(length(object$fitted));
@@ -153,14 +151,12 @@ nParam.default <- function(object, ...){
     return(length(coefficients(object))+1);
 }
 
-#' @method nParam smooth
 #' @export
 nParam.smooth <- function(object, ...){
     nParamReturn <- object$nParam[1,4];
     return(nParamReturn);
 }
 
-#' @method nParam iss
 #' @export
 nParam.iss <- function(object, ...){
     nParamReturn <- object$nParam;
@@ -555,7 +551,6 @@ orders.Arima <- function(object, ...){
 
 #### Plots of smooth objects ####
 #' @importFrom graphics plot
-#' @method plot smooth
 #' @export
 plot.smooth <- function(x, ...){
     ellipsis <- list(...);
@@ -627,7 +622,6 @@ plot.smooth <- function(x, ...){
     par(parDefault);
 }
 
-#' @method plot smooth.sim
 #' @export
 plot.smooth.sim <- function(x, ...){
     ellipsis <- list(...);
@@ -672,9 +666,9 @@ plot.smooth.forecast <- function(x, ...){
     }
 }
 
-#' @method plot iss
 #' @export
 plot.iss <- function(x, ...){
+    ellipsis <- list(...);
     intermittent <- x$intermittent
     if(intermittent=="i"){
         intermittent <- "Interval-based";
@@ -685,10 +679,18 @@ plot.iss <- function(x, ...){
     else if(intermittent=="f"){
         intermittent <- "Fixed probability";
     }
+    else if(intermittent=="l"){
+        intermittent <- "Logistic probability";
+    }
     else{
         intermittent <- "None";
     }
-    graphmaker(x$actuals,x$forecast,x$fitted,main=paste0("iSS, ",intermittent));
+    if(is.null(ellipsis$main)){
+        graphmaker(x$actuals,x$forecast,x$fitted,main=paste0("iSS, ",intermittent), ...);
+    }
+    else{
+        graphmaker(x$actuals,x$forecast,x$fitted, ...);
+    }
 }
 
 #### Prints of smooth ####
@@ -871,6 +873,9 @@ print.iss <- function(x, ...){
     }
     else if(intermittent=="f"){
         intermittent <- "Fixed probability";
+    }
+    else if(intermittent=="l"){
+        intermittent <- "Logistic probability";
     }
     else{
         intermittent <- "None";

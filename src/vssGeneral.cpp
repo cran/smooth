@@ -5,8 +5,36 @@
 
 using namespace Rcpp;
 
+arma::vec vFittedValue(arma::mat const &matrixW, arma::vec const &matrixV, char const &E){
+    arma::vec returnedValue;
+    switch(E){
+        case 'A':
+        case 'M':
+            returnedValue = matrixW * matrixV;
+            break;
+        case 'L':
+            arma::vec vecYFitted = exp(matrixW * matrixV);
+            returnedValue = vecYFitted / sum(vecYFitted);
+    }
+    return returnedValue;
+}
+
+arma::vec vErrorValue(arma::vec const &vectorY, arma::vec const &vectorYFit, char const &E){
+    arma::vec returnedValue;
+    switch(E){
+        case 'A':
+        case 'M':
+            returnedValue = vectorY - vectorYFit;
+        break;
+        case 'L':
+            arma::vec vectorE = (1 + vectorY - vectorYFit)/2;
+            returnedValue = log(vectorE / vectorE(0));
+    }
+    return returnedValue;
+}
+
 // Fitter for vector models
-List vFitter(arma::mat const &matrixY, arma::mat &matrixV, arma::mat const &matrixF, arma::mat const &matrixW, arma::mat const &matrixG,
+List vFitter(arma::mat const &matrixY, arma::mat &matrixV, arma::mat const &matrixF, arma::mat matrixW, arma::mat const &matrixG,
              arma::uvec &lags, char const &E, char const &T, char const &S, arma::mat const &matrixO) {
     /* matrixY has nrow = nSeries, ncol = obs
      * matrixV has nrow = nSeries * nComponents, ncol = obs + maxlag
@@ -34,12 +62,16 @@ List vFitter(arma::mat const &matrixY, arma::mat &matrixV, arma::mat const &matr
     arma::mat matrixE(nSeries, obs, arma::fill::zeros);
     // arma::mat bufferforat(matrixGX.n_rows);
 
+    if(E=='L'){
+        matrixW.row(0).zeros();
+    }
+
     for (unsigned int i=maxlag; i<obs+maxlag; i=i+1) {
         lagrows = (i+1) * lagslength - lags - 1;
 
         /* # Measurement equation and the error term */
-        matrixYfit.col(i-maxlag) = matrixO.col(i-maxlag) % (matrixW * matrixV(lagrows));
-        matrixE.col(i-maxlag) = (matrixY.col(i-maxlag) - matrixYfit.col(i-maxlag));
+        matrixYfit.col(i-maxlag) = matrixO.col(i-maxlag) % vFittedValue(matrixW, matrixV(lagrows), E);
+        matrixE.col(i-maxlag) = vErrorValue(matrixY.col(i-maxlag), matrixYfit.col(i-maxlag), E);
 
         /* # Transition equation */
         matrixV.col(i) = matrixF * matrixV(lagrows) + matrixG * matrixE.col(i-maxlag);
@@ -103,7 +135,7 @@ RcppExport SEXP vFitterWrap(SEXP yt, SEXP matvt, SEXP matF, SEXP matw, SEXP matG
 
 
 /* # Function produces the point forecasts for the specified model */
-arma::mat vForecaster(arma::mat const & matrixV, arma::mat const &matrixF, arma::mat const &matrixW,
+arma::mat vForecaster(arma::mat const & matrixV, arma::mat const &matrixF, arma::mat matrixW,
                       unsigned int const &nSeries, unsigned int const &hor, char const &E, char const &T, char const &S, arma::uvec lags){
                       // arma::mat const &matrixX, arma::mat const &matrixA, arma::mat const &matrixFX
     int lagslength = lags.n_rows;
@@ -121,6 +153,10 @@ arma::mat vForecaster(arma::mat const & matrixV, arma::mat const &matrixF, arma:
         lags(i) = lags(i) + (lagslength - i - 1);
     }
 
+    if(E=='L'){
+        matrixW.row(0).zeros();
+    }
+
     matrixVnew.submat(0,0,matrixVnew.n_rows-1,maxlag-1) = matrixV.submat(0,0,matrixVnew.n_rows-1,maxlag-1);
     // matrixAnew.submat(0,0,maxlag-1,matrixAnew.n_cols-1) = matrixAnew.submat(0,0,maxlag-1,matrixAnew.n_cols-1);
 
@@ -132,7 +168,8 @@ arma::mat vForecaster(arma::mat const & matrixV, arma::mat const &matrixF, arma:
         matrixVnew.col(i) = matrixF * matrixVnew(lagrows);
         // matrixAnew.row(i) = matrixAnew.row(i-1) * matrixFX;
 
-        matYfor.col(i-maxlag) = matrixW * matrixVnew(lagrows);
+        matYfor.col(i-maxlag) = vFittedValue(matrixW, matrixVnew(lagrows), E);
+        // matYfor.col(i-maxlag) = matrixW * matrixVnew(lagrows);
     }
 
     return matYfor;
@@ -175,7 +212,7 @@ RcppExport SEXP vForecasterWrap(SEXP matvt, SEXP matF, SEXP matw,
 }
 
 /* # Function returns the chosen Cost Function based on the chosen model and produced errors */
-double vOptimiser(arma::mat const &matrixY, arma::mat &matrixV, arma::mat const &matrixF, arma::mat const &matrixW, arma::mat const &matrixG,
+double vOptimiser(arma::mat const &matrixY, arma::mat &matrixV, arma::mat const &matrixF, arma::mat matrixW, arma::mat const &matrixG,
                   arma::uvec &lags, char const &E, char const &T, char const &S,
                   char const& CFtype, double const &normalize, arma::mat const &matrixO){
     // bool const &multi, std::string const &CFtype, char const &fitterType,
@@ -190,43 +227,37 @@ double vOptimiser(arma::mat const &matrixY, arma::mat &matrixV, arma::mat const 
 
     int nSeries = matrixY.n_rows;
 
-    // yactsum is needed for multiplicative error models
-    // double yactsum = arma::as_scalar(sum(log(matrixY.elem(nonzeroes))));
-
     List fitting = vFitter(matrixY, matrixV, matrixF, matrixW, matrixG, lags, E, T, S, matrixO);
 
     NumericMatrix mvtfromfit = as<NumericMatrix>(fitting["matvt"]);
     matrixV = as<arma::mat>(mvtfromfit);
     NumericMatrix errorsfromfit = as<NumericMatrix>(fitting["errors"]);
-    // NumericMatrix matrixAfromfit = as<NumericMatrix>(fitting["matat"]);
-    // matrixA = as<arma::mat>(matrixAfromfit);
 
     arma::mat matErrors(errorsfromfit.begin(), errorsfromfit.nrow(), errorsfromfit.ncol(), false);;
-    // arma::mat matErrorsfromfit(errorsfromfit.begin(), errorsfromfit.nrow(), errorsfromfit.ncol(), false);
-    // matErrors = matErrorsfromfit;
     matErrors = matErrors.elem(nonzeroes);
-    // if(E=='M'){
-    //     matErrors = log(1 + matErrors);
-    // }
 
-    // arma::vec veccij(hor, arma::fill::ones);
-    // arma::mat matrixSigma(hor, hor, arma::fill::eye);
-
-    if(CFtype=='l'){
-        try{
-            CFres = double(log(arma::prod(eig_sym(arma::trans(matErrors / normalize) * (matErrors / normalize) / obs))) +
-                nSeries * log(pow(normalize,2)));
-        }
-        catch(const std::runtime_error){
-            CFres = double(log(arma::det(arma::trans(matErrors / normalize) * (matErrors / normalize) / obs)) +
-                nSeries * log(pow(normalize,2)));
-        }
-    }
-    else if(CFtype=='d'){
-        CFres = arma::as_scalar(sum(log(sum(pow(matErrors,2)) / double(obs)), 1));
+    if(E=='L'){
+        NumericMatrix Yfromfit = as<NumericMatrix>(fitting["yfit"]);
+        arma::mat matrixYfit(Yfromfit.begin(), Yfromfit.nrow(), Yfromfit.ncol(), false);
+        CFres = -sum(log(matrixYfit.elem(arma::find(matrixY==1))));
     }
     else{
-        CFres = arma::as_scalar(sum(sum(pow(matErrors,2)) / double(obs), 1));
+        if(CFtype=='l'){
+            try{
+                CFres = double(log(arma::prod(eig_sym(arma::trans(matErrors / normalize) * (matErrors / normalize) / obs))) +
+                    nSeries * log(pow(normalize,2)));
+            }
+            catch(const std::runtime_error){
+                CFres = double(log(arma::det(arma::trans(matErrors / normalize) * (matErrors / normalize) / obs)) +
+                    nSeries * log(pow(normalize,2)));
+            }
+        }
+        else if(CFtype=='d'){
+            CFres = arma::as_scalar(sum(log(sum(pow(matErrors,2)) / double(obs)), 1));
+        }
+        else{
+            CFres = arma::as_scalar(sum(sum(pow(matErrors,2)) / double(obs), 1));
+        }
     }
     return CFres;
 }

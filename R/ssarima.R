@@ -115,6 +115,7 @@ utils::globalVariables(c("normalizer","constantValue","constantRequired","consta
 #' \item \code{actuals} - the original data.
 #' \item \code{holdout} - the holdout part of the original data.
 #' \item \code{imodel} - model of the class "iss" if intermittent model was estimated.
+#' If the model is non-intermittent, then imodel is \code{NULL}.
 #' \item \code{xreg} - provided vector or matrix of exogenous variables. If
 #' \code{xregDo="s"}, then this value will contain only selected exogenous
 #' variables.
@@ -193,7 +194,8 @@ ssarima <- function(data, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1),
                     cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE"),
                     h=10, holdout=FALSE, cumulative=FALSE,
                     intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-                    intermittent=c("none","auto","fixed","interval","probability","sba"), imodel="MNN",
+                    intermittent=c("none","auto","fixed","interval","probability","sba","logistic"),
+                    imodel="MNN",
                     bounds=c("admissible","none"),
                     silent=c("all","graph","legend","output","none"),
                     xreg=NULL, xregDo=c("use","select"), initialX=NULL,
@@ -364,20 +366,14 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
         if(nComponents > 0){
 # ar terms, ma terms from season to season...
             if(AREstimate){
-                # C <- c(C,rep(0.1,sum(ar.orders)));
                 C <- c(C,c(1:sum(ar.orders))/sum(sum(ar.orders):1));
             }
             if(MAEstimate){
                 C <- c(C,rep(0.1,sum(ma.orders)));
-                # C <- c(C,c(1:sum(ma.orders))/sum(sum(ma.orders):1));
             }
 
 # initial values of state vector and the constant term
             if(initialType=="o"){
-                # slope <- cov(yot[1:min(12,obsNonzero),],c(1:min(12,obsNonzero)))/var(c(1:min(12,obsNonzero)));
-                # intercept <- sum(yot[1:min(12,obsNonzero),])/min(12,obsNonzero) - slope * (sum(c(1:min(12,obsNonzero)))/min(12,obsNonzero) - 1);
-                # initialStuff <- c(rep(intercept,nComponents));
-                # C <- c(C,initialStuff[1:nComponents]);
                 C <- c(C,matvt[1:nComponents,1]);
             }
         }
@@ -705,6 +701,10 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
             colnames(matxt) <- colnames(matat) <- xregNames;
         }
         xreg <- matxt;
+        if(xregDo=="s"){
+            nParamExo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
+            parametersNumber[1,2] <- nParamExo;
+        }
     }
 # Prepare for fitting
     elements <- polysoswrap(ar.orders, ma.orders, i.orders, lags, nComponents,
@@ -780,6 +780,9 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     }
     else if(intermittent=="p"){
         intermittent <- "probability";
+    }
+    else if(intermittent=="l"){
+        intermittent <- "logistic";
     }
     else if(intermittent=="n"){
         intermittent <- "none";
