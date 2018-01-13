@@ -1,6 +1,6 @@
 utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
                          "persistenceEstimate","obsAll","obsInsample","multisteps","ot","obsNonzero","ICs","cfObjective",
-                         "y.for","y.low","y.high","normalizer"));
+                         "y.for","y.low","y.high","normalizer","yForecastStart"));
 
 #' General Exponential Smoothing
 #'
@@ -483,8 +483,9 @@ CreatorGES <- function(silentText=FALSE,...){
     if(obsNonzero <= nParamMax){
         if(xregDo=="select"){
             if(obsNonzero <= (nParamMax - nParamExo)){
-                stop(paste0("Not enough observations for the reasonable fit. Number of parameters is ",
-                            nParamMax + nParamExo," while the number of observations is ",obsNonzero,"!"),call.=FALSE);
+                warning(paste0("Not enough observations for the reasonable fit. Number of parameters is ",
+                               nParamMax + nParamExo," while the number of observations is ",obsNonzero,"!"),call.=FALSE);
+                tinySample <- TRUE;
             }
             else{
                 warning(paste0("The potential number of exogenous variables is higher than the number of observations. ",
@@ -492,9 +493,27 @@ CreatorGES <- function(silentText=FALSE,...){
             }
         }
         else{
-            stop(paste0("Not enough observations for the reasonable fit. Number of parameters is ",
-                        nParamMax," while the number of observations is ",obsNonzero,"!"),call.=FALSE);
+            warning(paste0("Not enough observations for the reasonable fit. Number of parameters is ",
+                           nParamMax," while the number of observations is ",obsNonzero,"!"),call.=FALSE);
+            tinySample <- TRUE;
         }
+    }
+    else{
+        tinySample <- FALSE;
+    }
+
+# If this is tiny sample, use SES instead
+    if(tinySample){
+        warning("Not enough observations to fit GES Switching to ETS(A,N,N).",call.=FALSE);
+        return(es(data,"ANN",initial=initial,cfType=cfType,
+                  h=h,holdout=holdout,cumulative=cumulative,
+                  intervals=intervals,level=level,
+                  intermittent=intermittent,
+                  imodel=imodel,
+                  bounds="u",
+                  silent=silent,
+                  xreg=xreg,xregDo=xregDo,initialX=initialX,
+                  updateX=updateX,persistenceX=persistenceX,transitionX=transitionX));
     }
 
 ##### Preset values of matvt ######
@@ -754,7 +773,7 @@ CreatorGES <- function(silentText=FALSE,...){
     parametersNumber[1,1] <- parametersNumber[1,1] + 1;
 
     # Write down the probabilities from intermittent models
-    pt <- ts(c(as.vector(pt),as.vector(pt.for)),start=start(data),frequency=datafreq);
+    pt <- ts(c(as.vector(pt),as.vector(pt.for)),start=dataStart,frequency=datafreq);
     # Write down the number of parameters of imodel
     if(all(intermittent!=c("n","provided")) & !imodelProvided){
         parametersNumber[1,3] <- imodel$nParam;
@@ -794,16 +813,16 @@ CreatorGES <- function(silentText=FALSE,...){
     parametersNumber[2,4] <- sum(parametersNumber[2,1:3]);
 
     if(holdout==T){
-        y.holdout <- ts(data[(obsInsample+1):obsAll],start=start(y.for),frequency=frequency(data));
+        y.holdout <- ts(data[(obsInsample+1):obsAll],start=yForecastStart,frequency=frequency(data));
         if(cumulative){
-            errormeasures <- errorMeasurer(sum(y.holdout),y.for,h*y);
+            errormeasures <- Accuracy(sum(y.holdout),y.for,h*y);
         }
         else{
-            errormeasures <- errorMeasurer(y.holdout,y.for,y);
+            errormeasures <- Accuracy(y.holdout,y.for,y);
         }
 
         if(cumulative){
-            y.holdout <- ts(sum(y.holdout),start=start(y.for),frequency=datafreq);
+            y.holdout <- ts(sum(y.holdout),start=yForecastStart,frequency=datafreq);
         }
     }
     else{
@@ -846,10 +865,10 @@ CreatorGES <- function(silentText=FALSE,...){
         y.high.new <- y.high;
         y.low.new <- y.low;
         if(cumulative){
-            y.for.new <- ts(rep(y.for/h,h),start=start(y.for),frequency=datafreq)
+            y.for.new <- ts(rep(y.for/h,h),start=yForecastStart,frequency=datafreq)
             if(intervals){
-                y.high.new <- ts(rep(y.high/h,h),start=start(y.for),frequency=datafreq)
-                y.low.new <- ts(rep(y.low/h,h),start=start(y.for),frequency=datafreq)
+                y.high.new <- ts(rep(y.high/h,h),start=yForecastStart,frequency=datafreq)
+                y.low.new <- ts(rep(y.low/h,h),start=yForecastStart,frequency=datafreq)
             }
         }
 

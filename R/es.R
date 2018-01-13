@@ -3,7 +3,7 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
                          "nParamIntermittent","cfTypeOriginal","matF","matw","pt.for","errors.mat",
                          "iprob","results","s2","FI","intermittent","normalizer","varVec",
                          "persistenceEstimate","initial","multisteps","ot",
-                         "silentText","silentGraph","silentLegend"));
+                         "silentText","silentGraph","silentLegend","yForecastStart"));
 
 #' Exponential Smoothing in SSOE state-space model
 #'
@@ -776,7 +776,6 @@ PoolPreparerES <- function(...){
 
     if(!is.null(modelsPool)){
         modelsNumber <- length(modelsPool);
-
 # List for the estimated models in the pool
         results <- as.list(c(1:modelsNumber));
         j <- 0;
@@ -805,7 +804,8 @@ PoolPreparerES <- function(...){
         results <- list(NA);
 
 ### Use brains in order to define models to estimate ###
-        if(modelDo=="select" & any(c(Ttype,Stype)=="Z")){
+        if(modelDo=="select" &
+           (any(c(Ttype,Stype)=="X") | any(c(Ttype,Stype)=="Y") | any(c(Ttype,Stype)=="Z"))){
             if(!silent){
                 cat("Forming the pool of models based on... ");
             }
@@ -820,15 +820,27 @@ PoolPreparerES <- function(...){
             }
 
             if(Ttype!="Z"){
-                if(damped){
-                    small.pool.trend <- paste0(Ttype,"d");
-                    trends.pool <- small.pool.trend;
+                if(Ttype=="X"){
+                    small.pool.trend <- c("N","A");
+                    trends.pool <- c("N","A","Ad");
+                    check.T <- TRUE;
+                }
+                else if(Ttype=="Y"){
+                    small.pool.trend <- c("N","M");
+                    trends.pool <- c("N","M","Md");
+                    check.T <- TRUE;
                 }
                 else{
-                    small.pool.trend <- Ttype;
-                    trends.pool <- Ttype;
+                    if(damped){
+                        small.pool.trend <- paste0(Ttype,"d");
+                        trends.pool <- small.pool.trend;
+                    }
+                    else{
+                        small.pool.trend <- Ttype;
+                        trends.pool <- Ttype;
+                    }
+                    check.T <- FALSE;
                 }
-                check.T <- FALSE;
             }
             else{
                 small.pool.trend <- c("N","A");
@@ -836,9 +848,21 @@ PoolPreparerES <- function(...){
             }
 
             if(Stype!="Z"){
-                small.pool.season <- Stype;
-                season.pool <- Stype;
-                check.S <- FALSE;
+                if(Stype=="X"){
+                    small.pool.season <- c("N","A");
+                    season.pool <- c("N","A");
+                    check.S <- TRUE;
+                }
+                else if(Stype=="Y"){
+                    small.pool.season <- c("N","M");
+                    season.pool <- c("N","M");
+                    check.S <- TRUE;
+                }
+                else{
+                    small.pool.season <- Stype;
+                    season.pool <- Stype;
+                    check.S <- FALSE;
+                }
             }
             else{
                 small.pool.season <- c("N","A","M");
@@ -1869,16 +1893,16 @@ CreatorES <- function(silent=FALSE,...){
         forecasts.list <- forecasts.list[,!badStuff];
         icWeights <- icWeights[!badStuff];
         model.current <- model.current[!badStuff];
-        y.fit <- ts(fitted.list %*% icWeights,start=start(data),frequency=datafreq);
+        y.fit <- ts(fitted.list %*% icWeights,start=dataStart,frequency=datafreq);
         y.for <- ts(forecasts.list %*% icWeights,start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
-        errors <- ts(c(y) - y.fit,start=start(data),frequency=datafreq);
+        errors <- ts(c(y) - y.fit,start=dataStart,frequency=datafreq);
         s2 <- mean(errors^2);
         names(icWeights) <- model.current;
         if(intervals){
             lowerList <- lowerList[,!badStuff];
             upperList <- upperList[,!badStuff];
-            y.low <- ts(lowerList %*% icWeights,start=start(y.for),frequency=datafreq);
-            y.high <- ts(upperList %*% icWeights,start=start(y.for),frequency=datafreq);
+            y.low <- ts(lowerList %*% icWeights,start=yForecastStart,frequency=datafreq);
+            y.high <- ts(upperList %*% icWeights,start=yForecastStart,frequency=datafreq);
         }
         else{
             y.low <- NA;
@@ -1901,7 +1925,7 @@ CreatorES <- function(silent=FALSE,...){
 ##### Do final check and make some preparations for output #####
 
     # Write down the probabilities from intermittent models
-    pt <- ts(c(as.vector(pt),as.vector(pt.for)),start=start(data),frequency=datafreq);
+    pt <- ts(c(as.vector(pt),as.vector(pt.for)),start=dataStart,frequency=datafreq);
     # Write down the number of parameters of imodel
     if(all(intermittent!=c("n","provided")) & !imodelProvided){
         parametersNumber[1,3] <- imodel$nParam;
@@ -1933,12 +1957,12 @@ CreatorES <- function(silent=FALSE,...){
 
 ##### Now let's deal with holdout #####
     if(holdout){
-        y.holdout <- ts(data[(obsInsample+1):obsAll],start=start(y.for),frequency=datafreq);
+        y.holdout <- ts(data[(obsInsample+1):obsAll],start=yForecastStart,frequency=datafreq);
         if(cumulative){
-            errormeasures <- errorMeasurer(sum(y.holdout),y.for,h*y);
+            errormeasures <- Accuracy(sum(y.holdout),y.for,h*y);
         }
         else{
-            errormeasures <- errorMeasurer(y.holdout,y.for,y);
+            errormeasures <- Accuracy(y.holdout,y.for,y);
         }
 
 # Add PLS
@@ -1966,7 +1990,7 @@ CreatorES <- function(silent=FALSE,...){
         }
 
         if(cumulative){
-            y.holdout <- ts(sum(y.holdout),start=start(y.for),frequency=datafreq);
+            y.holdout <- ts(sum(y.holdout),start=yForecastStart,frequency=datafreq);
         }
     }
     else{
@@ -1999,10 +2023,10 @@ CreatorES <- function(silent=FALSE,...){
         y.high.new <- y.high;
         y.low.new <- y.low;
         if(cumulative){
-            y.for.new <- ts(rep(y.for/h,h),start=start(y.for),frequency=datafreq)
+            y.for.new <- ts(rep(y.for/h,h),start=yForecastStart,frequency=datafreq)
             if(intervals){
-                y.high.new <- ts(rep(y.high/h,h),start=start(y.for),frequency=datafreq)
-                y.low.new <- ts(rep(y.low/h,h),start=start(y.for),frequency=datafreq)
+                y.high.new <- ts(rep(y.high/h,h),start=yForecastStart,frequency=datafreq)
+                y.low.new <- ts(rep(y.low/h,h),start=yForecastStart,frequency=datafreq)
             }
         }
 

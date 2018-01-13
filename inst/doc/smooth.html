@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2017-12-23" />
+<meta name="date" content="2018-01-13" />
 
 <title>smooth: forecasting using state-space models</title>
 
@@ -32,11 +32,11 @@
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2017-12-23</em></h4>
+<h4 class="date"><em>2018-01-13</em></h4>
 
 
 
-<p>This vignette explains how to use functions in ‘smooth’ package, what they produce, what each field in outputs and what returned values mean. Underlying statistical models are not discussed here, but if you want to know more about them, then there is a document “<a href="https://github.com/config-i1/smooth/blob/master/inst/doc/smooth-Documentation.pdf">Statistical models underlying functions of ‘smooth’ package for R</a>”.</p>
+<p>This vignette explains how to use functions in <code>smooth</code> package, what they produce, what each field in outputs and what returned values mean. Underlying statistical models are not discussed here, but if you want to know more about them, then there is a document “<a href="https://github.com/config-i1/smooth/blob/master/inst/doc/smooth-Documentation.pdf">Statistical models underlying functions of ‘smooth’ package for R</a>”. Some of the features of the package are also explained in my <a href="https://forecasting.svetunkov.ru/en/tag/smooth/">blog</a>.</p>
 <p>The package includes the following functions:</p>
 <ol style="list-style-type: decimal">
 <li><a href="es.html">es() - Exponential Smoothing</a>;</li>
@@ -46,22 +46,22 @@
 <li><a href="ves.html">ves() - Vector Exponential Smoothing</a>;</li>
 <li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
 <li><a href="simulate.html">sim.es() and simulate() - simulation functions for Exponential Smoothing</a>.</li>
-<li><code>iss()</code> – function that estimates probability of occurrence of variable using one of the following: 1. Fixed probability; 2. Croston’s probability; 3. SBA; 4. TSB probability. The model produced by <code>iss()</code> can then be used in any forecasting function as input variable for <code>imodel</code> parameter.</li>
-<li><code>xregExpander()</code> – function that creates lags and leads of the provided exogenous variables (either vector or matrix). This thing returns the matrix.</li>
-<li><code>stepwise()</code> – the function that implements stepwise based on information criteria and partial correlations. Easier to use and works faster than <code>step()</code> from ``stats’’ package.</li>
+<li><code>iss()</code> – function that estimates probability of occurrence of variable using one of the following: 1. Fixed probability; 2. Croston’s probability; 3. SBA; 4. TSB probability; 5. Logistic probability. The model produced by <code>iss()</code> can then be used in any forecasting function as input variable for <code>imodel</code> parameter. There is also vector counterpart of this function called <code>viss()</code> which implements multivariate fixed and logistic probabilities.</li>
+<li><code>xregExpander()</code> – function that creates lags and leads of the provided exogenous variables (either vector or matrix) and forecasts the missing values. This thing returns the matrix.</li>
+<li><code>stepwise()</code> – the function that implements stepwise based on information criteria and partial correlations. Easier to use and works faster than <code>step()</code> from <code>stats</code> package.</li>
 </ol>
-<p>This funcions (except for the last one) return object of class ``smooth’’, which uses several methods.</p>
+<p>The functions (1) - (4) and (6) return object of class <code>smooth</code>, (5) returns the object of class <code>vsmooth</code>, (7) returns <code>smooth.sim</code> class and finally (8) returns <code>iss</code> or <code>viss</code> (depending on the function used). There are several methods for these classes in the package.</p>
 <div id="methods-for-the-class-smooth" class="section level2">
 <h2>Methods for the class <code>smooth</code></h2>
-<p>There are several functions that can be used together with <code>es()</code>, <code>ces()</code>, <code>ssarima()</code> and <code>ges()</code> functions. So when a model is saved to some object <code>ourModel</code>, these function will do some things. Here’s the list of all the available methods with some explanations:</p>
+<p>There are several functions that can be used together with the forecasing functions of the package. So when a model is saved to some object <code>ourModel</code>, these function will do some things. Here’s the list of all the available methods with brief explanations:</p>
 <ol style="list-style-type: decimal">
 <li><code>summary(ourModel)</code> – function prints brief output with explanation of what was fitted, with what parameters and errors;</li>
-<li><code>fitted(ourModel)</code> – fitted values;</li>
+<li><code>fitted(ourModel)</code> – fitted values of the model;</li>
 <li><code>forecast(ourModel)</code> – point and interval forecasts. This is needed for compatibility with Rob Hyndman’s “forecast” package. <code>forecast(ourModel)</code> returns object of class <code>forecastSmooth</code>;</li>
 <li><code>residuals(ourModel)</code> – residuals of constructed model;</li>
-<li><code>AIC(ourModel)</code>, <code>BIC(ourModel)</code> and <code>AICc(ourModel)</code> – information criteria of the constructed model. <code>AICc()</code> function is not a standard <code>stats'' function and is introduced by</code>smooth’’;</li>
-<li><code>plot(ourModel)</code> – plots states of constructed model. If number of states is higher than 10, then several graphs are produced;</li>
-<li><code>simulate(ourModel)</code> – produces data simulated from provided model. Currently only available for ETS via <code>simulate(es(...))</code>;</li>
+<li><code>AIC(ourModel)</code>, <code>BIC(ourModel)</code> and <code>AICc(ourModel)</code> – information criteria of the constructed model. <code>AICc()</code> function is not a standard <code>stats</code> function and is introduced by <code>smooth</code>;</li>
+<li><code>plot(ourModel)</code> – plots states of constructed model. If number of states is higher than 10, then several graphs are produced. In case of <code>iss()</code> plots the actual zeroes, fitted values and the forecast.</li>
+<li><code>simulate(ourModel)</code> – produces data simulated from provided model;</li>
 <li><code>summary(forecast(ourModel))</code> – prints point and interval forecasts;</li>
 <li><code>plot(forecast(ourModel))</code> – produces graph with actuals, forecast, fitted and intervals using <code>graphmaker()</code> function.</li>
 <li><code>logLik(ourModel)</code> – returns log-likelihood of the model;</li>
@@ -70,10 +70,11 @@
 <li><code>pointLik(ourModel)</code> – likelihood values for each separate observation;</li>
 <li><code>sigma(ourModel)</code> – variance of the residuals of the model;</li>
 <li><code>lags(ourModel)</code> – lags of the model (used with <code>ssarima()</code> and <code>ges()</code>);</li>
-<li><code>orders(ourModel)</code> – orders of the model (can be used with <code>ssarima()</code> and <code>ges()</code>);</li>
-<li><code>modelType(ourModel)</code> – returns the type of the model. Returns something like “MMM” for ETS(MMM). Can be used with <code>es()</code>, <code>ces()</code> and <code>ets()</code>.</li>
-<li><code>coef(ourModel)</code> – returns the vector of all the estimated coefficients of the model.</li>
-<li><code>formula(ourModel)</code> – returns the formula for the measurement equation. This is just for the information and general understanding what we work with.</li>
+<li><code>orders(ourModel)</code> – orders of the model (can be used with <code>ssarima()</code>, <code>ges()</code> and <code>sma()</code>);</li>
+<li><code>modelType(ourModel)</code> – returns the type of the model. Returns something like “MMM” for ETS(MMM). Can be used with <code>es()</code>, <code>ces()</code>, <code>ves()</code> and <code>ets()</code>;</li>
+<li><code>coef(ourModel)</code> – returns the vector of all the estimated coefficients of the model;</li>
+<li><code>formula(ourModel)</code> – returns the formula for the measurement equation. This is just for the information and general understanding what we work with;</li>
+<li><code>getResponse(ourModel)</code> – returns actual values.</li>
 </ol>
 </div>
 

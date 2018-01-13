@@ -103,6 +103,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     # Define the actual values
     y <- matrix(data[1:obsInsample],obsInsample,1);
     datafreq <- frequency(data);
+    dataStart <- start(data);
 
     # Number of parameters to estimate / provided
     parametersNumber <- matrix(0,2,4,
@@ -217,70 +218,76 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
                 modelDo <- "estimate";
             }
 
-            if(any(unlist(strsplit(model,""))=="X") | any(unlist(strsplit(model,""))=="Y")){
-                modelsPool <- c("ANN","MNN","AAN","AMN","MAN","MMN","AAdN","AMdN","MAdN","MMdN","ANA","ANM","MNA","MNM",
-                                 "AAA","AAM","AMA","AMM","MAA","MAM","MMA","MMM",
-                                 "AAdA","AAdM","AMdA","AMdM","MAdA","MAdM","MMdA","MMdM");
-                if(datafreq==1 & Stype!="N"){
-                    if(!silentText){
-                        warning("The provided data has frequency of 1. Only non-seasonal models are available.",call.=FALSE);
-                    }
-                    Stype <- "N";
-                    substr(model,nchar(model),nchar(model)) <- "N";
-                }
-
-                if((obsInsample < datafreq*2) & Stype!="N"){
-                    warning("Sorry, but we don't have enough data for the seasonal model. Switching to non-seasonal.",call.=FALSE);
-                    Stype <- "N";
-                }
-                # Restrict error types in the pool
-                if(Etype=="X"){
-                    modelsPool <- modelsPool[substr(modelsPool,1,1)=="A"];
-                    Etype <- "Z";
-                }
-                else if(Etype=="Y"){
-                    modelsPool <- modelsPool[substr(modelsPool,1,1)=="M"];
-                    Etype <- "Z";
-                }
-                else{
-                    if(Etype!="Z"){
-                        modelsPool <- modelsPool[substr(modelsPool,1,1)==Etype];
-                    }
-                }
-                # Restrict trend types in the pool
-                if(Ttype=="X"){
-                    modelsPool <- modelsPool[substr(modelsPool,2,2)=="A" | substr(modelsPool,2,2)=="N"];
-                    Ttype <- "Z";
-                }
-                else if(Ttype=="Y"){
-                    modelsPool <- modelsPool[substr(modelsPool,2,2)=="M" | substr(modelsPool,2,2)=="N"];
-                    Ttype <- "Z";
-                }
-                else{
-                    if(Ttype!="Z"){
-                        modelsPool <- modelsPool[substr(modelsPool,2,2)==Ttype];
-                        if(damped){
-                            modelsPool <- modelsPool[nchar(modelsPool)==4];
-                        }
-                    }
-                }
-                # Restrict season types in the pool
-                if(Stype=="X"){
-                    modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="A" |
-                                               substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="N" ];
-                    Stype <- "Z";
-                }
-                else if(Stype=="Y"){
-                    modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="M" |
-                                               substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="N" ];
-                    Stype <- "Z";
-                }
-                else{
-                    if(Stype!="Z"){
-                        modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))==Stype];
-                    }
-                }
+            if(Etype=="X"){
+                Etype <- "A";
             }
+            else if(Etype=="Y"){
+                Etype <- "M";
+            }
+            # if(any(unlist(strsplit(model,""))=="X") | any(unlist(strsplit(model,""))=="Y")){
+            #     modelsPool <- c("ANN","MNN","AAN","AMN","MAN","MMN","AAdN","AMdN","MAdN","MMdN","ANA","ANM","MNA","MNM",
+            #                      "AAA","AAM","AMA","AMM","MAA","MAM","MMA","MMM",
+            #                      "AAdA","AAdM","AMdA","AMdM","MAdA","MAdM","MMdA","MMdM");
+            #     if(datafreq==1 & Stype!="N"){
+            #         if(!silentText){
+            #             warning("The provided data has frequency of 1. Only non-seasonal models are available.",call.=FALSE);
+            #         }
+            #         Stype <- "N";
+            #         substr(model,nchar(model),nchar(model)) <- "N";
+            #     }
+            #
+            #     if((obsInsample < datafreq*2) & Stype!="N"){
+            #         warning("Sorry, but we don't have enough data for the seasonal model. Switching to non-seasonal.",call.=FALSE);
+            #         Stype <- "N";
+            #     }
+            #     # Restrict error types in the pool
+            #     if(Etype=="X"){
+            #         modelsPool <- modelsPool[substr(modelsPool,1,1)=="A"];
+            #         Etype <- "Z";
+            #     }
+            #     else if(Etype=="Y"){
+            #         modelsPool <- modelsPool[substr(modelsPool,1,1)=="M"];
+            #         Etype <- "Z";
+            #     }
+            #     else{
+            #         if(Etype!="Z"){
+            #             modelsPool <- modelsPool[substr(modelsPool,1,1)==Etype];
+            #         }
+            #     }
+            #     # Restrict trend types in the pool
+            #     if(Ttype=="X"){
+            #         modelsPool <- modelsPool[substr(modelsPool,2,2)=="A" | substr(modelsPool,2,2)=="N"];
+            #         Ttype <- "Z";
+            #     }
+            #     else if(Ttype=="Y"){
+            #         modelsPool <- modelsPool[substr(modelsPool,2,2)=="M" | substr(modelsPool,2,2)=="N"];
+            #         Ttype <- "Z";
+            #     }
+            #     else{
+            #         if(Ttype!="Z"){
+            #             modelsPool <- modelsPool[substr(modelsPool,2,2)==Ttype];
+            #             if(damped){
+            #                 modelsPool <- modelsPool[nchar(modelsPool)==4];
+            #             }
+            #         }
+            #     }
+            #     # Restrict season types in the pool
+            #     if(Stype=="X"){
+            #         modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="A" |
+            #                                    substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="N" ];
+            #         Stype <- "Z";
+            #     }
+            #     else if(Stype=="Y"){
+            #         modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="M" |
+            #                                    substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="N" ];
+            #         Stype <- "Z";
+            #     }
+            #     else{
+            #         if(Stype!="Z"){
+            #             modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))==Stype];
+            #         }
+            #     }
+            # }
         }
         else{
             if(any(unlist(strsplit(model,""))=="C")){
@@ -864,15 +871,15 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
         }
         # If non-positive values are present, check if data is intermittent, if negatives are here, switch to additive models
         if(!allowMultiplicative){
-            if(Etype=="M"){
+            if(any(Etype==c("M","Y"))){
                 warning("Can't apply multiplicative model to non-positive data. Switching error type to 'A'", call.=FALSE);
                 Etype <- "A";
             }
-            if(Ttype=="M"){
+            if(any(Ttype==c("M","Y"))){
                 warning("Can't apply multiplicative model to non-positive data. Switching trend type to 'A'", call.=FALSE);
                 Ttype <- "A";
             }
-            if(Stype=="M"){
+            if(any(Stype==c("M","Y"))){
                 warning("Can't apply multiplicative model to non-positive data. Switching seasonality type to 'A'", call.=FALSE);
                 Stype <- "A";
             }
@@ -1058,7 +1065,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
 
     if(any(smoothType==c("es"))){
         # If model selection is chosen, forget about the initial values and persistence
-        if(any(Etype=="Z",Ttype=="Z",Stype=="Z")){
+        if(any(Etype=="Z",any(Ttype==c("X","Y","Z")),Stype=="Z")){
             if(any(!is.null(initialValue),!is.null(initialSeason),!is.null(persistence),!is.null(phi))){
                 warning(paste0("Model selection doesn't go well with the predefined values.\n",
                                "Switching to estimation of all the parameters."),call.=FALSE);
@@ -1290,6 +1297,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     assign("data",data,ParentEnvironment);
     assign("y",y,ParentEnvironment);
     assign("datafreq",datafreq,ParentEnvironment);
+    assign("dataStart",dataStart,ParentEnvironment);
     assign("bounds",bounds,ParentEnvironment);
     assign("cfType",cfType,ParentEnvironment);
     assign("cfTypeOriginal",cfTypeOriginal,ParentEnvironment);
@@ -1463,6 +1471,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
 
     y <- data[1:obsInsample];
     datafreq <- frequency(data);
+    dataStart <- start(data);
 
 # This is the critical minimum needed in order to at least fit ARIMA(0,0,0) with constant
     if(obsInsample < 4){
@@ -1660,6 +1669,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
     assign("y",y,ParentEnvironment);
     assign("data",data,ParentEnvironment);
     assign("datafreq",datafreq,ParentEnvironment);
+    assign("dataStart",dataStart,ParentEnvironment);
     assign("xregDo",xregDo,ParentEnvironment);
 }
 
@@ -1684,8 +1694,8 @@ ssFitter <- function(...){
     statesNames <- colnames(matvt);
     matvt <- ts(fitting$matvt,start=(time(data)[1] - deltat(data)*maxlag),frequency=datafreq);
     colnames(matvt) <- statesNames;
-    y.fit <- ts(fitting$yfit,start=start(data),frequency=datafreq);
-    errors <- ts(fitting$errors,start=start(data),frequency=datafreq);
+    y.fit <- ts(fitting$yfit,start=dataStart,frequency=datafreq);
+    errors <- ts(fitting$errors,start=dataStart,frequency=datafreq);
 
     if(EtypeNew=="M" & any(matvt[,1]<0)){
         matvt[matvt[,1]<0,1] <- 0.001;
@@ -2280,14 +2290,15 @@ ssForecaster <- function(...){
         df <- 0;
     }
 
+    yForecastStart <- time(data)[obsInsample]+deltat(data);
+
     if(h>0){
         y.for <- ts(forecasterwrap(matrix(matvt[(obsInsample+1):(obsInsample+maxlag),],nrow=maxlag),
                                    matF, matw, h, Etype, Ttype, Stype, modellags,
                                    matrix(matxt[(obsAll-h+1):(obsAll),],ncol=nExovars),
                                    matrix(matat[(obsAll-h+1):(obsAll),],ncol=nExovars), matFX),
-                    start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
+                    start=yForecastStart,frequency=datafreq);
 
-        y.forStart <- start(y.for);
         if(Etype=="M" & any(y.for<0)){
             warning(paste0("Negative values produced in forecast. This does not make any sense for model with multiplicative error.\n",
                            "Please, use another model."),call.=FALSE);
@@ -2381,14 +2392,14 @@ ssForecaster <- function(...){
                 y.for <- c(pt.for)*y.for;
 
                 if(cumulative){
-                    y.for <- ts(sum(y.for),start=y.forStart,frequency=datafreq);
-                    y.low <- ts(quantile(colSums(y.simulated,na.rm=T),(1-level)/2,type=quantileType),start=y.forStart,frequency=datafreq);
-                    y.high <- ts(quantile(colSums(y.simulated,na.rm=T),(1+level)/2,type=quantileType),start=y.forStart,frequency=datafreq);
+                    y.for <- ts(sum(y.for),start=yForecastStart,frequency=datafreq);
+                    y.low <- ts(quantile(colSums(y.simulated,na.rm=T),(1-level)/2,type=quantileType),start=yForecastStart,frequency=datafreq);
+                    y.high <- ts(quantile(colSums(y.simulated,na.rm=T),(1+level)/2,type=quantileType),start=yForecastStart,frequency=datafreq);
                 }
                 else{
-                    y.for <- ts(y.for,start=y.forStart + y.exo.for,frequency=datafreq);
-                    y.low <- ts(apply(y.simulated,1,quantile,(1-level)/2,na.rm=T,type=quantileType) + y.exo.for,start=y.forStart,frequency=datafreq);
-                    y.high <- ts(apply(y.simulated,1,quantile,(1+level)/2,na.rm=T,type=quantileType) + y.exo.for,start=y.forStart,frequency=datafreq);
+                    y.for <- ts(y.for,start=yForecastStart + y.exo.for,frequency=datafreq);
+                    y.low <- ts(apply(y.simulated,1,quantile,(1-level)/2,na.rm=T,type=quantileType) + y.exo.for,start=yForecastStart,frequency=datafreq);
+                    y.high <- ts(apply(y.simulated,1,quantile,(1+level)/2,na.rm=T,type=quantileType) + y.exo.for,start=yForecastStart,frequency=datafreq);
                 }
                 # For now we leave it as NULL
                 varVec <- NULL;
@@ -2410,20 +2421,20 @@ ssForecaster <- function(...){
                 }
 
                 if(cumulative){
-                    y.for <- ts(sum(y.for),start=y.forStart,frequency=datafreq);
+                    y.for <- ts(sum(y.for),start=yForecastStart,frequency=datafreq);
                 }
 
                 if(Etype=="A"){
-                    y.low <- ts(c(y.for) + quantvalues$lower,start=y.forStart,frequency=datafreq);
-                    y.high <- ts(c(y.for) + quantvalues$upper,start=y.forStart,frequency=datafreq);
+                    y.low <- ts(c(y.for) + quantvalues$lower,start=yForecastStart,frequency=datafreq);
+                    y.high <- ts(c(y.for) + quantvalues$upper,start=yForecastStart,frequency=datafreq);
                 }
                 else{
                     if(any(intervalsType==c("np","sp","a"))){
                         quantvalues$upper <- quantvalues$upper * y.for;
                         quantvalues$lower <- quantvalues$lower * y.for;
                     }
-                    y.low <- ts(quantvalues$lower,start=y.forStart,frequency=datafreq);
-                    y.high <- ts(quantvalues$upper,start=y.forStart,frequency=datafreq);
+                    y.low <- ts(quantvalues$lower,start=yForecastStart,frequency=datafreq);
+                    y.high <- ts(quantvalues$upper,start=yForecastStart,frequency=datafreq);
                 }
 
                 if(rounded){
@@ -2441,10 +2452,10 @@ ssForecaster <- function(...){
             }
             y.for <- c(pt.for)*y.for;
             if(cumulative){
-                y.for <- ts(sum(y.for),start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
+                y.for <- ts(sum(y.for),start=yForecastStart,frequency=datafreq);
             }
             else{
-                y.for <- ts(y.for,start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
+                y.for <- ts(y.for,start=yForecastStart,frequency=datafreq);
             }
             varVec <- NULL;
         }
@@ -2452,7 +2463,7 @@ ssForecaster <- function(...){
     else{
         y.low <- NA;
         y.high <- NA;
-        y.for <- ts(NA,start=time(data)[obsInsample]+deltat(data),frequency=datafreq);
+        y.for <- ts(NA,start=yForecastStart,frequency=datafreq);
         # For now we leave it as NULL, because this thing is estimated in ssIntervals()
         varVec <- NULL;
     }
@@ -2478,6 +2489,7 @@ ssForecaster <- function(...){
     assign("y.low",y.low,ParentEnvironment);
     assign("y.high",y.high,ParentEnvironment);
     assign("varVec",varVec,ParentEnvironment);
+    assign("yForecastStart",yForecastStart,ParentEnvironment);
 }
 
 ##### *Check and initialisation of xreg* #####
