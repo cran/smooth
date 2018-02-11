@@ -160,7 +160,7 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
                 persistence=NULL, transition=NULL, measurement=NULL,
                 initial=c("optimal","backcasting"), ic=c("AICc","AIC","BIC"),
-                cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE"),
+                cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                 h=10, holdout=FALSE, cumulative=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                 intermittent=c("none","auto","fixed","interval","probability","sba","logistic"),
@@ -251,7 +251,7 @@ ElementsGES <- function(C){
     if(initialType!="b"){
         if(initialType=="o"){
             vtvalues <- C[n.coef+(1:(orders %*% lags))];
-            n.coef <- n.coef + orders %*% lags;
+            n.coef <- n.coef + c(orders %*% lags);
 
             for(i in 1:nComponents){
                 vt[(maxlag - modellags + 1)[i]:maxlag,i] <- vtvalues[((cumsum(c(0,modellags))[i]+1):cumsum(c(0,modellags))[i+1])];

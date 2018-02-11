@@ -1,3 +1,35 @@
+smooth v2.4.0 (Release data: 2018-02-10)
+==============
+
+Changes:
+* ves() model now accepts intermittent parameter. So we can construct multivariate intermittent models.
+* ves() now prints information about the underlying intermittent model.
+* New estimator - MSCE (Mean Squared Cumulative Error). Needed in cases of cumulative demand.
+
+Bugfixes:
+* ves(): Initial values for seasonal components in case of multiplicative models were incorrectly estimated.
+* iETS could not be used in some cases of highly intermittent data and intermittent!="n".
+* logLik was incorrectly calculated in iss() for cases of intermittent="p".
+* The selection of intermittent model was done incorrectly due to the new return of ICs.
+* Return NULL in logLik() function, when logLik is unavailable for the model (e.g. combination of models). Similar thing with nParam().
+* Check if the data.frame is provided to ves.
+* stepwise() now ignores NAs in the provided data.
+
+
+smooth v2.3.2 (Release data: 2018-01-18)
+==============
+
+Changes:
+* The providedC is now used in case of xregDo="select". This should increase the speed of convergence and fix several bugs related to optimisation problems.
+* The correct initialX are now used in cases of es("ZZZ") and es("CCC").
+* We now return the matrix of ICs and ICweights in cases of model selection and combinations of es().
+* maxeval in the optimiser now depends on the number of parameters. If we have more than 10, then maxeval=1000. Otherwise maxeval=500.
+* Removed a silly SMAPE from the output of accuracies and substituted by a more useful sCE. Both are still available via ourModel$accuracy.
+
+Bugfixes:
+* ges() added an array to a vector, which caused dozens of warnings. Fixed.
+
+
 smooth v2.3.1 (Release data: 2018-01-13)
 ==============
 
@@ -11,6 +43,7 @@ Bugfixes:
 * es() now also checks if data is multiplicative in case of YYY and acts accordingly.
 * dataStart and yForecastStart variables in the code.
 * stepwise() now has a more userfriendly Call in the output.
+
 
 smooth v2.3.0 (Release data: 2017-12-23)
 ==============

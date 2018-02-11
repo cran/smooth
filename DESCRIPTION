@@ -1,8 +1,8 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using Smoothing Functions
-Version: 2.3.1
-Date: 2018-01-13
+Version: 2.4.0
+Date: 2018-02-10
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
 URL: https://github.com/config-i1/smooth
@@ -19,9 +19,9 @@ Suggests: Mcomp, numDeriv, testthat, knitr, rmarkdown
 VignetteBuilder: knitr
 RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2018-01-13 14:44:31 UTC; config
+Packaged: 2018-02-11 01:21:00 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2018-01-13 17:08:26 UTC
+Date/Publication: 2018-02-11 14:19:38 UTC

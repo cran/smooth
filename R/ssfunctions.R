@@ -224,70 +224,6 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
             else if(Etype=="Y"){
                 Etype <- "M";
             }
-            # if(any(unlist(strsplit(model,""))=="X") | any(unlist(strsplit(model,""))=="Y")){
-            #     modelsPool <- c("ANN","MNN","AAN","AMN","MAN","MMN","AAdN","AMdN","MAdN","MMdN","ANA","ANM","MNA","MNM",
-            #                      "AAA","AAM","AMA","AMM","MAA","MAM","MMA","MMM",
-            #                      "AAdA","AAdM","AMdA","AMdM","MAdA","MAdM","MMdA","MMdM");
-            #     if(datafreq==1 & Stype!="N"){
-            #         if(!silentText){
-            #             warning("The provided data has frequency of 1. Only non-seasonal models are available.",call.=FALSE);
-            #         }
-            #         Stype <- "N";
-            #         substr(model,nchar(model),nchar(model)) <- "N";
-            #     }
-            #
-            #     if((obsInsample < datafreq*2) & Stype!="N"){
-            #         warning("Sorry, but we don't have enough data for the seasonal model. Switching to non-seasonal.",call.=FALSE);
-            #         Stype <- "N";
-            #     }
-            #     # Restrict error types in the pool
-            #     if(Etype=="X"){
-            #         modelsPool <- modelsPool[substr(modelsPool,1,1)=="A"];
-            #         Etype <- "Z";
-            #     }
-            #     else if(Etype=="Y"){
-            #         modelsPool <- modelsPool[substr(modelsPool,1,1)=="M"];
-            #         Etype <- "Z";
-            #     }
-            #     else{
-            #         if(Etype!="Z"){
-            #             modelsPool <- modelsPool[substr(modelsPool,1,1)==Etype];
-            #         }
-            #     }
-            #     # Restrict trend types in the pool
-            #     if(Ttype=="X"){
-            #         modelsPool <- modelsPool[substr(modelsPool,2,2)=="A" | substr(modelsPool,2,2)=="N"];
-            #         Ttype <- "Z";
-            #     }
-            #     else if(Ttype=="Y"){
-            #         modelsPool <- modelsPool[substr(modelsPool,2,2)=="M" | substr(modelsPool,2,2)=="N"];
-            #         Ttype <- "Z";
-            #     }
-            #     else{
-            #         if(Ttype!="Z"){
-            #             modelsPool <- modelsPool[substr(modelsPool,2,2)==Ttype];
-            #             if(damped){
-            #                 modelsPool <- modelsPool[nchar(modelsPool)==4];
-            #             }
-            #         }
-            #     }
-            #     # Restrict season types in the pool
-            #     if(Stype=="X"){
-            #         modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="A" |
-            #                                    substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="N" ];
-            #         Stype <- "Z";
-            #     }
-            #     else if(Stype=="Y"){
-            #         modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="M" |
-            #                                    substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="N" ];
-            #         Stype <- "Z";
-            #     }
-            #     else{
-            #         if(Stype!="Z"){
-            #             modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))==Stype];
-            #         }
-            #     }
-            # }
         }
         else{
             if(any(unlist(strsplit(model,""))=="C")){
@@ -674,7 +610,8 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
 
     ##### Cost function type #####
     cfType <- cfType[1];
-    if(any(cfType==c("MSEh","TMSE","GTMSE","MAEh","TMAE","GTMAE","HAMh","THAM","GTHAM",
+    if(any(cfType==c("MSEh","TMSE","GTMSE","MSCE","MAEh","TMAE","GTMAE","MACE",
+                     "HAMh","THAM","GTHAM","CHAM",
                      "TFL","aMSEh","aTMSE","aGTMSE","aTFL"))){
         multisteps <- TRUE;
     }
@@ -873,15 +810,15 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
         if(!allowMultiplicative){
             if(any(Etype==c("M","Y"))){
                 warning("Can't apply multiplicative model to non-positive data. Switching error type to 'A'", call.=FALSE);
-                Etype <- "A";
+                Etype <- ifelse(Etype=="M","A","X");
             }
             if(any(Ttype==c("M","Y"))){
                 warning("Can't apply multiplicative model to non-positive data. Switching trend type to 'A'", call.=FALSE);
-                Ttype <- "A";
+                Ttype <- ifelse(Ttype=="M","A","X");
             }
             if(any(Stype==c("M","Y"))){
                 warning("Can't apply multiplicative model to non-positive data. Switching seasonality type to 'A'", call.=FALSE);
-                Stype <- "A";
+                Stype <- ifelse(Stype=="M","A","X");
             }
 
             if(!is.null(modelsPool)){
@@ -1520,7 +1457,8 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
 
     ##### Cost function type #####
     cfType <- cfType[1];
-    if(any(cfType==c("MSEh","TMSE","GTMSE","MAEh","TMAE","GTMAE","HAMh","THAM","GTHAM",
+    if(any(cfType==c("MSEh","TMSE","GTMSE","MSCE","MAEh","TMAE","GTMAE","MACE",
+                     "HAMh","THAM","GTHAM","CHAM",
                      "TFL","aMSEh","aTMSE","aGTMSE","aTFL"))){
         multisteps <- TRUE;
     }
@@ -2495,7 +2433,8 @@ ssForecaster <- function(...){
 ##### *Check and initialisation of xreg* #####
 ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                    persistenceX=NULL, transitionX=NULL, initialX=NULL,
-                   obsInsample, obsAll, obsStates, maxlag=1, h=1, xregDo="u", silent=FALSE){
+                   obsInsample, obsAll, obsStates, maxlag=1, h=1, xregDo="u", silent=FALSE,
+                   allowMultiplicative=FALSE){
 # The function does general checks needed for exogenouse variables and returns the list of necessary parameters
 
     if(!is.null(xreg)){
@@ -2553,25 +2492,30 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 # Define matrix w for exogenous variables
                 matxt <- matrix(xreg,ncol=1);
 # Define the second matat to fill in the coefs of the exogenous vars
-                matat <- matrix(NA,obsStates,1);
+                matatMultiplicative <- matat <- matrix(NA,obsStates,1);
 # Fill in the initial values for exogenous coefs using OLS
                 if(is.null(initialX)){
                     if(Etype=="M"){
                         matat[1:maxlag,] <- cov(log(data[1:obsInsample][ot==1]),
                                                 xreg[1:obsInsample][ot==1])/var(xreg[1:obsInsample][ot==1]);
+                        matatMultiplicative[1:maxlag,] <- matat[1:maxlag,];
                     }
                     else{
                         matat[1:maxlag,] <- cov(data[1:obsInsample][ot==1],xreg[1:obsInsample][ot==1])/var(xreg[1:obsInsample][ot==1]);
                     }
+
+                    # If Etype=="Z" or "C", estimate multiplicative stuff.
+                    if(allowMultiplicative & all(Etype!=c("M","A"))){
+                        matatMultiplicative[1:maxlag,] <- cov(log(data[1:obsInsample][ot==1]),
+                                                              xreg[1:obsInsample][ot==1])/var(xreg[1:obsInsample][ot==1]);
+                    }
                 }
                 if(is.null(names(xreg))){
-                    colnames(matat) <- "x";
-                    colnames(matxt) <- "x";
+                    colnames(matxt) <- colnames(matat) <- colnames(matatMultiplicative) <- "x";
                 }
                 else{
                     xregNames <- gsub(" ", "_", names(xreg), fixed = TRUE);
-                    colnames(matat) <- xregNames;
-                    colnames(matxt) <- xregNames;
+                    colnames(matxt) <- colnames(matat) <- colnames(matatMultiplicative) <- xregNames
                 }
             }
             xreg <- as.matrix(xreg);
@@ -2680,7 +2624,7 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 # mat.x is needed for the initial values of coefs estimation using OLS
                 mat.x <- as.matrix(cbind(rep(1,obsAll),xreg));
 # Define the second matat to fill in the coefs of the exogenous vars
-                matat <- matrix(NA,obsStates,nExovars);
+                matatMultiplicative <- matat <- matrix(NA,obsStates,nExovars);
 # Define matrix w for exogenous variables
                 matxt <- as.matrix(xreg);
 # Fill in the initial values for exogenous coefs using OLS
@@ -2689,16 +2633,23 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                         matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,][ot==1,]) %*% mat.x[1:obsInsample,][ot==1,],tol=1e-50) %*%
                                                       t(mat.x[1:obsInsample,][ot==1,]) %*% log(data[1:obsInsample][ot==1]))[2:(nExovars+1)],
                                                 each=maxlag);
+                        matatMultiplicative[1:maxlag,] <- matat[1:maxlag,];
                     }
                     else{
                         matat[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,][ot==1,]) %*% mat.x[1:obsInsample,][ot==1,],tol=1e-50) %*%
                                                       t(mat.x[1:obsInsample,][ot==1,]) %*% data[1:obsInsample][ot==1])[2:(nExovars+1)],
                                                 each=maxlag);
                     }
+
+                    # If Etype=="Z" or "C", estimate multiplicative stuff.
+                    if(allowMultiplicative & all(Etype!=c("M","A"))){
+                        matatMultiplicative[1:maxlag,] <- rep(t(solve(t(mat.x[1:obsInsample,][ot==1,]) %*% mat.x[1:obsInsample,][ot==1,],tol=1e-50) %*%
+                                                                    t(mat.x[1:obsInsample,][ot==1,]) %*% log(data[1:obsInsample][ot==1]))[2:(nExovars+1)],
+                                                              each=maxlag);
+                    }
                 }
                 if(is.null(colnames(xreg))){
-                    colnames(matat) <- paste0("x",c(1:nExovars));
-                    colnames(matxt) <- paste0("x",c(1:nExovars));
+                    colnames(matxt) <- colnames(matat) <- colnames(matatMultiplicative) <- paste0("x",c(1:nExovars));
                 }
                 else{
                     xregNames <- gsub(" ", "_", colnames(xreg), fixed = TRUE);
@@ -2707,8 +2658,7 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                                        "xreg variables. We had to remove them."),call.=FALSE);
                         xregNames <- gsub("[^[:alnum:]]", "", xregNames);
                     }
-                    colnames(matat) <- xregNames;
-                    colnames(matxt) <- xregNames;
+                    colnames(matxt) <- colnames(matat) <- colnames(matatMultiplicative) <- xregNames;
                 }
             }
         }
@@ -2746,7 +2696,7 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 # "1" is needed for the final forecast simplification
         nExovars <- 1;
         matxt <- matrix(1,obsStates,1);
-        matat <- matrix(0,obsStates,1);
+        matatMultiplicative <- matat <- matrix(0,obsStates,1);
         matFX <- matrix(1,1,1);
         vecgX <- matrix(0,1,1);
         xregEstimate <- FALSE;
@@ -2812,7 +2762,8 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 
     return(list(nExovars=nExovars, matxt=matxt, matat=matat, matFX=matFX, vecgX=vecgX,
                 xreg=xreg, xregEstimate=xregEstimate, FXEstimate=FXEstimate,
-                gXEstimate=gXEstimate, initialXEstimate=initialXEstimate))
+                gXEstimate=gXEstimate, initialXEstimate=initialXEstimate,
+                matatMultiplicative=matatMultiplicative))
 }
 
 ##### *Likelihood function* #####
@@ -3045,6 +2996,12 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
     }
 
     cat("\nInformation criteria:\n");
+    if(model=="ETS"){
+        if(any(unlist(gregexpr("C",modelname))!=-1)){
+            cat("(combined values)\n");
+        }
+        ICs <- ICs[nrow(ICs),];
+    }
     print(ICs);
 
     if(intervals){
@@ -3073,9 +3030,9 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
         cat("Forecast errors:\n");
         if(any(intermittent==c("none","n"))){
             cat(paste(paste0("MPE: ",errormeasures["MPE"]*100,"%"),
+                      paste0("sCE: ",errormeasures["sCE"]*100,"%"),
                       paste0("Bias: ",errormeasures["cbias"]*100,"%"),
-                      paste0("MAPE: ",errormeasures["MAPE"]*100,"%"),
-                      paste0("SMAPE: ",errormeasures["SMAPE"]*100,"%\n"),sep="; "));
+                      paste0("MAPE: ",errormeasures["MAPE"]*100,"%\n"),sep="; "));
             cat(paste(paste0("MASE: ",errormeasures["MASE"]),
                       paste0("sMAE: ",errormeasures["sMAE"]*100,"%"),
                       paste0("RelMAE: ",errormeasures["RelMAE"]),
