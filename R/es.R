@@ -638,22 +638,22 @@ EstimatorES <- function(...){
     # If the optimisation failed, then probably this is because of smoothing parameters in mixed models. Set them eqaul to zero.
     if(any(C==Cs$C)){
         if(C[1]==Cs$C[1]){
-            C[1] <- 0;
+            C[1] <- max(0,CLower);
         }
         if(Ttype!="N"){
             if(C[2]==Cs$C[2]){
-                C[2] <- 0;
+                C[2] <- max(0,CLower);
             }
             if(Stype!="N"){
                 if(C[3]==Cs$C[3]){
-                    C[3] <- 0;
+                    C[3] <- max(0,CLower);
                 }
             }
         }
         else{
             if(Stype!="N"){
                 if(C[2]==Cs$C[2]){
-                    C[2] <- 0;
+                    C[2] <- max(0,CLower);
                 }
             }
         }
@@ -771,7 +771,12 @@ XregSelector <- function(listToReturn){
     }
 
     if(!is.null(xreg)){
-        providedC <- c(C,coef(xregResults)[-1]);
+        if(Etype=="M" & any(abs(coef(xregResults)[-1])>10)){
+            providedC <- c(C,coef(xregResults)[-1]/max(abs(coef(xregResults)[-1])));
+        }
+        else{
+            providedC <- c(C,coef(xregResults)[-1]);
+        }
         phi <- NULL;
         res <- EstimatorES(ParentEnvironment=environment());
         icBest <- res$ICs[ic];
@@ -1337,6 +1342,9 @@ CreatorES <- function(silent=FALSE,...){
     FXEstimate <- xregdata$FXEstimate;
     gXEstimate <- xregdata$gXEstimate;
     initialXEstimate <- xregdata$initialXEstimate;
+    if(is.null(xreg)){
+        xregDo <- "u";
+    }
 
     nParamExo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
     nParamIntermittent <- all(intermittent!=c("n","provided"))*1;
@@ -1394,7 +1402,7 @@ CreatorES <- function(silent=FALSE,...){
                 }
             }
 
-            warning("Not of non-zero enough observations for the fit of ETS(",
+            warning("Not enought of non-zero observations for the fit of ETS(",
                     model,")! Fitting what we can...",call.=FALSE);
             if(modelDo=="combine"){
                 model <- "CNN";

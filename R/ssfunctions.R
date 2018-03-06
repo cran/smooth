@@ -239,6 +239,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
             warning(paste0("Wrong error type: ",Etype,". Should be 'Z', 'X', 'Y', 'A' or 'M'.\n",
                            "Changing to 'Z'"),call.=FALSE);
             Etype <- "Z";
+            modelDo <- "select";
         }
 
         ### Check trend type
@@ -246,6 +247,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
             warning(paste0("Wrong trend type: ",Ttype,". Should be 'Z', 'X', 'Y', 'N', 'A' or 'M'.\n",
                            "Changing to 'Z'"),call.=FALSE);
             Ttype <- "Z";
+            modelDo <- "select";
         }
     }
     else if(smoothType=="ssarima"){
@@ -455,6 +457,7 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
             }
             else{
                 Stype <- "Z";
+                modelDo <- "select";
             }
         }
         if(all(Stype!="N",datafreq==1)){
@@ -2657,6 +2660,12 @@ ssXreg <- function(data, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                         warning(paste0("There were some special characters in names of ",
                                        "xreg variables. We had to remove them."),call.=FALSE);
                         xregNames <- gsub("[^[:alnum:]]", "", xregNames);
+                    }
+                    xregDuplicated <- duplicated(colnames(xreg));
+                    if(any(xregDuplicated)){
+                        warning(paste0("Some names of variables are duplicated. ",
+                                       "We had to rename them."),call.=FALSE);
+                        xregNames[xregDuplicated] <- paste0("xDuplicated",c(1:sum(xregDuplicated)));
                     }
                     colnames(matxt) <- colnames(matat) <- colnames(matatMultiplicative) <- xregNames;
                 }

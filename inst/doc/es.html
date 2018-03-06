@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-02-11" />
+<meta name="date" content="2018-03-04" />
 
 <title>es() - Exponential Smoothing</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">es() - Exponential Smoothing</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-02-11</em></h4>
+<h4 class="date"><em>2018-03-04</em></h4>
 
 
 
@@ -83,7 +83,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>The simplest call of this function is:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</code></pre></div>
 <pre><code>## Forming the pool of models based on... ANN, ANA, AAN, Estimation progress:    100%... Done!</code></pre>
-<pre><code>## Time elapsed: 0.47 seconds
+<pre><code>## Time elapsed: 0.44 seconds
 ## Model estimated: ETS(MNN)
 ## Persistence vector g:
 ## alpha 
@@ -116,7 +116,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>If we need prediction intervals, then we run:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">intervals=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</code></pre></div>
 <pre><code>## Forming the pool of models based on... ANN, ANA, AAN, Estimation progress:    100%... Done!</code></pre>
-<pre><code>## Time elapsed: 0.4 seconds
+<pre><code>## Time elapsed: 0.37 seconds
 ## Model estimated: ETS(MNN)
 ## Persistence vector g:
 ## alpha 
@@ -208,7 +208,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## 1997.029 1997.136 2002.518</code></pre>
 <p>Using some other parameters may lead to completely different model and forecasts:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">cfType=</span><span class="st">&quot;aTMSE&quot;</span>, <span class="dt">bounds=</span><span class="st">&quot;a&quot;</span>, <span class="dt">ic=</span><span class="st">&quot;BIC&quot;</span>, <span class="dt">intervals=</span><span class="ot">TRUE</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.57 seconds
+<pre><code>## Time elapsed: 0.64 seconds
 ## Model estimated: ETS(MNN)
 ## Persistence vector g:
 ## alpha 
@@ -230,7 +230,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>In order to combine forecasts we need to use “C” letter:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span><span class="st">&quot;CCN&quot;</span>, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="st">&quot;graph&quot;</span>)</code></pre></div>
 <pre><code>## Estimation progress:    10%20%30%40%50%60%70%80%90%100%... Done!</code></pre>
-<pre><code>## Time elapsed: 0.74 seconds
+<pre><code>## Time elapsed: 0.68 seconds
 ## Model estimated: ETS(CCN)
 ## Initial values were optimised.
 ## Residuals standard deviation: 1408.59
@@ -246,7 +246,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>Model selection from a specified pool and forecasts combination are called using respectively:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span><span class="kw">c</span>(<span class="st">&quot;ANN&quot;</span>,<span class="st">&quot;AAN&quot;</span>,<span class="st">&quot;AAdN&quot;</span>,<span class="st">&quot;ANA&quot;</span>,<span class="st">&quot;AAA&quot;</span>,<span class="st">&quot;AAdA&quot;</span>), <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="st">&quot;graph&quot;</span>)</code></pre></div>
 <pre><code>## Estimation progress:    17%33%50%67%83%100%... Done!</code></pre>
-<pre><code>## Time elapsed: 0.9 seconds
+<pre><code>## Time elapsed: 0.86 seconds
 ## Model estimated: ETS(ANN)
 ## Persistence vector g:
 ## alpha 
@@ -264,7 +264,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## MASE: 2.909; sMAE: 118.7%; RelMAE: 1.243; sMSE: 238.1%</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span><span class="kw">c</span>(<span class="st">&quot;CCC&quot;</span>,<span class="st">&quot;ANN&quot;</span>,<span class="st">&quot;AAN&quot;</span>,<span class="st">&quot;AAdN&quot;</span>,<span class="st">&quot;ANA&quot;</span>,<span class="st">&quot;AAA&quot;</span>,<span class="st">&quot;AAdA&quot;</span>), <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="st">&quot;graph&quot;</span>)</code></pre></div>
 <pre><code>## Estimation progress:    17%33%50%67%83%100%... Done!</code></pre>
-<pre><code>## Time elapsed: 0.91 seconds
+<pre><code>## Time elapsed: 0.88 seconds
 ## Model estimated: ETS(CCC)
 ## Initial values were optimised.
 ## Residuals standard deviation: 1386.689
@@ -281,63 +281,62 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">x &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">rnorm</span>(<span class="kw">length</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x),<span class="dv">50</span>,<span class="dv">3</span>),<span class="kw">rnorm</span>(<span class="kw">length</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x),<span class="dv">100</span>,<span class="dv">7</span>))</code></pre></div>
 <p>and fit a model with all the exogenous first:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span><span class="st">&quot;ZZZ&quot;</span>, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x)</code></pre></div>
-<pre><code>## Time elapsed: 0.63 seconds
+<pre><code>## Time elapsed: 0.59 seconds
 ## Model estimated: ETSX(MNN)
 ## Persistence vector g:
 ## alpha 
-## 0.148 
+## 0.143 
 ## Initial values were optimised.
 ## 5 parameters were estimated in the process
-## Residuals standard deviation: 0.41
+## Residuals standard deviation: 0.416
 ## Xreg coefficients were estimated in a normal style
-## Cost function type: MSE; Cost function value: 1242161.26
+## Cost function type: MSE; Cost function value: 1278404.247
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC 
-## 1646.413 1647.073 1659.287 
+## 1649.203 1649.862 1662.077 
 ## Forecast errors:
-## MPE: 28.1%; sCE: -1980.6%; Bias: 88.6%; MAPE: 40.5%
-## MASE: 3.002; sMAE: 122.5%; RelMAE: 1.282; sMSE: 248.3%</code></pre>
+## MPE: 27.6%; sCE: -1949.7%; Bias: 88.7%; MAPE: 39.5%
+## MASE: 2.944; sMAE: 120.1%; RelMAE: 1.258; sMSE: 241.6%</code></pre>
 <p>or construct a model with selected exogenous (based on IC):</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span><span class="st">&quot;ZZZ&quot;</span>, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x, <span class="dt">xregDo=</span><span class="st">&quot;select&quot;</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.91 seconds
-## Model estimated: ETSX(MNN)
+<pre><code>## Time elapsed: 0.39 seconds
+## Model estimated: ETS(MNN)
 ## Persistence vector g:
 ## alpha 
-## 0.147 
+## 0.145 
 ## Initial values were optimised.
-## 4 parameters were estimated in the process
-## Residuals standard deviation: 0.411
-## Xreg coefficients were estimated in a normal style
-## Cost function type: MSE; Cost function value: 1260735.752
+## 3 parameters were estimated in the process
+## Residuals standard deviation: 0.413
+## Cost function type: MSE; Cost function value: 1288657.07
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC 
-## 1645.853 1646.288 1656.152 
+## 1645.978 1646.236 1653.702 
 ## Forecast errors:
-## MPE: 26.3%; sCE: -1909.6%; Bias: 87.8%; MAPE: 40.1%
-## MASE: 2.939; sMAE: 119.9%; RelMAE: 1.255; sMSE: 239%</code></pre>
+## MPE: 26.3%; sCE: -1919.1%; Bias: 87%; MAPE: 39.8%
+## MASE: 2.944; sMAE: 120.1%; RelMAE: 1.258; sMSE: 242.7%</code></pre>
 <p>or the one with the updated xreg:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ourModel &lt;-<span class="st"> </span><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span><span class="st">&quot;ZZZ&quot;</span>, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x, <span class="dt">updateX=</span><span class="ot">TRUE</span>)</code></pre></div>
 <p>If we want to check if lagged x can be used for forecasting purposes, we can use <code>xregExpander()</code> function:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span><span class="st">&quot;ZZZ&quot;</span>, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span><span class="kw">xregExpander</span>(x), <span class="dt">xregDo=</span><span class="st">&quot;select&quot;</span>)</code></pre></div>
-<pre><code>## Time elapsed: 1.18 seconds
-## Model estimated: ETSX(MNN)
+<pre><code>## Time elapsed: 3.47 seconds
+## Model estimated: ETSX(MAN)
 ## Persistence vector g:
-## alpha 
-## 0.147 
+## alpha  beta 
+## 0.108 0.000 
 ## Initial values were optimised.
-## 4 parameters were estimated in the process
-## Residuals standard deviation: 0.411
+## 7 parameters were estimated in the process
+## Residuals standard deviation: 0.407
 ## Xreg coefficients were estimated in a normal style
-## Cost function type: MSE; Cost function value: 1260735.752
+## Cost function type: MSE; Cost function value: 1195818.404
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC 
-## 1645.853 1646.288 1656.152 
+## 1646.725 1647.984 1664.748 
 ## Forecast errors:
-## MPE: 26.3%; sCE: -1909.6%; Bias: 87.8%; MAPE: 40.1%
-## MASE: 2.939; sMAE: 119.9%; RelMAE: 1.255; sMSE: 239%</code></pre>
+## MPE: 28.7%; sCE: -2021.3%; Bias: 85.9%; MAPE: 42.1%
+## MASE: 3.096; sMAE: 126.3%; RelMAE: 1.323; sMSE: 257.8%</code></pre>
 <p>If we are confused about the type of estimated model, the function <code>formula()</code> will help us:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">formula</span>(ourModel)</code></pre></div>
 <pre><code>## [1] &quot;y[t] = l[t-1] * exp(a1[t-1] * x1[t] + a2[t-1] * x2[t]) * e[t]&quot;</code></pre>
@@ -367,24 +366,24 @@ esModel &lt;-<span class="st"> </span><span class="kw">es</span>(M3<span class="
 ## Jan 1994       9556.358 -847.31330 19960.03</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">forecast</span>(esModel,<span class="dt">h=</span><span class="dv">18</span>,<span class="dt">level=</span><span class="fl">0.95</span>)</code></pre></div>
 <pre><code>##          Point forecast Lower bound (2.5%) Upper bound (97.5%)
-## Aug 1992             NA           3554.511            20417.22
-## Sep 1992             NA           3689.462            21570.20
-## Oct 1992             NA           3696.055            22051.19
-## Nov 1992             NA           3709.779            22716.51
-## Dec 1992             NA           3692.643            23614.21
-## Jan 1993             NA           3798.835            24750.08
-## Feb 1993             NA           3711.770            25518.54
-## Mar 1993             NA           3688.689            26564.18
-## Apr 1993             NA           3897.672            27580.20
-## May 1993             NA           3898.712            28108.20
-## Jun 1993             NA           3918.595            29144.59
-## Jul 1993             NA           3874.217            29969.47
-## Aug 1993             NA           3964.450            31557.42
-## Sep 1993             NA           3927.068            32254.58
-## Oct 1993             NA           3974.246            33430.04
-## Nov 1993             NA           4004.073            34492.23
-## Dec 1993             NA           4186.297            34953.23
-## Jan 1994             NA           4092.036            37290.38
+## Aug 1992             NA           3564.022            20352.23
+## Sep 1992             NA           3615.811            21335.40
+## Oct 1992             NA           3642.813            22161.12
+## Nov 1992             NA           3595.987            22880.33
+## Dec 1992             NA           3673.155            23924.46
+## Jan 1993             NA           3768.307            24162.85
+## Feb 1993             NA           3730.591            25245.62
+## Mar 1993             NA           3831.469            26204.25
+## Apr 1993             NA           3831.459            27540.34
+## May 1993             NA           3863.875            28485.85
+## Jun 1993             NA           3894.315            29207.39
+## Jul 1993             NA           3861.759            30273.74
+## Aug 1993             NA           3918.336            31151.72
+## Sep 1993             NA           3903.837            33608.17
+## Oct 1993             NA           4020.785            33587.16
+## Nov 1993             NA           4043.083            34487.63
+## Dec 1993             NA           4061.117            35671.35
+## Jan 1994             NA           4080.336            36950.37
 ## Feb 1994             NA                 NA                  NA
 ## Mar 1994             NA                 NA                  NA
 ## Apr 1994             NA                 NA                  NA
@@ -2380,7 +2379,7 @@ esModel &lt;-<span class="st"> </span><span class="kw">es</span>(M3<span class="
 <p>Finally, if you work with M or M3 data, and need to test a function on a specific time series, you can use the following simplified call:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">es</span>(M3<span class="op">$</span>N2457, <span class="dt">intervals=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</code></pre></div>
 <pre><code>## Forming the pool of models based on... ANN, ANA, AAN, Estimation progress:    100%... Done!</code></pre>
-<pre><code>## Time elapsed: 0.4 seconds
+<pre><code>## Time elapsed: 0.38 seconds
 ## Model estimated: ETS(MNN)
 ## Persistence vector g:
 ## alpha 

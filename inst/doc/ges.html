@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-02-11" />
+<meta name="date" content="2018-03-04" />
 
 <title>ges() - Generalised Exponential Smoothing</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">ges() - Generalised Exponential Smoothing</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-02-11</em></h4>
+<h4 class="date"><em>2018-03-04</em></h4>
 
 
 
@@ -83,7 +83,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>Generalised Exponential Smoothing is a next step from CES. It is a state-space model in which all the matrices and vectors are estimated. It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GES<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our example with monthly data N2457, we will have GES<span class="math inline">\((1^1,1^{12})\)</span>:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.66 seconds
+<pre><code>## Time elapsed: 0.69 seconds
 ## Model estimated: GES(1[1],1[12])
 ## Persistence vector g:
 ##       [,1]   [,2]
@@ -106,7 +106,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## MASE: 2.185; sMAE: 89.2%; RelMAE: 0.934; sMSE: 129.2%</code></pre>
 <p>But some different orders and lags can be specified. For example:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>))</code></pre></div>
-<pre><code>## Time elapsed: 0.56 seconds
+<pre><code>## Time elapsed: 0.43 seconds
 ## Model estimated: GES(2[1],1[12])
 ## Persistence vector g:
 ##       [,1] [,2]  [,3]
@@ -134,7 +134,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## Searching for appropriate lags:  —\|/—\|/—\|/We found them!
 ## Searching for appropriate orders:  —\|/—\|/—Orders found.
 ## Reestimating the model. Done!</code></pre>
-<pre><code>## Time elapsed: 38.18 seconds
+<pre><code>## Time elapsed: 36.29 seconds
 ## Model estimated: GES(1[1],1[6])
 ## Persistence vector g:
 ##       [,1]   [,2]
@@ -162,7 +162,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">    transition &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>),<span class="dv">3</span>,<span class="dv">3</span>)
     measurement &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>)
     <span class="kw">ges</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>), <span class="dt">transition=</span>transition, <span class="dt">measurement=</span>measurement)</code></pre></div>
-<pre><code>## Time elapsed: 0.24 seconds
+<pre><code>## Time elapsed: 0.23 seconds
 ## Model estimated: GES(2[1],1[12])
 ## Persistence vector g:
 ##       [,1]  [,2]   [,3]
