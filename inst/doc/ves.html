@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-03-04" />
+<meta name="date" content="2018-05-03" />
 
 <title>ves() - Vector Exponential Smoothing</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">ves() - Vector Exponential Smoothing</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-03-04</em></h4>
+<h4 class="date"><em>2018-05-03</em></h4>
 
 
 
@@ -82,7 +82,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">Y &lt;-<span class="st"> </span><span class="kw">cbind</span>(M3<span class="op">$</span>N2570<span class="op">$</span>x,M3<span class="op">$</span>N2571<span class="op">$</span>x);</code></pre></div>
 <p><code>ves()</code> function allows constructing Vector Exponential Smoothing in either pure additive or pure multiplicative form. The function has several elements that can either be individual or grouped. The former means that all the time series use the same value. For example, <code>persistence=&quot;g&quot;</code> means that the smoothing parameters for all the series are the same. A simple call for <code>ves()</code> results in estimation of VES(A,N,N) with grouped smoothing parameters, transition matrix and individual initials:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ves</span>(Y, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.13 seconds
+<pre><code>## Time elapsed: 0.16 seconds
 ## Model estimated: VES(ANN)
 ## 6 parameters were estimated in the process
 ## Cost function type: likelihood; Cost function value: 13.717

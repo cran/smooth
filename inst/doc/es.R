@@ -4,6 +4,7 @@ knitr::opts_chunk$set(fig.width=6, fig.height=4, fig.path='Figs/', fig.show='hol
 
 ## ----load_libraries, message=FALSE, warning=FALSE------------------------
 require(smooth)
+require(greybox)
 require(Mcomp)
 
 ## ----es_N2457------------------------------------------------------------

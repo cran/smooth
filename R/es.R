@@ -1,7 +1,7 @@
 utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","datafreq","initialType",
                          "yot","maxlag","silent","allowMultiplicative","modelCurrent",
                          "nParamIntermittent","cfTypeOriginal","matF","matw","pt.for","errors.mat",
-                         "iprob","results","s2","FI","intermittent","normalizer","varVec",
+                         "iprob","results","s2","FI","intermittent","normalizer",
                          "persistenceEstimate","initial","multisteps","ot",
                          "silentText","silentGraph","silentLegend","yForecastStart",
                          "icBest","icSelection","icWeights"));
@@ -107,6 +107,7 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' smoothing parameters live.
 #' \item \code{phi} - value of damping parameter.
 #' \item \code{transition} - transition matrix of the model.
+#' \item \code{measurement} - measurement vector of the model.
 #' \item \code{initialType} - type of the initial values used.
 #' \item \code{initial} - initial values of the state vector (non-seasonal).
 #' \item \code{initialSeason} - initial values of the seasonal part of state vector.
@@ -369,7 +370,6 @@ CF <- function(C){
                             modellags, initialType, Ttype, Stype, nExovars, matat,
                             persistenceEstimate, phiEstimate, initialType=="o", initialSeasonEstimate, xregEstimate,
                             matFX, vecgX, updateX, FXEstimate, gXEstimate, initialXEstimate);
-
 
     cfRes <- costfunc(elements$matvt, elements$matF, elements$matw, y, elements$vecg,
                       h, modellags, Etype, Ttype, Stype,
@@ -702,21 +702,14 @@ EstimatorES <- function(...){
     nParam <- length(C) + 1;
 
     # Change cfType for model selection
-    if(multisteps){
-        if(substring(cfType,1,1)=="a"){
-            cfType <- "aTFL";
-        }
-        else{
-            cfType <- "TFL";
-        }
-    }
-    else{
-        if(!any(cfType==c("LogisticL","LogisticD"))){
+    if(!multisteps){
+        if(any(cfType==c("Rounded","TSB"))){
             cfType <- "MSE";
         }
     }
 
-    ICValues <- ICFunction(nParam=nParam+nParamIntermittent,C=res$solution,Etype=Etype);
+    ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
+                           C=res$solution,Etype=Etype);
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
 
@@ -818,7 +811,7 @@ PoolPreparerES <- function(...){
             season.pool <- c("N","A","M");
         }
 
-        if(Etype!="Z"){
+        if(all(Etype!=c("Z","C"))){
             errors.pool <- Etype;
         }
 
@@ -1003,19 +996,32 @@ PoolPreparerES <- function(...){
         }
         else{
 # Make the corrections in the pool for combinations
-            if(Etype!="Z"){
-                errors.pool <- Etype;
-            }
-            if(Ttype!="Z"){
-                if(damped){
-                    trends.pool <- paste0(Ttype,"d");
+            if(all(Ttype!=c("Z","C"))){
+                if(Ttype=="Y"){
+                    trends.pool <- c("N","M","Md");
+                }
+                else if(Ttype=="X"){
+                    trends.pool <- c("N","A","Ad");
                 }
                 else{
-                    trends.pool <- Ttype;
+                    if(damped){
+                        trends.pool <- paste0(Ttype,"d");
+                    }
+                    else{
+                        trends.pool <- Ttype;
+                    }
                 }
             }
-            if(Stype!="Z"){
-                season.pool <- Stype;
+            if(all(Stype!=c("Z","C"))){
+                if(Stype=="Y"){
+                    trends.pool <- c("N","M");
+                }
+                else if(Stype=="X"){
+                    trends.pool <- c("N","A");
+                }
+                else{
+                    season.pool <- Stype;
+                }
             }
 
             modelsNumber <- (length(errors.pool)*length(trends.pool)*length(season.pool));
@@ -1105,9 +1111,6 @@ PoolEstimatorES <- function(silent=FALSE,...){
 ##### Function selects the best es() based on IC #####
 CreatorES <- function(silent=FALSE,...){
     if(modelDo=="select"){
-        if(all(cfType!=c("MSE","Rounded","TSB","LogisticD","LogisticL"))){
-            warning(paste0("'",cfType,"' is used as cost function instead of 'MSE'. The results of model selection may be wrong."),call.=FALSE);
-        }
         environment(PoolEstimatorES) <- environment();
         esPoolResults <- PoolEstimatorES(silent=silent);
         results <- esPoolResults$results;
@@ -1121,9 +1124,6 @@ CreatorES <- function(silent=FALSE,...){
         return(listToReturn);
     }
     else if(modelDo=="combine"){
-        if(all(cfType!=c("MSE","Rounded","TSB","LogisticD","LogisticL"))){
-            warning(paste0("'",cfType,"' is used as cost function instead of 'MSE'. The produced combinations weights may be wrong."),call.=FALSE);
-        }
         environment(PoolEstimatorES) <- environment();
         esPoolResults <- PoolEstimatorES(silent=silent);
         results <- esPoolResults$results;
@@ -1186,21 +1186,14 @@ CreatorES <- function(silent=FALSE,...){
         nParam <- length(C) + 1;
 
 # Change cfType for model selection
-        if(multisteps){
-            if(substring(cfType,1,1)=="a"){
-                cfType <- "aTFL";
-            }
-            else{
-                cfType <- "TFL";
-            }
-        }
-        else{
-            if(!any(cfType==c("LogisticL","LogisticD"))){
+        if(!multisteps){
+            if(any(cfType==c("Rounded","TSB"))){
                 cfType <- "MSE";
             }
         }
 
-        ICValues <- ICFunction(nParam=nParam+nParamIntermittent,C=C,Etype=Etype);
+        ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
+                               C=C,Etype=Etype);
         logLik <- ICValues$llikelihood;
         ICs <- ICValues$ICs;
         icBest <- ICs;
@@ -1559,6 +1552,19 @@ CreatorES <- function(silent=FALSE,...){
             modelDo <- "estimate";
             modelCurrent <- model;
         }
+        else{
+            if(!any(cfType==c("MSE","MAE","HAM","MSEh","MAEh","HAMh","MSCE","MACE","CHAM",
+                              "TFL","aTFL","Rounded","TSB","LogisticD","LogisticL"))){
+                if(modelDo=="combine"){
+                    warning(paste0("'",cfType,"' is used as cost function instead of 'MSE'.",
+                                   "The produced combination weights may be wrong."),call.=FALSE);
+                }
+                else{
+                    warning(paste0("'",cfType,"' is used as cost function instead of 'MSE'. ",
+                                   "The results of the model selection may be wrong."),call.=FALSE);
+                }
+            }
+        }
     }
     else{
         modelDo <- "nothing";
@@ -1712,7 +1718,8 @@ CreatorES <- function(silent=FALSE,...){
         Etype <- EtypeOriginal;
         Ttype <- TtypeOriginal;
         Stype <- StypeOriginal;
-        if(all(cfType!=c("MSE","Rounded","TSB","LogisticL","LogisticD"))){
+        if(!any(cfType==c("MSE","MAE","HAM","MSEh","MAEh","HAMh","MSCE","MACE","CHAM",
+                          "TFL","aTFL","Rounded","TSB","LogisticD","LogisticL"))){
             warning(paste0("'",cfType,
                            "' is used as cost function instead of 'MSE'. A wrong intermittent model may be selected"),
                     call.=FALSE);
@@ -1721,7 +1728,7 @@ CreatorES <- function(silent=FALSE,...){
             cat("Selecting appropriate type of intermittency... ");
         }
 # Prepare stuff for intermittency selection
-        intermittentModelsPool <- c("n","f","i","p","l");
+        intermittentModelsPool <- c("n","f","i","p","s","l");
         intermittentCFs <- intermittentICs <- rep(NA,length(intermittentModelsPool));
         intermittentModelsList <- list(NA);
         intermittentICs[1] <- esValues$icBest[ic];
@@ -2065,30 +2072,6 @@ CreatorES <- function(silent=FALSE,...){
             errormeasures <- Accuracy(y.holdout,y.for,y);
         }
 
-# Add PLS
-### Currently PLS can only be returned when intervals=TRUE because of the varVec
-        if(intervals){
-            errormeasuresNames <- names(errormeasures);
-            if(all(intermittent!=c("n","none"))){
-                errormeasures <- c(errormeasures,
-                                   suppressWarnings(pls(actuals=y.holdout, forecasts=y.for, Etype=Etype,
-                                                        sigma=s2, trace=FALSE, iprob=imodel$forecast,
-                                                        varVec=varVec, rounded=rounded)));
-            }
-            else{
-                if(multisteps){
-                    sigma <- t(errors.mat) %*% errors.mat / obsInsample;
-                }
-                else{
-                    sigma <- s2;
-                }
-                errormeasures <- c(errormeasures, suppressWarnings(pls(actuals=y.holdout, forecasts=y.for, Etype=Etype,
-                                                                       sigma=sigma, trace=multisteps, iprob=rep(1,h),
-                                                                       varVec=varVec, rounded=rounded)));
-            }
-            names(errormeasures) <- c(errormeasuresNames,"PLS");
-        }
-
         if(cumulative){
             y.holdout <- ts(sum(y.holdout),start=yForecastStart,frequency=datafreq);
         }
@@ -2144,6 +2127,7 @@ CreatorES <- function(silent=FALSE,...){
     if(modelDo!="combine"){
         model <- list(model=modelname,formula=esFormula,timeElapsed=Sys.time()-startTime,
                       states=matvt,persistence=persistence,phi=phi,transition=matF,
+                      measurement=matw,
                       initialType=initialType,initial=initialValue,initialSeason=initialSeason,
                       nParam=parametersNumber,
                       fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,

@@ -181,8 +181,8 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
 #### Add initialSeason to the output? ####
     intermittent <- substring(intermittent[1],1,1);
     if(all(intermittent!=c("n","f","i","p","s","l"))){
-        intermittent <- "f";
         warning(paste0("Unknown value of intermittent provided: '",intermittent,"'."));
+        intermittent <- "f";
     }
     if(intermittent=="s"){
         intermittent <- "i";
@@ -240,6 +240,12 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         warning("Sorry, but we do not deal with seasonal models in iss yet.",call.=FALSE);
     }
 
+    if(var(ot)==0){
+        warning(paste0("There is no variability in the occurrence of the variable in-sample.\n",
+                       "Switching to intermitten='none'."),call.=FALSE)
+        intermittent <- "n";
+    }
+
 #### Fixed probability ####
     if(intermittent=="f"){
         if(!is.null(initial)){
@@ -285,14 +291,22 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
         }
         tailNumber <- obsInsample - length(pt);
         if(tailNumber>0){
-            pt <- c(pt,crostonModel$forecast[1:tailNumber]);
+            pt.for <- crostonModel$forecast[1:tailNumber];
+            if(any(pt.for<1)){
+                pt.for[pt.for<1] <- 1;
+            }
+            pt <- c(pt,pt.for);
         }
         pt.for <- crostonModel$forecast[(tailNumber+1):newh];
+        if(any(pt.for<1)){
+            pt.for[pt.for<1] <- 1;
+        }
 
         if(sbaCorrection){
             pt <- ts((1-sum(crostonModel$persistence)/2)/pt,start=start(y),frequency=frequency(y));
             pt.for <- ts((1-sum(crostonModel$persistence)/2)/pt.for, start=time(y)[obsInsample]+deltat(y),frequency=frequency(y));
             states <- 1/crostonModel$states;
+            intermittent <- "s";
         }
         else{
             pt <- ts(1/pt,start=start(y),frequency=frequency(y));
@@ -395,7 +409,8 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
                                  ic=ic,silent=TRUE,h=h,cfType=cfType,xreg=xreg,
                                  initialSeason=initialSeason);
 
-            if(logisticModel[[1]]$ICs[ic] < logisticModel[[2]]$ICs[ic]){
+            if(logisticModel[[1]]$ICs[nrow(logisticModel[[1]]$ICs),ic] <
+               logisticModel[[2]]$ICs[nrow(logisticModel[[2]]$ICs),ic]){
                 logisticModel <- logisticModel[[1]];
             }
             else{
@@ -416,8 +431,8 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
     }
 #### None ####
     else{
-        pt <- ts(rep(1,obsAll),start=start(y),frequency=frequency(y));
-        pt.for <- ts(rep(1,h), start=time(y)[obsInsample]+deltat(y),frequency=frequency(y));
+        pt <- ts(y,start=start(y),frequency=frequency(y));
+        pt.for <- ts(rep(y[obsInsample],h), start=time(y)[obsInsample]+deltat(y),frequency=frequency(y));
         errors <- ts(rep(0,obsInsample), start=start(y), frequency=frequency(y));
         output <- list(model=NULL, fitted=pt, forecast=pt.for, states=pt,
                        variance=rep(0,h), logLik=NA, nParam=0,

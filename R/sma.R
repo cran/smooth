@@ -39,6 +39,7 @@ utils::globalVariables(c("yForecastStart"));
 #' \item \code{transition} - matrix F.
 #' \item \code{persistence} - the persistence vector. This is the place, where
 #' smoothing parameters live.
+#' \item \code{measurement} - measurement vector of the model.
 #' \item \code{order} - order of moving average.
 #' \item \code{initial} - Initial state vector values.
 #' \item \code{initialType} - Type of initial values used.
@@ -216,7 +217,8 @@ CreatorSMA <- function(silentText=FALSE,...){
     C <- NULL;
     cfObjective <- CF(C);
 
-    ICValues <- ICFunction(nParam=nParam,C=C,Etype=Etype);
+    ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
+                           C=C,Etype=Etype);
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
     bestIC <- ICs["AICc"];
@@ -303,6 +305,7 @@ CreatorSMA <- function(silentText=FALSE,...){
 ##### Return values #####
     model <- list(model=modelname,timeElapsed=Sys.time()-startTime,
                   states=matvt,transition=matF,persistence=vecg,
+                  measurement=matw,
                   order=order, initial=matvt[1,], initialType=initialType, nParam=parametersNumber,
                   fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,

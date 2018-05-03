@@ -1,8 +1,8 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using Smoothing Functions
-Version: 2.4.1
-Date: 2018-03-04
+Version: 2.4.3
+Date: 2018-05-03
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
 URL: https://github.com/config-i1/smooth
@@ -11,7 +11,7 @@ Description: Functions implementing Single Source of Error state-space models fo
             analysis and forecasting. The package includes exponential smoothing, SARIMA in state-space forms and
             several simulation functions.
 License: GPL (>= 2)
-Depends: R (>= 3.0.2)
+Depends: R (>= 3.0.2), greybox (>= 0.2.1)
 Imports: Rcpp (>= 0.12.3), stats, graphics, forecast, nloptr, utils,
         zoo
 LinkingTo: Rcpp, RcppArmadillo (>= 0.8.100.0.0)
@@ -19,9 +19,9 @@ Suggests: Mcomp, numDeriv, testthat, knitr, rmarkdown
 VignetteBuilder: knitr
 RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2018-03-04 11:14:53 UTC; config
+Packaged: 2018-05-03 13:11:17 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2018-03-06 07:33:59 UTC
+Date/Publication: 2018-05-03 15:30:00 UTC

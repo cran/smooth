@@ -334,24 +334,40 @@ CreatorGES <- function(silentText=FALSE,...){
        (initialXEstimate),(FXEstimate),(gXEstimate))){
 
         if(is.null(providedC)){
-            C <- NULL;
+            Cub <- Clb <- C <- NULL;
 # matw, matF, vecg, vt
             if(measurementEstimate){
                 C <- c(C,rep(1,nComponents));
+                Clb <- c(Clb,rep(0,nComponents));
+                Cub <- c(Cub,rep(1,nComponents));
+                # Clb <- c(Clb,rep(-Inf,nComponents));
+                # Cub <- c(Cub,rep(Inf,nComponents));
             }
             if(transitionEstimate){
                 C <- c(C,rep(1,nComponents^2));
+                Clb <- c(Clb,rep(0,nComponents^2));
+                Cub <- c(Cub,rep(1,nComponents^2));
+                # Clb <- c(Clb,rep(-Inf,nComponents^2));
+                # Cub <- c(Cub,rep(Inf,nComponents^2));
             }
             if(persistenceEstimate){
                 C <- c(C,rep(0.1,nComponents));
+                Clb <- c(Clb,rep(-Inf,nComponents));
+                Cub <- c(Cub,rep(Inf,nComponents));
             }
             if(initialType=="o"){
                 C <- c(C,intercept);
+                Clb <- c(Clb,-Inf);
+                Cub <- c(Cub,Inf);
                 if((orders %*% lags)>1){
                     C <- c(C,slope);
+                    Clb <- c(Clb,-Inf);
+                    Cub <- c(Cub,Inf);
                 }
                 if((orders %*% lags)>2){
                     C <- c(C,yot[1:(orders %*% lags-2),]);
+                    Clb <- c(Clb,rep(-Inf,(orders %*% lags-2)));
+                    Cub <- c(Cub,rep(Inf,(orders %*% lags-2)));
                 }
             }
 
@@ -359,24 +375,32 @@ CreatorGES <- function(silentText=FALSE,...){
             if(xregEstimate){
                 if(initialXEstimate){
                     C <- c(C,matat[maxlag,]);
+                    Clb <- c(Clb,rep(-Inf,nExovars));
+                    Cub <- c(Cub,rep(Inf,nExovars));
                 }
                 if(updateX){
                     if(FXEstimate){
                         C <- c(C,c(diag(nExovars)));
+                        Clb <- c(Clb,rep(0,nExovars^2));
+                        Cub <- c(Cub,rep(1,nExovars^2));
                     }
                     if(gXEstimate){
                         C <- c(C,rep(0,nExovars));
+                        Clb <- c(Clb,rep(-Inf,nExovars));
+                        Cub <- c(Cub,rep(Inf,nExovars));
                     }
                 }
             }
         }
 
 # Optimise model. First run
-        res <- nloptr(C, CF, opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval));
+        res <- nloptr(C, CF, opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval),
+                      lb=Clb, ub=Cub);
         C <- res$solution;
 
 # Optimise model. Second run
-        res2 <- nloptr(C, CF, opts=list("algorithm"="NLOPT_LN_NELDERMEAD", "xtol_rel"=xtol_rel/100, "maxeval"=maxeval/5));
+        res2 <- nloptr(C, CF, opts=list("algorithm"="NLOPT_LN_NELDERMEAD", "xtol_rel"=xtol_rel/100, "maxeval"=maxeval/5),
+                       lb=Clb, ub=Cub);
         # This condition is needed in order to make sure that we did not make the solution worse
         if(res2$objective <= res$objective){
             res <- res2;
@@ -407,7 +431,8 @@ CreatorGES <- function(silentText=FALSE,...){
         cfType <- "MSE";
     }
 
-    ICValues <- ICFunction(nParam=nParam+nParamIntermittent,C=C,Etype=Etype);
+    ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
+                           C=C,Etype=Etype);
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
 
@@ -602,14 +627,15 @@ CreatorGES <- function(silentText=FALSE,...){
 
 ##### If intermittent=="a", run a loop and select the best one #####
     if(intermittent=="a"){
-        if(cfType!="MSE"){
+        if(!any(cfType==c("MSE","MAE","HAM","MSEh","MAEh","HAMh","MSCE","MACE","CHAM",
+                          "TFL","aTFL","Rounded","TSB","LogisticD","LogisticL"))){
             warning(paste0("'",cfType,"' is used as cost function instead of 'MSE'. A wrong intermittent model may be selected"),call.=FALSE);
         }
         if(!silentText){
             cat("Selecting appropriate type of intermittency... ");
         }
 # Prepare stuff for intermittency selection
-        intermittentModelsPool <- c("n","f","c","t","s");
+        intermittentModelsPool <- c("n","f","i","p","s","l");
         intermittentCFs <- intermittentICs <- rep(NA,length(intermittentModelsPool));
         intermittentModelsList <- list(NA);
         intermittentICs[1] <- gesValues$icBest;
@@ -619,11 +645,8 @@ CreatorGES <- function(silentText=FALSE,...){
             intermittentParametersSetter(intermittent=intermittentModelsPool[i],ParentEnvironment=environment());
             intermittentMaker(intermittent=intermittentModelsPool[i],ParentEnvironment=environment());
             intermittentModelsList[[i]] <- CreatorGES(silentText=TRUE);
-            intermittentICs[i] <- intermittentModelsList[[i]]$icBest;
+            intermittentICs[i] <- intermittentModelsList[[i]]$icBest[ic];
             intermittentCFs[i] <- intermittentModelsList[[i]]$cfObjective;
-            # if(intermittentICs[i]>intermittentICs[i-1]){
-            #     break;
-            # }
         }
         intermittentICs[is.nan(intermittentICs) | is.na(intermittentICs)] <- 1e+100;
         intermittentCFs[is.nan(intermittentCFs) | is.na(intermittentCFs)] <- 1e+100;
@@ -741,7 +764,8 @@ CreatorGES <- function(silentText=FALSE,...){
         environment(likelihoodFunction) <- environment();
         environment(ICFunction) <- environment();
 
-        ICValues <- ICFunction(nParam=nParam+nParamIntermittent,C=C,Etype="M");
+        ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
+                               C=C,Etype="M");
         ICs <- ICValues$ICs;
         logLik <- ICValues$llikelihood;
     }
