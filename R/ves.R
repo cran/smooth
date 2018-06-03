@@ -2,14 +2,14 @@ utils::globalVariables(c("nParamMax","nComponentsAll","nComponentsNonSeasonal","
                          "modelLags","persistenceEstimate","persistenceType","persistenceValue","damped","dampedEstimate","dampedType",
                          "transitionType","initialEstimate","initialSeasonEstimate","initialSeasonValue","initialSeasonType",
                          "modelIsMultiplicative","matG","matW","A","Sigma","yFitted","PI","dataDeltat","dataFreq","dataStart",
-                         "otObs"));
+                         "otObs","dataNames"));
 
-#' Vector Exponential Smoothing in SSOE state-space model
+#' Vector Exponential Smoothing in SSOE state space model
 #'
 #' Function constructs vector ETS model and returns forecast, fitted values, errors
 #' and matrix of states along with other useful variables.
 #'
-#' Function estimates vector ETS in a form of the Single Source of Error State-space
+#' Function estimates vector ETS in a form of the Single Source of Error state space
 #' model of the following type:
 #'
 #' \deqn{
@@ -127,6 +127,7 @@ utils::globalVariables(c("nParamMax","nComponentsAll","nComponentsNonSeasonal","
 #' \item \code{cf} - The value of the cost function;
 #' \item \code{cfType} - The type of the used cost function;
 #' \item \code{accuracy} - the values of the error measures. Currently not available.
+#' \item \code{FI} - Fisher information if user asked for it using \code{FI=TRUE}.
 #' }
 #' @seealso \code{\link[smooth]{es}, \link[forecast]{ets}}
 #'
@@ -154,12 +155,12 @@ ves <- function(data, model="ANN", persistence=c("group","independent","dependen
                 transition=c("group","independent","dependent"), phi=c("group","individual"),
                 initial=c("individual","group"), initialSeason=c("group","individual"),
                 cfType=c("likelihood","diagonal","trace"),
-                ic=c("AICc","AIC","BIC"), h=10, holdout=FALSE,
+                ic=c("AICc","AIC","BIC","BICc"), h=10, holdout=FALSE,
                 intervals=c("none","conditional","unconditional","independent"), level=0.95,
                 cumulative=FALSE,
                 intermittent=c("none","fixed","logistic"), imodel="ANN",
                 iprobability=c("dependent","independent"),
-                bounds=c("admissible","none"),
+                bounds=c("admissible","usual","none"),
                 silent=c("all","graph","output","none"), ...){
 # Copyright (C) 2017 - Inf  Ivan Svetunkov
 
@@ -241,8 +242,14 @@ AValues <- function(Ttype,Stype,maxlag,nComponentsAll,nComponentsNonSeasonal,nSe
             persistenceLength <- nComponentsAll*nSeries^2;
         }
         A <- c(A,rep(0.1,persistenceLength));
-        ALower <- c(ALower,rep(-5,persistenceLength));
-        AUpper <- c(AUpper,rep(5,persistenceLength));
+        if(bounds=="u"){
+            ALower <- c(ALower,rep(0,persistenceLength));
+            AUpper <- c(AUpper,rep(1,persistenceLength));
+        }
+        else{
+            ALower <- c(ALower,rep(-5,persistenceLength));
+            AUpper <- c(AUpper,rep(5,persistenceLength));
+        }
         ANames <- c(ANames,paste0("Persistence",c(1:persistenceLength)));
     }
 
@@ -390,8 +397,8 @@ BasicMakerVES <- function(...){
         statesNames <- c(statesNames,"seasonal");
     }
     matvt <- matrix(NA, nComponentsAll*nSeries, obsStates,
-                    dimnames=list(paste0(paste0("Series",rep(c(1:nSeries),each=nComponentsAll)),
-                                         ", ",statesNames),NULL));
+                    dimnames=list(paste0(rep(dataNames,each=nComponentsAll),
+                                         "_",statesNames),NULL));
     ## Deal with non-seasonal part of the vector of states
     if(!initialEstimate){
         initialPlaces <- nComponentsAll*(c(1:nSeries)-1)+1;
@@ -622,7 +629,15 @@ EstimatorVES <- function(...){
     ICs <- IAValues$ICs;
     logLik <- IAValues$llikelihood;
 
-    return(list(ICs=ICs,objective=res$objective,A=A,nParam=nParam,logLik=logLik));
+    # Write down Fisher Information if needed
+    if(FI){
+        environment(vLikelihoodFunction) <- environment();
+        FI <- -numDeriv::hessian(vLikelihoodFunction,A);
+        rownames(FI) <- AList$ANames;
+        colnames(FI) <- AList$ANames;
+    }
+
+    return(list(ICs=ICs,objective=res$objective,A=A,nParam=nParam,logLik=logLik,FI=FI));
 }
 
 ##### Function constructs the VES function #####
@@ -632,7 +647,7 @@ CreatorVES <- function(silent=FALSE,...){
         res <- EstimatorVES(ParentEnvironment=environment());
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,
                              cfObjective=res$objective,A=res$A,ICs=res$ICs,icBest=res$ICs[ic],
-                             nParam=res$nParam,logLik=res$logLik);
+                             nParam=res$nParam,logLik=res$logLik,FI=res$FI);
 
         return(listToReturn);
     }
@@ -645,18 +660,28 @@ CreatorVES <- function(silent=FALSE,...){
         list2env(elements,environment());
 
         A <- c(persistenceValue);
+        ANames <- paste0("Persistence",c(1:length(persistenceValue)));
         if(damped){
             A <- c(A,dampedValue);
+            ANames <- c(ANames,paste0("phi",c(1:length(dampedValue))));
         }
         if(transitionType=="d"){
+            transitionLength <- length(A);
             # Write values from the rest of transition matrix
             for(i in 1:nSeries){
                 A <- c(A, c(transitionValue[c(1:nComponentsAll)+nComponentsAll*(i-1),
                                             setdiff(c(1:nSeries*nComponentsAll),c(1:nComponentsAll)+nComponentsAll*(i-1))]));
             }
+            transitionLength <- length(A) - transitionLength;
+            ANames <- c(ANames,paste0("transition",c(1:transitionLength)));
         }
         A <- c(A,initialValue);
-        A <- c(A,initialSeasonValue);
+        ANames <- c(ANames,paste0("initial",c(1:length(initialValue))));
+        if(Stype!="N"){
+            A <- c(A,initialSeasonValue);
+            ANames <- c(ANames,paste0("initialSeason",c(1:length(initialSeasonValue))));
+        }
+        names(A) <- ANames;
 
         cfObjective <- CF(A);
 
@@ -677,9 +702,17 @@ CreatorVES <- function(silent=FALSE,...){
         ICs <- ICValues$ICs;
         icBest <- ICs[ic];
 
+        # Write down Fisher Information if needed
+        if(FI){
+            environment(vLikelihoodFunction) <- environment();
+            FI <- -numDeriv::hessian(vLikelihoodFunction,A);
+            rownames(FI) <- ANames;
+            colnames(FI) <- ANames;
+        }
+
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,
                              cfObjective=cfObjective,A=A,ICs=ICs,icBest=icBest,
-                             nParam=nParam,logLik=logLik);
+                             nParam=nParam,logLik=logLik,FI=FI);
         return(listToReturn);
     }
 }
@@ -749,20 +782,26 @@ CreatorVES <- function(silent=FALSE,...){
             parametersNumber[1,1] <- parametersNumber[1,1] + length(matG);
         }
     }
-    rownames(persistenceValue) <- paste0(paste0("Series",rep(c(1:nSeries),each=nComponentsAll)), ", ", persistenceNames);
+    rownames(persistenceValue) <- paste0(rep(dataNames,each=nComponentsAll), "_", persistenceNames);
+    colnames(persistenceValue) <- dataNames;
 
 # This is needed anyway for the reusability of the model
     transitionValue <- matF;
     if(transitionEstimate){
-        parametersNumber[1,1] <- parametersNumber[1,1] + length(transitionValue);
+        parametersNumber[1,1] <- parametersNumber[1,1] + (nSeries-1)*nSeries*nComponentsAll^2;
     }
+    colnames(transitionValue) <- rownames(persistenceValue);
+    rownames(transitionValue) <- rownames(persistenceValue);
 
     if(damped){
-        rownames(dampedValue) <- paste0("Series",c(1:nSeries));
+        rownames(dampedValue) <- dataNames;
         if(dampedEstimate){
             parametersNumber[1,1] <- parametersNumber[1,1] + length(unique(as.vector(dampedValue)));
         }
     }
+
+    rownames(matW) <- dataNames;
+    colnames(matW) <- rownames(persistenceValue);
 
     initialPlaces <- nComponentsAll*(c(1:nSeries)-1)+1;
     initialNames <- "level";
@@ -775,7 +814,7 @@ CreatorVES <- function(silent=FALSE,...){
         initialValue <- matrix(matvt[initialPlaces,maxlag],nComponentsNonSeasonal*nSeries,1);
         parametersNumber[1,1] <- parametersNumber[1,1] + length(unique(as.vector(initialValue)));
     }
-    rownames(initialValue) <- paste0(paste0("Series",rep(c(1:nSeries),each=nComponentsNonSeasonal)), ", ", initialNames);
+    rownames(initialValue) <- paste0(rep(dataNames,each=nComponentsNonSeasonal), "_", initialNames);
 
     if(modelIsSeasonal){
         if(initialSeasonEstimate){
@@ -783,7 +822,7 @@ CreatorVES <- function(silent=FALSE,...){
             initialSeasonValue <- matrix(matvt[initialPlaces,1:maxlag],nSeries,maxlag);
             parametersNumber[1,1] <- parametersNumber[1,1] + length(unique(as.vector(initialSeasonValue)));
         }
-        rownames(initialSeasonValue) <- paste0("Series",c(1:nSeries));
+        rownames(initialSeasonValue) <- dataNames;
         colnames(initialSeasonValue) <- paste0("Seasonal",c(1:maxlag));
     }
 
@@ -795,6 +834,7 @@ CreatorVES <- function(silent=FALSE,...){
     if(!is.matrix(yForecast)){
         yForecast <- as.matrix(yForecast,h,nSeries);
     }
+    colnames(yForecast) <- dataNames;
     forecastStart <- start(yForecast)
     if(any(intervalsType==c("i","u"))){
         PI <-  ts(PI,start=forecastStart,frequency=dataFreq);
@@ -824,11 +864,20 @@ CreatorVES <- function(silent=FALSE,...){
 ##### Now let's deal with the holdout #####
     if(holdout){
         yHoldout <- ts(data[(obsInSample+1):obsAll,],start=forecastStart,frequency=dataFreq);
-        errormeasures <- NA;
+        colnames(yHoldout) <- dataNames;
+
+        measureFirst <- Accuracy(yHoldout[,1],yForecast[,1],y[,1]);
+        errorMeasures <- matrix(NA,nSeries,length(measureFirst));
+        rownames(errorMeasures) <- dataNames;
+        colnames(errorMeasures) <- names(measureFirst);
+        errorMeasures[1,] <- measureFirst;
+        for(i in 2:nSeries){
+            errorMeasures[i,] <- Accuracy(yHoldout[,i],yForecast[,i],y[,i]);
+        }
     }
     else{
         yHoldout <- NA;
-        errormeasures <- NA;
+        errorMeasures <- NA;
     }
 
     modelname <- "VES";
@@ -852,7 +901,7 @@ CreatorVES <- function(silent=FALSE,...){
         pages <- ceiling(nSeries / 5);
         parDefault <- par(no.readonly=TRUE);
         for(j in 1:pages){
-            par(mfcol=c(min(5,floor(nSeries/j)),1));
+            par(mar=c(4,4,2,1),mfcol=c(min(5,floor(nSeries/j)),1));
             for(i in 1:nSeries){
                 if(any(intervalsType==c("u","i"))){
                     plotRange <- range(min(data[,i],yForecast[,i],yFitted[,i],PI[,i*2-1]),
@@ -862,7 +911,7 @@ CreatorVES <- function(silent=FALSE,...){
                     plotRange <- range(min(data[,i],yForecast[,i],yFitted[,i]),
                                        max(data[,i],yForecast[,i],yFitted[,i]));
                 }
-                plot(data[,i],main=paste0(modelname,", series ", i),ylab="Y",
+                plot(data[,i],main=paste0(modelname," ",dataNames[i]),ylab="Y",
                      ylim=plotRange,
                      xlim=range(time(data[,i])[1],time(yForecast)[max(h,1)]));
                 lines(yFitted[,i],col="purple",lwd=2,lty=2);
@@ -898,6 +947,7 @@ CreatorVES <- function(silent=FALSE,...){
                   nParam=parametersNumber, imodel=imodel,
                   actuals=data,fitted=yFitted,holdout=yHoldout,residuals=errors,Sigma=Sigma,
                   forecast=yForecast,PI=PI,intervals=intervalsType,level=level,
-                  ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,accuracy=errormeasures);
+                  ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,accuracy=errorMeasures,
+                  FI=FI);
     return(structure(model,class=c("vsmooth","smooth")));
 }

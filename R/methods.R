@@ -72,20 +72,38 @@ errorType <- function(object, ...) UseMethod("errorType")
 #' @export
 AICc.smooth <- function(object, ...){
     llikelihood <- logLik(object);
-    nParamAll <- attributes(llikelihood)$df;
+    nParamAll <- nParam(object);
     llikelihood <- llikelihood[1:length(llikelihood)];
 
     if(!is.null(object$imodel)){
         obs <- sum(object$fitted!=0);
         nParamSizes <- nParamAll - object$nParam[1,3];
-
         IC <- (2*nParamAll - 2*llikelihood +
                    2*nParamSizes*(nParamSizes + 1) / (obs - nParamSizes - 1));
     }
     else{
         obs <- nobs(object);
-
         IC <- 2*nParamAll - 2*llikelihood + 2 * nParamAll * (nParamAll + 1) / (obs - nParamAll - 1);
+    }
+
+    return(IC);
+}
+
+#' @importFrom greybox BICc
+#' @export
+BICc.smooth <- function(object, ...){
+    llikelihood <- logLik(object);
+    nParamAll <- nParam(object);
+    llikelihood <- llikelihood[1:length(llikelihood)];
+
+    if(!is.null(object$imodel)){
+        obs <- sum(object$fitted!=0);
+        nParamSizes <- nParamAll - object$nParam[1,3];
+        IC <- - 2*llikelihood + (nParamSizes * log(obs) * obs) / (obs - nParamSizes - 1);
+    }
+    else{
+        obs <- nobs(object);
+        IC <- - 2*llikelihood + (nParamAll * log(obs) * obs) / (obs - nParamAll - 1);
     }
 
     return(IC);
@@ -98,7 +116,7 @@ AICc.smooth <- function(object, ...){
 #'
 #' The function returns either scalar (if it is a non-smooth model)
 #' or the matrix of (h x h) size with variances and covariances of 1 to h steps ahead
-#' forecat errors. This is currently done based on empirical values. The analytical ones
+#' forecast errors. This is currently done based on empirical values. The analytical ones
 #' are more complicated.
 #'
 #' @template ssAuthor
@@ -107,7 +125,7 @@ AICc.smooth <- function(object, ...){
 #' @param object Model estimated using one of the functions of smooth package.
 #' @param type What method to use in order to produce covariance matrix:
 #' \enumerate{
-#' \item \code{analytical} - based on the state-space structure of the model and the
+#' \item \code{analytical} - based on the state space structure of the model and the
 #' one-step-ahead forecast error. This works for pure additive and pure multiplicative
 #' models. The values for the mixed models might be off.
 #' \item \code{empirical} - based on the in-sample 1 to h steps ahead forecast errors
@@ -351,7 +369,7 @@ nParam.iss <- function(object, ...){
 #'
 #' Prediction likelihood score (PLS) is based on either normal or log-normal
 #' distribution of errors. This is extracted from the provided model. The likelihood
-#' based onthe distribution of 1 to h steps ahead forecast errors is used in the process.
+#' based on the distribution of 1 to h steps ahead forecast errors is used in the process.
 #'
 #' @template ssAuthor
 #' @template ssKeywords
@@ -531,7 +549,7 @@ pls.smooth <- function(object, holdout=NULL, ...){
 #' @param object Time series model.
 #' @param ...  Some stuff.
 #' @return This function returns a vector.
-#' @author Ivan Svetunkov, \email{ivan@@svetunkov.ru}
+#' @template ssAuthor
 #' @seealso \link[stats]{AIC}, \link[stats]{BIC}
 #' @keywords htest
 #' @examples
@@ -660,7 +678,7 @@ NULL
 #' This function is created in order for the package to be compatible with Rob
 #' Hyndman's "forecast" package
 #'
-#' This is not a compulsary function. You can simply use \link[smooth]{es},
+#' This is not a compulsory function. You can simply use \link[smooth]{es},
 #' \link[smooth]{ces}, \link[smooth]{ges} or \link[smooth]{ssarima} without
 #' \code{forecast.smooth}. But if you are really used to \code{forecast}
 #' function, then go ahead!
@@ -688,7 +706,7 @@ NULL
 #' \item \code{intervals} - binary variable (whether intervals were produced or not).
 #' \item \code{residuals} - the residuals of the original model.
 #' }
-#' @author Ivan Svetunkov, \email{ivan@@svetunkov.ru}
+#' @template ssAuthor
 #' @seealso \code{\link[forecast]{ets}, \link[forecast]{forecast}}
 #' @references Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 #' Forecasting with exponential smoothing: the state space approach,
@@ -878,6 +896,14 @@ errorType.smooth <- function(object, ...){
     return(Etype);
 }
 
+#' @export
+errorType.smooth.sim <- errorType.smooth;
+
+#' @export
+errorType.iss <- function(object, ...){
+    return(substr(modelType(object),1,1));
+}
+
 ##### Function returns the modellags from the model - internal function #####
 modelLags.default <- function(object, ...){
     modelLags <- NA;
@@ -949,6 +975,11 @@ modelType.smooth <- function(object, ...){
 
 #' @export
 modelType.smooth.sim <- modelType.smooth;
+
+#' @export
+modelType.iss <- function(object, ...){
+    return(object$model);
+}
 
 #### Function extracts orders of provided model ####
 #' @export
@@ -1113,6 +1144,12 @@ plot.smooth <- function(x, ...){
 }
 
 #' @export
+plot.smoothC <- function(x, ...){
+    graphmaker(x$actuals, x$forecast, x$fitted, x$lower, x$upper, x$level,
+               main="Combined smooth forecasts");
+}
+
+#' @export
 plot.smooth.sim <- function(x, ...){
     ellipsis <- list(...);
     if(is.null(ellipsis$main)){
@@ -1204,15 +1241,19 @@ print.smooth <- function(x, ...){
 
     intervalsType <- x$intervals;
 
-    if(gregexpr("SMA",x$model)!=-1){
-        x$iprob <- 1;
-        x$initialType <- "b";
-        intermittent <- "n";
-    }
-    else if(gregexpr("ETS",x$model)!=-1){
-    # If cumulative forecast and Etype=="M", report that this was "parameteric" interval
-        if(cumulative & substr(modelType(x),1,1)=="M"){
-            intervalsType <- "p";
+    if(!is.null(x$model)){
+        if(!is.list(x$model)){
+            if(gregexpr("SMA",x$model)!=-1){
+                x$iprob <- 1;
+                x$initialType <- "b";
+                intermittent <- "n";
+            }
+            else if(gregexpr("ETS",x$model)!=-1){
+                # If cumulative forecast and Etype=="M", report that this was "parameteric" interval
+                if(cumulative & substr(modelType(x),1,1)=="M"){
+                    intervalsType <- "p";
+                }
+            }
         }
     }
     if(class(x$imodel)!="iss"){
@@ -1373,9 +1414,9 @@ print.iss <- function(x, ...){
     else{
         intermittent <- "None";
     }
-    ICs <- round(c(AIC(x),AICc(x),BIC(x)),4);
-    names(ICs) <- c("AIC","AICc","BIC");
-    cat(paste0("Intermittent State-Space model estimated: ",intermittent,"\n"));
+    ICs <- round(c(AIC(x),AICc(x),BIC(x),BICc(x)),4);
+    names(ICs) <- c("AIC","AICc","BIC","BICc");
+    cat(paste0("Intermittent state space model estimated: ",intermittent,"\n"));
     if(!is.null(x$model)){
         cat(paste0("Underlying ETS model: ",x$model,"\n"));
     }

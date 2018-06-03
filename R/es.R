@@ -6,12 +6,12 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
                          "silentText","silentGraph","silentLegend","yForecastStart",
                          "icBest","icSelection","icWeights"));
 
-#' Exponential Smoothing in SSOE state-space model
+#' Exponential Smoothing in SSOE state space model
 #'
 #' Function constructs ETS model and returns forecast, fitted values, errors
 #' and matrix of states.
 #'
-#' Function estimates ETS in a form of the Single Source of Error State-space
+#' Function estimates ETS in a form of the Single Source of Error state space
 #' model of the following type:
 #'
 #' \deqn{y_{t} = o_{t} (w(v_{t-l}) + x_t a_{t-1} + r(v_{t-l}) \epsilon_{t})}
@@ -139,7 +139,7 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' \item \code{initialX} - initial values for parameters of exogenous variables.
 #' \item \code{persistenceX} - persistence vector g for exogenous variables.
 #' \item \code{transitionX} - transition matrix F for exogenous variables.
-#' \item \code{ICs} - values of information criteria of the model. Includes AIC, AICc and BIC.
+#' \item \code{ICs} - values of information criteria of the model. Includes AIC, AICc, BIC and BICc.
 #' \item \code{logLik} - log-likelihood of the function.
 #' \item \code{cf} - cost function value.
 #' \item \code{cfType} - type of cost function used in the estimation.
@@ -237,7 +237,7 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #'
 #' @export es
 es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
-               initial=c("optimal","backcasting"), initialSeason=NULL, ic=c("AICc","AIC","BIC"),
+               initial=c("optimal","backcasting"), initialSeason=NULL, ic=c("AICc","AIC","BIC","BICc"),
                cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                h=10, holdout=FALSE, cumulative=FALSE,
                intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
@@ -247,7 +247,7 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
                silent=c("all","graph","legend","output","none"),
                xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
-# Copyright (C) 2015 - 2016  Ivan Svetunkov
+# Copyright (C) 2015 - Inf  Ivan Svetunkov
 
 # Start measuring the time of calculations
     startTime <- Sys.time();
@@ -378,7 +378,7 @@ CF <- function(C){
                       bounds);
 
     if(is.nan(cfRes) | is.na(cfRes) | is.infinite(cfRes)){
-        cfRes <- 1e+100;
+        cfRes <- 1e+500;
     }
 
     return(cfRes);
@@ -431,8 +431,8 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
                         CUpper <- c(CUpper,rep(Inf,maxlag));
                     }
                     else{
-                        CLower <- c(CLower,rep(1e-5,maxlag));
-                        CUpper <- c(CUpper,rep(10,maxlag));
+                        CLower <- c(CLower,matvt[1:maxlag,nComponents]*seasonalRandomness[1]);
+                        CUpper <- c(CUpper,matvt[1:maxlag,nComponents]*seasonalRandomness[2]);
                     }
                 }
             }
@@ -477,8 +477,8 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
                         CUpper <- c(CUpper,rep(Inf,maxlag));
                     }
                     else{
-                        CLower <- c(CLower,rep(-0.0001,maxlag));
-                        CUpper <- c(CUpper,rep(20,maxlag));
+                        CLower <- c(CLower,matvt[1:maxlag,nComponents]*seasonalRandomness[1]);
+                        CUpper <- c(CUpper,matvt[1:maxlag,nComponents]*seasonalRandomness[2]);
                     }
                 }
             }
@@ -523,8 +523,8 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
                         CUpper <- c(CUpper,rep(Inf,maxlag));
                     }
                     else{
-                        CLower <- c(CLower,rep(-Inf,maxlag));
-                        CUpper <- c(CUpper,rep(Inf,maxlag));
+                        CLower <- c(CLower,matvt[1:maxlag,nComponents]*seasonalRandomness[1]);
+                        CUpper <- c(CUpper,matvt[1:maxlag,nComponents]*seasonalRandomness[2]);
                     }
                 }
             }
@@ -626,8 +626,10 @@ EstimatorES <- function(...){
 
     # Change C if it is out of the bounds
     if(any((C>=CUpper),(C<=CLower))){
-        C[C>=CUpper] <- CUpper[C>=CUpper] * 0.999 - 0.001;
-        C[C<=CLower] <- CLower[C<=CLower] * 1.001 + 0.001;
+        # C[C>=CUpper] <- CUpper[C>=CUpper] * 0.999 - 0.001;
+        # C[C<=CLower] <- CLower[C<=CLower] * 1.001 + 0.001;
+        CUpper[C>=CUpper] <- C[C>=CUpper] * 1.001 + 0.001;
+        CLower[C<=CLower] <- C[C<=CLower] * 0.999 - 0.001;
     }
 
     # Parameters are chosen to speed up the optimisation process and have decent accuracy
@@ -638,25 +640,26 @@ EstimatorES <- function(...){
     # If the optimisation failed, then probably this is because of smoothing parameters in mixed models. Set them eqaul to zero.
     if(any(C==Cs$C)){
         if(C[1]==Cs$C[1]){
-            C[1] <- max(0,CLower);
+            C[1] <- max(0,CLower[1]);
         }
         if(Ttype!="N"){
             if(C[2]==Cs$C[2]){
-                C[2] <- max(0,CLower);
+                C[2] <- max(0,CLower[2]);
             }
             if(Stype!="N"){
                 if(C[3]==Cs$C[3]){
-                    C[3] <- max(0,CLower);
+                    C[3] <- max(0,CLower[3]);
                 }
             }
         }
         else{
             if(Stype!="N"){
                 if(C[2]==Cs$C[2]){
-                    C[2] <- max(0,CLower);
+                    C[2] <- max(0,CLower[2]);
                 }
             }
         }
+
         res <- nloptr(C, CF, lb=CLower, ub=CUpper,
                       opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval));
         C <- res$solution;
@@ -1096,7 +1099,7 @@ PoolEstimatorES <- function(silent=FALSE,...){
     if(!silent){
         cat("... Done! \n");
     }
-    icSelection <- matrix(NA,modelsNumber,3);
+    icSelection <- matrix(NA,modelsNumber,4);
     for(i in 1:modelsNumber){
         icSelection[i,] <- results[[i]]$ICs;
     }
@@ -1130,10 +1133,10 @@ CreatorES <- function(silent=FALSE,...){
         icSelection <- esPoolResults$icSelection;
         icSelection <- icSelection/(h^multisteps);
         icBest <- apply(icSelection,2,min);
-        icBest <- matrix(icBest,nrow=nrow(icSelection),ncol=3,byrow=TRUE);
+        icBest <- matrix(icBest,nrow=nrow(icSelection),ncol=4,byrow=TRUE);
         icWeights <- (exp(-0.5*(icSelection-icBest)) /
                           matrix(colSums(exp(-0.5*(icSelection-icBest))),
-                                 nrow=nrow(icSelection),ncol=3,byrow=TRUE));
+                                 nrow=nrow(icSelection),ncol=4,byrow=TRUE));
         ICs <- colSums(icSelection * icWeights);
         return(list(icWeights=icWeights,ICs=ICs,icBest=icBest,results=results,cfObjective=NA,
                     icSelection=icSelection));
@@ -1258,8 +1261,10 @@ CreatorES <- function(silent=FALSE,...){
         if(is.null(initialSeason)){
             initialSeasonEstimate <- TRUE;
             seasonalCoefs <- decompose(ts(c(y),frequency=datafreq),type="additive")$seasonal[1:datafreq];
-            seasonalCoefs <- cbind(seasonalCoefs,decompose(ts(c(y),frequency=datafreq),
-                                                           type="multiplicative")$seasonal[1:datafreq]);
+            decompositionM <- decompose(ts(c(y),frequency=datafreq), type="multiplicative");
+            seasonalCoefs <- cbind(seasonalCoefs,decompositionM$seasonal[1:datafreq]);
+            seasonalRandomness <- c(min(decompositionM$random,na.rm=TRUE),
+                                    max(decompositionM$random,na.rm=TRUE));
         }
         else{
             initialSeasonEstimate <- FALSE;
@@ -1285,7 +1290,7 @@ CreatorES <- function(silent=FALSE,...){
         }
 
         if(cfType=="HAM"){
-            smoothingParameters <- cbind(rep(0,3),rep(0,3));
+            smoothingParameters <- cbind(rep(0.01,3),rep(0.01,3));
         }
     }
 
@@ -1796,7 +1801,7 @@ CreatorES <- function(silent=FALSE,...){
 # Write down Fisher Information if needed
         if(FI){
             environment(likelihoodFunction) <- environment();
-            FI <- numDeriv::hessian(likelihoodFunction,C);
+            FI <- -numDeriv::hessian(likelihoodFunction,C);
         }
 
         ssFitter(ParentEnvironment=environment());

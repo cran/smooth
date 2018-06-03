@@ -2,10 +2,10 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 
 #' Complex Exponential Smoothing
 #'
-#' Function estimates CES in state-space form with information potential equal
+#' Function estimates CES in state space form with information potential equal
 #' to errors and returns several variables.
 #'
-#' The function estimates Complex Exponential Smoothing in the state-space 2
+#' The function estimates Complex Exponential Smoothing in the state space 2
 #' described in Svetunkov, Kourentzes (2017) with the information potential
 #' equal to the approximation error.  The estimation of initial states of xt is
 #' done using backcast.
@@ -86,7 +86,7 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' \item \code{persistenceX} - persistence vector g for exogenous variables.
 #' \item \code{transitionX} - transition matrix F for exogenous variables.
 #' \item \code{ICs} - values of information criteria of the model. Includes
-#' AIC, AICc, BIC and CIC (Complex IC).
+#' AIC, AICc, BIC and BICc.
 #' \item \code{logLik} - log-likelihood of the function.
 #' \item \code{cf} - Cost function value.
 #' \item \code{cfType} - Type of cost function used in the estimation.
@@ -142,7 +142,7 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #'
 #' @export ces
 ces <- function(data, seasonality=c("none","simple","partial","full"),
-                initial=c("optimal","backcasting"), A=NULL, B=NULL, ic=c("AICc","AIC","BIC"),
+                initial=c("optimal","backcasting"), A=NULL, B=NULL, ic=c("AICc","AIC","BIC","BICc"),
                 cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                 h=10, holdout=FALSE, cumulative=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
@@ -152,7 +152,7 @@ ces <- function(data, seasonality=c("none","simple","partial","full"),
                 silent=c("all","graph","legend","output","none"),
                 xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                 updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
-# Function estimates CES in state-space form with sigma = error
+# Function estimates CES in state space form with sigma = error
 #  and returns complex smoothing parameter value, fitted values,
 #  residuals, point and interval forecasts, matrix of CES components and values of
 #  information criteria.
@@ -402,7 +402,7 @@ CreatorCES <- function(silentText=FALSE,...){
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
 
-    bestIC <- ICs["AICc"];
+    bestIC <- ICs[ic];
 
 # Revert to the provided cost function
     cfType <- cfTypeOriginal;
@@ -698,7 +698,7 @@ CreatorCES <- function(silentText=FALSE,...){
 # Write down Fisher Information if needed
     if(FI){
         environment(likelihoodFunction) <- environment();
-        FI <- numDeriv::hessian(likelihoodFunction,C);
+        FI <- -numDeriv::hessian(likelihoodFunction,C);
     }
 
 ##### Fit simple model and produce forecast #####

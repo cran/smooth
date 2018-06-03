@@ -4,7 +4,7 @@
 \alias{sma}
 \title{Simple Moving Average}
 \usage{
-sma(data, order = NULL, ic = c("AICc", "AIC", "BIC"), h = 10,
+sma(data, order = NULL, ic = c("AICc", "AIC", "BIC", "BICc"), h = 10,
   holdout = FALSE, cumulative = FALSE, intervals = c("none", "parametric",
   "semiparametric", "nonparametric"), level = 0.95, silent = c("all",
   "graph", "legend", "output", "none"), ...)
@@ -43,7 +43,9 @@ used in this process is e[j] = a j^b, where j=1,..,h.
 }
 The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
 parametric intervals are constructed, while the latter is equivalent to
-\code{none}.}
+\code{none}.
+If the forecasts of the models were combined, then the intervals are combined
+quantile-wise (Lichtendahl et al., 2013).}
 
 \item{level}{Confidence level. Defines width of prediction interval.}
 
@@ -97,7 +99,7 @@ account).
 \item \code{actuals} - the original data.
 \item \code{holdout} - the holdout part of the original data.
 \item \code{ICs} - values of information criteria of the model. Includes AIC,
-AICc and BIC.
+AICc, BIC and BICc.
 \item \code{logLik} - log-likelihood of the function.
 \item \code{cf} - Cost function value.
 \item \code{cfType} - Type of cost function used in the estimation.
@@ -108,10 +110,10 @@ Bias coefficient (based on complex numbers). This is available only when
 }
 }
 \description{
-Function constructs State-Space simple moving average of predefined order
+Function constructs state space simple moving average of predefined order
 }
 \details{
-The function constructs AR model in the Single Source of Error State-space form
+The function constructs AR model in the Single Source of Error state space form
 based on the idea that:
 
 \eqn{y_{t} = \frac{1}{n} \sum_{j=1}^n y_{t-j}}

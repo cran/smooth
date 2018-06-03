@@ -5,9 +5,10 @@
 \title{Vector Intermittent State Space}
 \usage{
 viss(data, intermittent = c("logistic", "none", "fixed"), ic = c("AICc",
-  "AIC", "BIC"), h = 10, holdout = FALSE, probability = c("dependent",
-  "independent"), model = "ANN", persistence = NULL, transition = NULL,
-  phi = NULL, initial = NULL, initialSeason = NULL, xreg = NULL)
+  "AIC", "BIC", "BICc"), h = 10, holdout = FALSE,
+  probability = c("dependent", "independent"), model = "ANN",
+  persistence = NULL, transition = NULL, phi = NULL, initial = NULL,
+  initialSeason = NULL, xreg = NULL)
 }
 \arguments{
 \item{data}{The matrix with data, where series are in columns and
@@ -27,7 +28,7 @@ the end of the data.}
 \item{probability}{Type of probability assumed in the model. If
 \code{"dependent"}, then it is assumed that occurrence of one variable is
 connected with the occurrence with another one. In case of \code{"independent"}
-the occurrence of the variables is assumed to happen independ of each
+the occurrence of the variables is assumed to happen independent of each
 other.}
 
 \item{model}{Type of ETS model used for the estimation. Normally this should

@@ -5,8 +5,8 @@
 \title{Complex Exponential Smoothing Auto}
 \usage{
 auto.ces(data, models = c("none", "simple", "full"), initial = c("optimal",
-  "backcasting"), ic = c("AICc", "AIC", "BIC"), cfType = c("MSE", "MAE",
-  "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
+  "backcasting"), ic = c("AICc", "AIC", "BIC", "BICc"), cfType = c("MSE",
+  "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
   cumulative = FALSE, intervals = c("none", "parametric", "semiparametric",
   "nonparametric"), level = 0.95, intermittent = c("none", "auto", "fixed",
   "interval", "probability", "sba", "logistic"), imodel = "MNN",
@@ -71,7 +71,9 @@ used in this process is e[j] = a j^b, where j=1,..,h.
 }
 The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
 parametric intervals are constructed, while the latter is equivalent to
-\code{none}.}
+\code{none}.
+If the forecasts of the models were combined, then the intervals are combined
+quantile-wise (Lichtendahl et al., 2013).}
 
 \item{level}{Confidence level. Defines width of prediction interval.}
 
@@ -144,13 +146,13 @@ Object of class "smooth" is returned. See \link[smooth]{ces} for
 details.
 }
 \description{
-Function estimates CES in state-space form with information potential equal
+Function estimates CES in state space form with information potential equal
 to errors with different seasonality types and chooses the one with the
 lowest IC value.
 }
 \details{
 The function estimates several Complex Exponential Smoothing in the
-state-space 2 described in Svetunkov, Kourentzes (2015) with the information
+state space 2 described in Svetunkov, Kourentzes (2015) with the information
 potential equal to the approximation error using different types of
 seasonality and chooses the one with the lowest value of information
 criterion.

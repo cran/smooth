@@ -2,18 +2,18 @@
 % Please edit documentation in R/ves.R
 \name{ves}
 \alias{ves}
-\title{Vector Exponential Smoothing in SSOE state-space model}
+\title{Vector Exponential Smoothing in SSOE state space model}
 \usage{
 ves(data, model = "ANN", persistence = c("group", "independent",
   "dependent"), transition = c("group", "independent", "dependent"),
   phi = c("group", "individual"), initial = c("individual", "group"),
   initialSeason = c("group", "individual"), cfType = c("likelihood",
-  "diagonal", "trace"), ic = c("AICc", "AIC", "BIC"), h = 10,
+  "diagonal", "trace"), ic = c("AICc", "AIC", "BIC", "BICc"), h = 10,
   holdout = FALSE, intervals = c("none", "conditional", "unconditional",
   "independent"), level = 0.95, cumulative = FALSE,
   intermittent = c("none", "fixed", "logistic"), imodel = "ANN",
   iprobability = c("dependent", "independent"), bounds = c("admissible",
-  "none"), silent = c("all", "graph", "output", "none"), ...)
+  "usual", "none"), silent = c("all", "graph", "output", "none"), ...)
 }
 \arguments{
 \item{data}{The matrix with data, where series are in columns and
@@ -195,6 +195,7 @@ for the number of degrees of freedom);
 \item \code{cf} - The value of the cost function;
 \item \code{cfType} - The type of the used cost function;
 \item \code{accuracy} - the values of the error measures. Currently not available.
+\item \code{FI} - Fisher information if user asked for it using \code{FI=TRUE}.
 }
 }
 \description{
@@ -202,7 +203,7 @@ Function constructs vector ETS model and returns forecast, fitted values, errors
 and matrix of states along with other useful variables.
 }
 \details{
-Function estimates vector ETS in a form of the Single Source of Error State-space
+Function estimates vector ETS in a form of the Single Source of Error state space
 model of the following type:
 
 \deqn{

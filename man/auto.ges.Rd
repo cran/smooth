@@ -5,15 +5,15 @@
 \title{Automatic GES}
 \usage{
 auto.ges(data, orderMax = 3, lagMax = frequency(data), type = c("A", "M",
-  "Z"), initial = c("backcasting", "optimal"), ic = c("AICc", "AIC", "BIC"),
-  cfType = c("MSE", "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10,
-  holdout = FALSE, cumulative = FALSE, intervals = c("none", "parametric",
-  "semiparametric", "nonparametric"), level = 0.95, intermittent = c("none",
-  "auto", "fixed", "interval", "probability", "sba", "logistic"),
-  imodel = "MNN", bounds = c("admissible", "none"), silent = c("all",
-  "graph", "legend", "output", "none"), xreg = NULL, xregDo = c("use",
-  "select"), initialX = NULL, updateX = FALSE, persistenceX = NULL,
-  transitionX = NULL, ...)
+  "Z"), initial = c("backcasting", "optimal"), ic = c("AICc", "AIC", "BIC",
+  "BICc"), cfType = c("MSE", "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"),
+  h = 10, holdout = FALSE, cumulative = FALSE, intervals = c("none",
+  "parametric", "semiparametric", "nonparametric"), level = 0.95,
+  intermittent = c("none", "auto", "fixed", "interval", "probability", "sba",
+  "logistic"), imodel = "MNN", bounds = c("admissible", "none"),
+  silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
+  xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
+  persistenceX = NULL, transitionX = NULL, ...)
 }
 \arguments{
 \item{data}{Vector or ts object, containing data needed to be forecasted.}
@@ -79,7 +79,9 @@ used in this process is e[j] = a j^b, where j=1,..,h.
 }
 The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
 parametric intervals are constructed, while the latter is equivalent to
-\code{none}.}
+\code{none}.
+If the forecasts of the models were combined, then the intervals are combined
+quantile-wise (Lichtendahl et al., 2013).}
 
 \item{level}{Confidence level. Defines width of prediction interval.}
 

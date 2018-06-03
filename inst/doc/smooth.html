@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-05-03" />
+<meta name="date" content="2018-05-31" />
 
 <title>smooth: forecasting using state-space models</title>
 
@@ -32,7 +32,7 @@
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-05-03</em></h4>
+<h4 class="date"><em>2018-05-31</em></h4>
 
 
 
@@ -46,7 +46,8 @@
 <li><a href="ves.html">ves() - Vector Exponential Smoothing</a>;</li>
 <li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
 <li><a href="simulate.html">sim.es() and simulate() - simulation functions for Exponential Smoothing</a>.</li>
-<li><code>iss()</code> – function that estimates probability of occurrence of variable using one of the following: 1. Fixed probability; 2. Croston’s probability; 3. SBA; 4. TSB probability; 5. Logistic probability. The model produced by <code>iss()</code> can then be used in any forecasting function as input variable for <code>imodel</code> parameter. There is also vector counterpart of this function called <code>viss()</code> which implements multivariate fixed and logistic probabilities.</li>
+<li><code>smoothCombine()</code> - function that combines forecasts of the main univariate functions of smooth package.</li>
+<li><code>iss()</code> – function that estimates probability of occurrence of variable using one of the following: 10. Fixed probability; 2. Croston’s probability; 3. SBA; 4. TSB probability; 5. Logistic probability. The model produced by <code>iss()</code> can then be used in any forecasting function as input variable for <code>imodel</code> parameter. There is also vector counterpart of this function called <code>viss()</code> which implements multivariate fixed and logistic probabilities.</li>
 <li><code>xregExpander()</code> – function that creates lags and leads of the provided exogenous variables (either vector or matrix) and forecasts the missing values. This thing returns the matrix.</li>
 <li><code>stepwise()</code> – the function that implements stepwise based on information criteria and partial correlations. Easier to use and works faster than <code>step()</code> from <code>stats</code> package.</li>
 </ol>
@@ -59,22 +60,25 @@
 <li><code>fitted(ourModel)</code> – fitted values of the model;</li>
 <li><code>forecast(ourModel)</code> – point and interval forecasts. This is needed for compatibility with Rob Hyndman’s “forecast” package. <code>forecast(ourModel)</code> returns object of class <code>forecastSmooth</code>;</li>
 <li><code>residuals(ourModel)</code> – residuals of constructed model;</li>
-<li><code>AIC(ourModel)</code>, <code>BIC(ourModel)</code> and <code>AICc(ourModel)</code> – information criteria of the constructed model. <code>AICc()</code> function is not a standard <code>stats</code> function and is introduced by <code>smooth</code>;</li>
+<li><code>AIC(ourModel)</code>, <code>BIC(ourModel)</code>, <code>AICc(ourModel)</code> and <code>BICc(ourModel)</code> – information criteria of the constructed model. <code>AICc()</code> and <code>BICc()</code> functions are not standard <code>stats</code> functions and are imported from <code>greybox</code> package and modified in <code>smooth</code> for the specific models;</li>
 <li><code>plot(ourModel)</code> – plots states of constructed model. If number of states is higher than 10, then several graphs are produced. In case of <code>iss()</code> plots the actual zeroes, fitted values and the forecast.</li>
 <li><code>simulate(ourModel)</code> – produces data simulated from provided model;</li>
 <li><code>summary(forecast(ourModel))</code> – prints point and interval forecasts;</li>
 <li><code>plot(forecast(ourModel))</code> – produces graph with actuals, forecast, fitted and intervals using <code>graphmaker()</code> function.</li>
 <li><code>logLik(ourModel)</code> – returns log-likelihood of the model;</li>
 <li><code>nobs(ourModel)</code> – returns number of observations in-sample we had;</li>
-<li><code>nParam(ourModel)</code> – number of estimated parameters;</li>
+<li><code>nParam(ourModel)</code> – number of estimated parameters (originally from <code>greybox</code> package);</li>
 <li><code>pointLik(ourModel)</code> – likelihood values for each separate observation;</li>
 <li><code>sigma(ourModel)</code> – variance of the residuals of the model;</li>
 <li><code>lags(ourModel)</code> – lags of the model (used with <code>ssarima()</code> and <code>ges()</code>);</li>
 <li><code>orders(ourModel)</code> – orders of the model (can be used with <code>ssarima()</code>, <code>ges()</code> and <code>sma()</code>);</li>
 <li><code>modelType(ourModel)</code> – returns the type of the model. Returns something like “MMM” for ETS(MMM). Can be used with <code>es()</code>, <code>ces()</code>, <code>ves()</code> and <code>ets()</code>;</li>
+<li><code>errorType(ourModel)</code> – the type of the error of a model (additive or multiplicative);</li>
 <li><code>coef(ourModel)</code> – returns the vector of all the estimated coefficients of the model;</li>
 <li><code>formula(ourModel)</code> – returns the formula for the measurement equation. This is just for the information and general understanding what we work with;</li>
-<li><code>getResponse(ourModel)</code> – returns actual values.</li>
+<li><code>getResponse(ourModel)</code> – returns actual values;</li>
+<li><code>covar(ourModel)</code> – covariance matrix of multiple steps ahead forecast errors;</li>
+<li><code>pls(ourModel)</code> - Prediction Likelihood Score for the model and the provided holdout.</li>
 </ol>
 </div>
 

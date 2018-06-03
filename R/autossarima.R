@@ -1,13 +1,13 @@
 utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType","ar.orders","i.orders","ma.orders"));
 
-#' State-Space ARIMA
+#' State Space ARIMA
 #'
-#' Function selects the best State-Space ARIMA based on information criteria,
+#' Function selects the best State Space ARIMA based on information criteria,
 #' using fancy branch and bound mechanism. The resulting model can be not
 #' optimal in IC meaning, but it is usually reasonable.
 #'
 #' The function constructs bunch of ARIMAs in Single Source of Error
-#' State-space form (see \link[smooth]{ssarima} documentation) and selects the
+#' state space form (see \link[smooth]{ssarima} documentation) and selects the
 #' best one based on information criterion.
 #'
 #' Due to the flexibility of the model, multiple seasonalities can be used. For
@@ -76,7 +76,7 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' @export auto.ssarima
 auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,frequency(data)),
                          combine=FALSE, workFast=TRUE, constant=NULL,
-                         initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC"),
+                         initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC","BICc"),
                          cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                          h=10, holdout=FALSE, cumulative=FALSE,
                          intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
@@ -328,6 +328,10 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
         else if(ic=="BIC"){
             llikelihood <- (nParam*log(obsNonzero) - icValue)/2;
             correction <- nParamNew*log(obsNonzero) - 2*llikelihood;
+        }
+        else if(ic=="BICc"){
+            llikelihood <- ((nParam*log(obsNonzero)*obsNonzero)/(obsNonzero-nParam-1) - icValue)/2;
+            correction <- (nParamNew*log(obsNonzero)*obsNonzero)/(obsNonzero-nParamNew-1) - 2*llikelihood;
         }
 
         return(correction);

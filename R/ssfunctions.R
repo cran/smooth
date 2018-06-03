@@ -4,7 +4,7 @@ utils::globalVariables(c("h","holdout","orders","lags","transition","measurement
                          "constant","AR","MA","data","y.fit","cumulative","rounded"));
 
 ##### *Checker of input of basic functions* #####
-ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
+ssInput <- function(smoothType=c("es","ges","ces","ssarima","smoothC"),...){
     # This is universal function needed in order to check the passed arguments to es(), ges(), ces() and ssarima()
 
     smoothType <- smoothType[1];
@@ -477,6 +477,10 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
             nParamMax <- order;
         }
     }
+    else{
+        maxlag <- 1;
+        nParamMax <- 0;
+    }
 
     ##### Lags and components for GES #####
     if(smoothType=="ges"){
@@ -598,13 +602,13 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
     ##### bounds #####
     bounds <- substring(bounds[1],1,1);
     if(bounds!="u" & bounds!="a" & bounds!="n"){
-        warning("Strange bounds are defined. Switching to 'usual'.",call.=FALSE);
-        bounds <- "u";
+        warning("Strange bounds are defined. Switching to 'admissible'.",call.=FALSE);
+        bounds <- "a";
     }
 
     ##### Information Criteria #####
     ic <- ic[1];
-    if(all(ic!=c("AICc","AIC","BIC"))){
+    if(all(ic!=c("AICc","AIC","BIC","BICc"))){
         warning(paste0("Strange type of information criteria defined: ",ic,". Switching to 'AICc'."),call.=FALSE);
         ic <- "AICc";
     }
@@ -671,19 +675,19 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
         intervalsType <- "p";
     }
 
-    if(intervalsType=="none"){
+    if(any(intervalsType==c("none","n"))){
         intervalsType <- "n";
         intervals <- FALSE;
     }
-    else if(intervalsType=="parametric"){
+    else if(any(intervalsType==c("parametric","p"))){
         intervalsType <- "p";
         intervals <- TRUE;
     }
-    else if(intervalsType=="semiparametric"){
+    else if(any(intervalsType==c("semiparametric","sp"))){
         intervalsType <- "sp";
         intervals <- TRUE;
     }
-    else if(intervalsType=="nonparametric"){
+    else if(any(intervalsType==c("nonparametric","np"))){
         intervalsType <- "np";
         intervals <- TRUE;
     }
@@ -997,6 +1001,12 @@ ssInput <- function(smoothType=c("es","ges","ces","ssarima"),...){
                                               maxlag*(seasonality!="n") +
                                               maxlag*any(seasonality==c("f","s")));
                 }
+            }
+            else if(smoothType=="smoothC"){
+                warning("We cannot use the preset initials for the models. Switching to optimal.",
+                        call.=FALSE);
+                initialType <- "o";
+                initialValue <- NULL;
             }
         }
     }
@@ -1451,7 +1461,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
 
     ##### Information Criteria #####
     ic <- ic[1];
-    if(all(ic!=c("AICc","AIC","BIC"))){
+    if(all(ic!=c("AICc","AIC","BIC","BICc"))){
         warning(paste0("Strange type of information criteria defined: ",ic,". Switching to 'AICc'."),call.=FALSE);
         ic <- "AICc";
     }
@@ -1497,19 +1507,19 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.ges","auto.ssarima"),...){
         intervalsType <- "p";
     }
 
-    if(intervalsType=="none"){
+    if(any(intervalsType==c("none","n"))){
         intervalsType <- "n";
         intervals <- FALSE;
     }
-    else if(intervalsType=="parametric"){
+    else if(any(intervalsType==c("parametric","p"))){
         intervalsType <- "p";
         intervals <- TRUE;
     }
-    else if(intervalsType=="semiparametric"){
+    else if(any(intervalsType==c("semiparametric","sp"))){
         intervalsType <- "sp";
         intervals <- TRUE;
     }
-    else if(intervalsType=="nonparametric"){
+    else if(any(intervalsType==c("nonparametric","np"))){
         intervalsType <- "np";
         intervals <- TRUE;
     }
@@ -1642,6 +1652,11 @@ ssFitter <- function(...){
     y.fit <- ts(fitting$yfit,start=dataStart,frequency=datafreq);
     errors <- ts(fitting$errors,start=dataStart,frequency=datafreq);
 
+    if(any(is.nan(matvt[,1]))){
+        matvt[is.nan(matvt[,1]),1] <- 0;
+        warning(paste0("Something went wrong with the model ",model,", NaNs were produced.\n",
+                       "This could happen if you used multiplicative model on non-positive data. Please, use a different model."),call.=FALSE);
+    }
     if(EtypeNew=="M" & any(matvt[,1]<0)){
         matvt[matvt[,1]<0,1] <- 0.001;
         warning(paste0("Negative values produced in the level of state vector of model ",model,".\n",
@@ -1671,7 +1686,7 @@ ssFitter <- function(...){
     assign("errors",errors,ParentEnvironment);
 }
 
-##### *State-space intervals* #####
+##### *State space intervals* #####
 ssIntervals <- function(errors, ev=median(errors), level=0.95, intervalsType=c("a","p","sp","np"), df=NULL,
                         measurement=NULL, transition=NULL, persistence=NULL, s2=NULL,
                         modellags=NULL, states=NULL, cumulative=FALSE, cfType="MSE",
@@ -2230,10 +2245,10 @@ qlnormBin <- function(iprob, level=0.95, meanVec=0, sdVec=1, Etype="A"){
         stop("The provided data is not either vector or matrix. Can't do anything with it!", call.=FALSE);
     }
 
-    return(list(upper=upper,lower=lower,variance=varVec));
+    return(list(upper=upper,lower=lower));
 }
 
-##### *Forecaster of state-space functions* #####
+##### *Forecaster of state space functions* #####
 ssForecaster <- function(...){
     ellipsis <- list(...);
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
@@ -2266,12 +2281,17 @@ ssForecaster <- function(...){
     yForecastStart <- time(data)[obsInsample]+deltat(data);
 
     if(h>0){
-        y.for <- ts(forecasterwrap(matrix(matvt[(obsInsample+1):(obsInsample+maxlag),],nrow=maxlag),
+        y.for <- ts(c(forecasterwrap(matrix(matvt[(obsInsample+1):(obsInsample+maxlag),],nrow=maxlag),
                                    matF, matw, h, Etype, Ttype, Stype, modellags,
                                    matrix(matxt[(obsAll-h+1):(obsAll),],ncol=nExovars),
-                                   matrix(matat[(obsAll-h+1):(obsAll),],ncol=nExovars), matFX),
+                                   matrix(matat[(obsAll-h+1):(obsAll),],ncol=nExovars), matFX)),
                     start=yForecastStart,frequency=datafreq);
 
+        if(any(is.nan(y.for))){
+            warning(paste0("NaNs were produced in the forecast.\n",
+                           "This could happen if you used multiplicative model on non-positive data. Please, use a different model."),call.=FALSE);
+            y.for[] <- 0;
+        }
         if(Etype=="M" & any(y.for<0)){
             warning(paste0("Negative values produced in forecast. This does not make any sense for model with multiplicative error.\n",
                            "Please, use another model."),call.=FALSE);
@@ -2909,14 +2929,29 @@ ICFunction <- function(nParam=nParam,nParamIntermittent=nParamIntermittent,
     nParamOverall <- nParam + nParamIntermittent;
     llikelihood <- likelihoodFunction(C);
 
-    AIC.coef <- 2*nParamOverall*h^multisteps - 2*llikelihood;
-# max here is needed in order to take into account cases with higher number of parameters than observations
-#!!! This is incorrect in the case of non-normal residuals!
-    AICc.coef <- AIC.coef + 2 * nParam*h^multisteps * (nParam + 1) / max(obsNonzero - nParam - 1,0);
-    BIC.coef <- log(obsNonzero)*nParamOverall*h^multisteps - 2*llikelihood;
+# max here is needed in order to take into account cases with higher
+## number of parameters than observations
+### AICc and BICc are incorrect in case of non-normal residuals!
+    if(cfType=="TFL"){
+        coefAIC <- 2*nParamOverall*h - 2*llikelihood;
+        coefBIC <- log(obsNonzero)*nParamOverall*h - 2*llikelihood;
+        coefAICc <- (2*obsNonzero*(nParam*h + (h*(h+1))/2) /
+                         max(obsNonzero - nParam - 1 - h,0)
+                     -2*llikelihood);
+        coefBICc <- (((nParam + (h*(h+1))/2)*
+                          log(obsNonzero*h)*obsNonzero*h) /
+                         max(obsNonzero*h - nParam - (h*(h+1))/2,0)
+                     -2*llikelihood);
+    }
+    else{
+        coefAIC <- 2*nParamOverall - 2*llikelihood;
+        coefBIC <- log(obsNonzero)*nParamOverall - 2*llikelihood;
+        coefAICc <- coefAIC + 2*nParam*(nParam+1) / max(obsNonzero-nParam-1,0);
+        coefBICc <- (nParam * log(obsNonzero) * obsNonzero) / (obsNonzero - nParam - 1) -2*llikelihood;
+    }
 
-    ICs <- c(AIC.coef, AICc.coef, BIC.coef);
-    names(ICs) <- c("AIC", "AICc", "BIC");
+    ICs <- c(coefAIC, coefAICc, coefBIC, coefBICc);
+    names(ICs) <- c("AIC", "AICc", "BIC", "BICc");
 
     return(list(llikelihood=llikelihood,ICs=ICs));
 }
@@ -2929,21 +2964,33 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
                      intervalsType=c("n","p","sp","np","a"), level=0.95, ICs,
                      holdout=FALSE, insideintervals=NULL, errormeasures=NULL,
                      intermittent="n"){
-# Function forms the generic output for State-space models.
-    if(gregexpr("ETS",modelname)!=-1){
-        model <- "ETS";
+# Function forms the generic output for state space models.
+    if(!is.null(modelname)){
+        if(is.list(modelname)){
+            model <- "smoothC";
+            modelname <- "Combined smooth";
+        }
+        else{
+            if(gregexpr("ETS",modelname)!=-1){
+                model <- "ETS";
+            }
+            else if(gregexpr("CES",modelname)!=-1){
+                model <- "CES";
+            }
+            else if(gregexpr("GES",modelname)!=-1){
+                model <- "GES";
+            }
+            else if(gregexpr("ARIMA",modelname)!=-1){
+                model <- "ARIMA";
+            }
+            else if(gregexpr("SMA",modelname)!=-1){
+                model <- "SMA";
+            }
+        }
     }
-    else if(gregexpr("CES",modelname)!=-1){
-        model <- "CES";
-    }
-    else if(gregexpr("GES",modelname)!=-1){
-        model <- "GES";
-    }
-    else if(gregexpr("ARIMA",modelname)!=-1){
-        model <- "ARIMA";
-    }
-    else if(gregexpr("SMA",modelname)!=-1){
-        model <- "SMA";
+    else{
+        model <- "smoothC";
+        modelname <- "Combined smooth";
     }
 
     cat(paste0("Time elapsed: ",round(as.numeric(timeelapsed,units="secs"),2)," seconds\n"));
@@ -3086,7 +3133,7 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
         }
         ICs <- ICs[nrow(ICs),];
     }
-    print(ICs);
+    print(round(ICs,4));
 
     if(intervals){
         if(intervalsType=="p"){

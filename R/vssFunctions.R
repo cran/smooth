@@ -106,6 +106,15 @@ vssInput <- function(smoothType=c("ves"),...){
     dataFreq <- frequency(data);
     dataDeltat <- deltat(data);
     dataStart <- start(data);
+    dataNames <- colnames(data);
+    if(!is.null(dataNames)){
+        dataNames <- gsub(" ", "_", dataNames, fixed = TRUE);
+        dataNames <- gsub(":", "_", dataNames, fixed = TRUE);
+        dataNames <- gsub("$", "_", dataNames, fixed = TRUE);
+    }
+    else{
+        dataNames <- paste0("Series",c(1:nSeries));
+    }
 
     # Number of parameters to estimate / provided
     parametersNumber <- matrix(0,2,4,
@@ -320,22 +329,6 @@ vssInput <- function(smoothType=c("ves"),...){
             else{
                 persistenceType <- "p";
                 persistenceEstimate <- FALSE;
-                ### Check the persistence matrix in order to decide number of parameters
-                persistencePartial <- matrix(persistenceValue[1:nComponentsAll,1:nSeries],
-                                            nComponentsAll,nSeries);
-                # Check if persistence is dependent
-                if(all(persistencePartial[,nSeries]==0)){
-                    # Check if persistence is grouped
-                    if(persistenceValue[1,1]==persistenceValue[1+nComponentsAll,nSeries]){
-                        parametersNumber[2,1] <- parametersNumber[2,1] + nSeries;
-                    }
-                    else{
-                        parametersNumber[2,1] <- parametersNumber[2,1] + nSeries*nComponentsAll;
-                    }
-                }
-                else{
-                    parametersNumber[2,1] <- parametersNumber[2,1] + length(unique(as.vector(persistenceValue)));
-                }
 
                 if(length(persistenceValue)==nComponentsAll){
                     persistenceBuffer <- matrix(0,nSeries*nComponentsAll,nSeries);
@@ -343,9 +336,27 @@ vssInput <- function(smoothType=c("ves"),...){
                         persistenceBuffer[1:nComponentsAll+nComponentsAll*(i-1),i] <- persistenceValue;
                     }
                     persistenceValue <- persistenceBuffer;
+                    parametersNumber[2,1] <- parametersNumber[2,1] + length(unique(as.vector(persistenceValue)));
                 }
                 else{
+                    ### Check the persistence matrix in order to decide number of parameters
+                    persistencePartial <- matrix(persistenceValue[1:nComponentsAll,1:nSeries],
+                                                 nComponentsAll,nSeries);
                     persistenceValue <- matrix(persistenceValue,nSeries*nComponentsAll,nSeries);
+
+                    # Check if persistence is dependent
+                    if(all(persistencePartial[,nSeries]==0)){
+                        # Check if persistence is grouped
+                        if(persistenceValue[1,1]==persistenceValue[1+nComponentsAll,nSeries]){
+                            parametersNumber[2,1] <- parametersNumber[2,1] + nSeries;
+                        }
+                        else{
+                            parametersNumber[2,1] <- parametersNumber[2,1] + nSeries*nComponentsAll;
+                        }
+                    }
+                    else{
+                        parametersNumber[2,1] <- parametersNumber[2,1] + length(unique(as.vector(persistenceValue)));
+                    }
                 }
             }
         }
@@ -477,9 +488,9 @@ vssInput <- function(smoothType=c("ves"),...){
     }
 
     if(transitionType=="d"){
-        ## !!! Each separate transition matrix is not evaluated, but the left spaces are...
+        ## !!! Each separate transition matrix is not evaluated, but the off-diagonals are
         transitionEstimate <- TRUE;
-        nParamMax <- nParamMax + nSeries*nComponentsAll - nComponentsAll^2;
+        nParamMax <- nParamMax + (nSeries-1)*nSeries*nComponentsAll^2;
     }
 
     ##### Damping parameter ####
@@ -688,7 +699,7 @@ vssInput <- function(smoothType=c("ves"),...){
 
     ##### Information Criteria #####
     ic <- ic[1];
-    if(all(ic!=c("AICc","AIC","BIC"))){
+    if(all(ic!=c("AICc","AIC","BIC","BICc"))){
         warning(paste0("Strange type of information criteria defined: ",ic,". Switching to 'AICc'."),call.=FALSE);
         ic <- "AICc";
     }
@@ -735,27 +746,6 @@ vssInput <- function(smoothType=c("ves"),...){
         level <- level / 100;
     }
 
-    ##### Check if multiplicative is applicable #####
-    if(any(smoothType==c("ves"))){
-        # Check if multiplicative models can be fitted
-        allowMultiplicative <- !((any(y<=0) & intermittent=="n")| (intermittent!="n" & any(y<0)));
-        # If non-positive values are present, check if data is intermittent, if negatives are here, switch to additive models
-        if(!allowMultiplicative){
-            if(Etype=="M"){
-                warning("Can't apply multiplicative model to non-positive data. Switching error type to 'A'", call.=FALSE);
-                Etype <- "A";
-            }
-            if(Ttype=="M"){
-                warning("Can't apply multiplicative model to non-positive data. Switching trend type to 'A'", call.=FALSE);
-                Ttype <- "A";
-            }
-            if(Stype=="M"){
-                warning("Can't apply multiplicative model to non-positive data. Switching seasonality type to 'A'", call.=FALSE);
-                Stype <- "A";
-            }
-        }
-    }
-
     ##### bounds #####
     bounds <- substring(bounds[1],1,1);
     if(all(bounds!=c("u","a","n"))){
@@ -799,6 +789,7 @@ vssInput <- function(smoothType=c("ves"),...){
     assign("dataFreq",dataFreq,ParentEnvironment);
     assign("dataDeltat",dataDeltat,ParentEnvironment);
     assign("dataStart",dataStart,ParentEnvironment);
+    assign("dataNames",dataNames,ParentEnvironment);
     assign("parametersNumber",parametersNumber,ParentEnvironment);
 
     assign("model",model,ParentEnvironment);
@@ -811,7 +802,6 @@ vssInput <- function(smoothType=c("ves"),...){
     assign("modelIsMultiplicative",modelIsMultiplicative,ParentEnvironment);
     assign("nComponentsAll",nComponentsAll,ParentEnvironment);
     assign("nComponentsNonSeasonal",nComponentsNonSeasonal,ParentEnvironment);
-    assign("allowMultiplicative",allowMultiplicative,ParentEnvironment);
 
     assign("persistenceValue",persistenceValue,ParentEnvironment);
     assign("persistenceType",persistenceType,ParentEnvironment);
@@ -883,13 +873,19 @@ vICFunction <- function(nParam=nParam,A,Etype=Etype){
 
     llikelihood <- vLikelihoodFunction(A);
 
-    AIC.coef <- 2*nParam - 2*llikelihood;
-    # max here is needed in order to take into account cases with higher number of parameters than observations
-    AICc.coef <- AIC.coef + 2 * nParam * (nParam + 1) / max(obsInSample - nParam - 1,0);
-    BIC.coef <- log(obsInSample)*nParam - 2*llikelihood;
+    coefAIC <- 2*nParam - 2*llikelihood;
+    coefBIC <- log(obsInSample)*nParam - 2*llikelihood;
 
-    ICs <- c(AIC.coef, AICc.coef, BIC.coef);
-    names(ICs) <- c("AIC", "AICc", "BIC");
+    # max here is needed in order to take into account cases with higher number of parameters than observations
+    coefAICc <- ((2*obsInSample*(nParam*nSeries + nSeries*(nSeries+1)/2)) /
+                                 max(obsInSample - (nParam + nSeries + 1),0)) -2*llikelihood;
+
+    coefBICc <- (((nParam + nSeries*(nSeries+1)/2) *
+                      log(obsInSample * nSeries) * obsInSample * nSeries) /
+                     (obsInSample * nSeries - nParam - nSeries*(nSeries+1)/2)) -2*llikelihood;
+
+    ICs <- c(coefAIC, coefAICc, coefBIC, coefBICc);
+    names(ICs) <- c("AIC", "AICc", "BIC", "BICc");
 
     return(list(llikelihood=llikelihood,ICs=ICs));
 }
@@ -919,7 +915,7 @@ vssFitter <- function(...){
     assign("errors",errors,ParentEnvironment);
 }
 
-##### *State-space intervals* #####
+##### *State space intervals* #####
 # This is not implemented yet
 #' @importFrom stats qchisq
 vssIntervals <- function(level=0.95, intervalsType=c("c","u","i"), Sigma=NULL,
@@ -1064,7 +1060,7 @@ vssIntervals <- function(level=0.95, intervalsType=c("c","u","i"), Sigma=NULL,
     return(PI);
 }
 
-##### *Forecaster of state-space functions* #####
+##### *Forecaster of state space functions* #####
 vssForecaster <- function(...){
     ellipsis <- list(...);
     ParentEnvironment <- ellipsis[['ParentEnvironment']];

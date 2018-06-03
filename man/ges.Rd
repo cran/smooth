@@ -6,15 +6,15 @@
 \usage{
 ges(data, orders = c(1, 1), lags = c(1, frequency(data)), type = c("A",
   "M"), persistence = NULL, transition = NULL, measurement = NULL,
-  initial = c("optimal", "backcasting"), ic = c("AICc", "AIC", "BIC"),
-  cfType = c("MSE", "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10,
-  holdout = FALSE, cumulative = FALSE, intervals = c("none", "parametric",
-  "semiparametric", "nonparametric"), level = 0.95, intermittent = c("none",
-  "auto", "fixed", "interval", "probability", "sba", "logistic"),
-  imodel = "MNN", bounds = c("admissible", "none"), silent = c("all",
-  "graph", "legend", "output", "none"), xreg = NULL, xregDo = c("use",
-  "select"), initialX = NULL, updateX = FALSE, persistenceX = NULL,
-  transitionX = NULL, ...)
+  initial = c("optimal", "backcasting"), ic = c("AICc", "AIC", "BIC",
+  "BICc"), cfType = c("MSE", "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"),
+  h = 10, holdout = FALSE, cumulative = FALSE, intervals = c("none",
+  "parametric", "semiparametric", "nonparametric"), level = 0.95,
+  intermittent = c("none", "auto", "fixed", "interval", "probability", "sba",
+  "logistic"), imodel = "MNN", bounds = c("admissible", "none"),
+  silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
+  xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
+  persistenceX = NULL, transitionX = NULL, ...)
 }
 \arguments{
 \item{data}{Vector or ts object, containing data needed to be forecasted.}
@@ -93,7 +93,9 @@ used in this process is e[j] = a j^b, where j=1,..,h.
 }
 The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
 parametric intervals are constructed, while the latter is equivalent to
-\code{none}.}
+\code{none}.
+If the forecasts of the models were combined, then the intervals are combined
+quantile-wise (Lichtendahl et al., 2013).}
 
 \item{level}{Confidence level. Defines width of prediction interval.}
 
@@ -211,7 +213,7 @@ were estimated as well.
 \item \code{persistenceX} - persistence vector g for exogenous variables.
 \item \code{transitionX} - transition matrix F for exogenous variables.
 \item \code{ICs} - values of information criteria of the model. Includes
-AIC, AICc and BIC.
+AIC, AICc, BIC and BICc.
 \item \code{logLik} - log-likelihood of the function.
 \item \code{cf} - Cost function value.
 \item \code{cfType} - Type of cost function used in the estimation.
@@ -230,7 +232,7 @@ Function constructs General Exponential Smoothing, estimating matrices F, w,
 vector g and initial parameters.
 }
 \details{
-The function estimates the Single Source of Error State-space model of the
+The function estimates the Single Source of Error state space model of the
 following type:
 
 \deqn{y_{t} = o_{t} (w' v_{t-l} + x_t a_{t-1} + \epsilon_{t})}
@@ -295,6 +297,10 @@ University 2017:1, 1-52.
 \item Taylor, J.W. and Bunn, D.W. (1999) A Quantile Regression Approach to
 Generating Prediction Intervals. Management Science, Vol 45, No 2, pp
 225-237.
+\item Lichtendahl Kenneth C., Jr., Grushka-Cockayne Yael, Winkler
+Robert L., (2013) Is It Better to Average Probabilities or
+Quantiles? Management Science 59(7):1594-1611. DOI:
+[10.1287/mnsc.1120.1667](https://doi.org/10.1287/mnsc.1120.1667)
 }
 }
 \seealso{

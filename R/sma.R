@@ -2,9 +2,9 @@ utils::globalVariables(c("yForecastStart"));
 
 #' Simple Moving Average
 #'
-#' Function constructs State-Space simple moving average of predefined order
+#' Function constructs state space simple moving average of predefined order
 #'
-#' The function constructs AR model in the Single Source of Error State-space form
+#' The function constructs AR model in the Single Source of Error state space form
 #' based on the idea that:
 #'
 #' \eqn{y_{t} = \frac{1}{n} \sum_{j=1}^n y_{t-j}}
@@ -62,7 +62,7 @@ utils::globalVariables(c("yForecastStart"));
 #' \item \code{actuals} - the original data.
 #' \item \code{holdout} - the holdout part of the original data.
 #' \item \code{ICs} - values of information criteria of the model. Includes AIC,
-#' AICc and BIC.
+#' AICc, BIC and BICc.
 #' \item \code{logLik} - log-likelihood of the function.
 #' \item \code{cf} - Cost function value.
 #' \item \code{cfType} - Type of cost function used in the estimation.
@@ -89,12 +89,12 @@ utils::globalVariables(c("yForecastStart"));
 #' plot(forecast(ourModel))
 #'
 #' @export sma
-sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC"),
+sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC","BICc"),
                 h=10, holdout=FALSE, cumulative=FALSE,
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                 silent=c("all","graph","legend","output","none"),
                 ...){
-# Function constructs simple moving average in state-space model
+# Function constructs simple moving average in state space model
 
 #    Copyright (C) 2016  Ivan Svetunkov
 
@@ -221,7 +221,7 @@ CreatorSMA <- function(silentText=FALSE,...){
                            C=C,Etype=Etype);
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
-    bestIC <- ICs["AICc"];
+    bestIC <- ICs[ic];
 
     return(list(cfObjective=cfObjective,ICs=ICs,bestIC=bestIC,nParam=nParam,nComponents=nComponents,
                 matF=matF,vecg=vecg,matvt=matvt,matw=matw,modellags=modellags,
