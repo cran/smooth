@@ -320,7 +320,7 @@ AValues <- function(Ttype,Stype,maxlag,nComponentsAll,nComponentsNonSeasonal,nSe
     return(list(A=A,ALower=ALower,AUpper=AUpper,ANames=ANames));
 }
 
-##### Basic VES initialiser #####
+##### Basic VES initialiser
 ### This function will accept Etype, Ttype, Stype and damped and would return:
 # nComponentsNonSeasonal, nComponentsAll, maxlag, modelIsSeasonal, obsStates
 # This is needed for model selection
@@ -721,6 +721,7 @@ CreatorVES <- function(silent=FALSE,...){
     yFitted <- matrix(NA,nSeries,obsInSample);
     yForecast <- matrix(NA,nSeries,h);
     errors <- matrix(NA,nSeries,obsInSample);
+    rownames(yFitted) <- rownames(yForecast) <- rownames(errors) <- dataNames;
 
 ##### Define modelDo #####
     if(any(persistenceEstimate, transitionEstimate, dampedEstimate, initialEstimate, initialSeasonEstimate)){
@@ -899,10 +900,15 @@ CreatorVES <- function(silent=FALSE,...){
     # This is a temporary solution
     if(!silentGraph){
         pages <- ceiling(nSeries / 5);
+        perPage <- ceiling(nSeries / pages);
+        packs <- c(seq(1, nSeries+1, perPage));
+        if(packs[length(packs)]<nSeries+1){
+            packs <- c(packs,nSeries+1);
+        }
         parDefault <- par(no.readonly=TRUE);
         for(j in 1:pages){
-            par(mar=c(4,4,2,1),mfcol=c(min(5,floor(nSeries/j)),1));
-            for(i in 1:nSeries){
+            par(mar=c(4,4,2,1),mfcol=c(perPage,1));
+            for(i in packs[j]:(packs[j+1]-1)){
                 if(any(intervalsType==c("u","i"))){
                     plotRange <- range(min(data[,i],yForecast[,i],yFitted[,i],PI[,i*2-1]),
                                        max(data[,i],yForecast[,i],yFitted[,i],PI[,i*2]));
@@ -912,8 +918,8 @@ CreatorVES <- function(silent=FALSE,...){
                                        max(data[,i],yForecast[,i],yFitted[,i]));
                 }
                 plot(data[,i],main=paste0(modelname," ",dataNames[i]),ylab="Y",
-                     ylim=plotRange,
-                     xlim=range(time(data[,i])[1],time(yForecast)[max(h,1)]));
+                     ylim=plotRange, xlim=range(time(data[,i])[1],time(yForecast)[max(h,1)]),
+                     type="l");
                 lines(yFitted[,i],col="purple",lwd=2,lty=2);
                 if(h>1){
                     if(any(intervalsType==c("u","i"))){
@@ -935,8 +941,8 @@ CreatorVES <- function(silent=FALSE,...){
                 }
                 abline(v=dataDeltat*(forecastStart[2]-2)+forecastStart[1],col="red",lwd=2);
             }
-            par(parDefault);
         }
+        par(parDefault);
     }
 
     ##### Return values #####

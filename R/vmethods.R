@@ -107,8 +107,8 @@ plot.viss <- function(x, ...){
             plotRange <- range(min(actuals[,i],yForecast[,i],yFitted[,i]),
                                max(actuals[,i],yForecast[,i],yFitted[,i]));
             plot(actuals[,i],main=paste0(modelname,", series ", i),ylab="Y",
-                 ylim=plotRange,
-                 xlim=range(time(actuals[,i])[1],time(yForecast)[max(h,1)]));
+                 ylim=plotRange, xlim=range(time(actuals[,i])[1],time(yForecast)[max(h,1)]),
+                 type="l");
             lines(yFitted[,i],col="purple",lwd=2,lty=2);
             if(h>1){
                 lines(yForecast[,i],col="blue",lwd=2);
@@ -119,6 +119,46 @@ plot.viss <- function(x, ...){
             abline(v=dataDeltat*(forecastStart[2]-2)+forecastStart[1],col="red",lwd=2);
         }
         par(parDefault);
+    }
+}
+
+#' @export
+plot.vsmooth.sim <- function(x, ...){
+    ellipsis <- list(...);
+    if(is.null(ellipsis$main)){
+        ellipsis$main <- x$model;
+    }
+
+    if(length(dim(x$data))==2){
+        nsim <- 1;
+    }
+    else{
+        nsim <- dim(x$data)[3];
+    }
+
+    nSeries <- dim(x$data)[2];
+    if(nSeries>10){
+        warning("You have generated more than ten time series. We will plot only first ten of them.",
+                call.=FALSE);
+        x$data <- x$data[,1:10,];
+    }
+
+    if(nsim==1){
+        if(is.null(ellipsis$ylab)){
+            ellipsis$ylab <- "Data";
+        }
+        ellipsis$x <- x$data;
+        do.call(plot, ellipsis);
+    }
+    else{
+        randomNumber <- ceiling(runif(1,1,nsim));
+        message(paste0("You have generated ",nsim," time series. Not sure which of them to plot.\n",
+                       "Please use plot(ourSimulation$data[,k]) instead. Plotting randomly selected series N",randomNumber,"."));
+        if(is.null(ellipsis$ylab)){
+            ellipsis$ylab <- paste0("Series N",randomNumber);
+        }
+        ellipsis$x <- ts(x$data[,,randomNumber]);
+        do.call(plot, ellipsis);
     }
 }
 
@@ -231,6 +271,118 @@ print.vsmooth <- function(x, ...){
         cat(paste0(x$level*100,"% ",intervalsType," prediction intervals were constructed\n"));
     }
 
+}
+
+#### Simulate data using provided vector object ####
+#' @export
+simulate.vsmooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
+    ellipsis <- list(...);
+    if(is.null(obs)){
+        obs <- nobs(object);
+    }
+    if(!is.null(seed)){
+        set.seed(seed);
+    }
+
+    # Start a list of arguments
+    args <- vector("list",0);
+
+    args$nSeries <- ncol(object$actuals);
+
+    if(!is.null(ellipsis$randomizer)){
+        randomizer <- ellipsis$randomizer;
+    }
+    else{
+        randomizer <- "rnorm";
+    }
+
+    if(randomizer=="rnorm"){
+        if(!is.null(ellipsis$mean)){
+            args$mean <- ellipsis$mean;
+        }
+        else{
+            args$mean <- 0;
+        }
+
+        if(!is.null(ellipsis$sd)){
+            args$sd <- ellipsis$sd;
+        }
+        else{
+            args$sd <- sqrt(mean(residuals(object)^2));
+        }
+    }
+    else if(randomizer=="rlaplace"){
+        if(!is.null(ellipsis$mu)){
+            args$mu <- ellipsis$mu;
+        }
+        else{
+            args$mu <- 0;
+        }
+
+        if(!is.null(ellipsis$b)){
+            args$b <- ellipsis$b;
+        }
+        else{
+            args$b <- mean(abs(residuals(object)));
+        }
+    }
+    else if(randomizer=="rs"){
+        if(!is.null(ellipsis$mu)){
+            args$mu <- ellipsis$mu;
+        }
+        else{
+            args$mu <- 0;
+        }
+
+        if(!is.null(ellipsis$b)){
+            args$b <- ellipsis$b;
+        }
+        else{
+            args$b <- mean(sqrt(abs(residuals(object))));
+        }
+    }
+    else if(randomizer=="mvrnorm"){
+        if(!is.null(ellipsis$mu)){
+            args$mu <- ellipsis$mu;
+        }
+        else{
+            args$mu <- 0;
+        }
+
+        if(!is.null(ellipsis$Sigma)){
+            args$Sigma <- ellipsis$Sigma;
+        }
+        else{
+            args$Sigma <- sigma(object);
+        }
+    }
+
+    args$randomizer <- randomizer;
+    args$frequency <- frequency(object$actuals);
+    args$obs <- obs;
+    args$nsim <- nsim;
+    args$initial <- object$initial;
+
+    if(gregexpr("VES",object$model)!=-1){
+        if(all(object$phi==1)){
+            phi <- 1;
+        }
+        else{
+            phi <- object$phi;
+        }
+        model <- modelType(object);
+        args <- c(args,list(model=model, phi=phi, persistence=object$persistence,
+                            transition=object$transition,
+                            initialSeason=object$initialSeason));
+
+        simulatedData <- do.call("sim.ves",args);
+    }
+    else{
+        model <- substring(object$model,1,unlist(gregexpr("\\(",object$model))[1]-1);
+        message(paste0("Sorry, but simulate is not yet available for the model ",model,"."));
+        simulatedData <- NA;
+    }
+    return(simulatedData);
 }
 
 #### Summary of objects ####

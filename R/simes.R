@@ -29,7 +29,8 @@
 #' \code{"restricted"} - similar to \code{"usual"} but with upper bound equal
 #' to 0.3. \code{"admissible"} - bounds from tables 10.1 and 10.2 of Hyndman
 #' et. al., 2008. Using first letter of the type of bounds also works. These
-#' bounds are also used for multiplicative models, so be careful!
+#' bounds are also used for multiplicative models, but the models are much
+#' more restrictive, so weird results might be obtained. Be careful!
 #' @param ...  Additional parameters passed to the chosen randomizer. All the
 #' parameters should be passed in the order they are used in chosen randomizer.
 #' For example, passing just \code{sd=0.5} to \code{rnorm} function will lead
@@ -101,19 +102,33 @@
 #' iETS.MNN <- sim.es("MNN",frequency=12,persistence=0.2,initial=4,iprob=iprob,obs=50)
 #'
 #' @importFrom stats optim
+#' @importFrom greybox rlaplace rs
 #' @export sim.es
 sim.es <- function(model="ANN", obs=10, nsim=1,
                    frequency=1, persistence=NULL, phi=1,
                    initial=NULL, initialSeason=NULL,
                    bounds=c("usual","admissible","restricted"),
-                   randomizer=c("rnorm","rlnorm","runif","rbeta","rt"),
+                   randomizer=c("rnorm","rlnorm","rt","rlaplace","rs"),
                    iprob=1, ...){
 # Function generates data using ETS with Single Source of Error as a data generating process.
-#    Copyright (C) 2015 - 2016 Ivan Svetunkov
+#    Copyright (C) 2015 - Inf Ivan Svetunkov
 
-    bounds <- substring(bounds[1],1,1);
     randomizer <- randomizer[1];
     args <- list(...);
+    bounds <- bounds[1];
+    # If R decided that by "b" we meant "bounds", fix this!
+    if(is.numeric(bounds)){
+        args$b <- bounds;
+        bounds <- "u";
+    }
+
+    if(all(bounds!=c("u","a","r","usual","admissible","restricted"))){
+        warning(paste0("Strange type of bounds provided: ",bounds,". Switching to 'usual'."),
+                call.=FALSE);
+        bounds <- "u";
+    }
+
+    bounds <- substring(bounds[1],1,1);
 
 # If chosen model is "AAdN" or anything like that, we are taking the appropriate values
     if(nchar(model)==4){
@@ -218,7 +233,7 @@ sim.es <- function(model="ANN", obs=10, nsim=1,
         matw <- c(matw,1);
         componentSeasonal <- TRUE;
 
-        if(componentTrend==FALSE){
+        if(!componentTrend){
             matF <- matrix(c(1,0,0,1),2,2);
         }
         else{
@@ -272,8 +287,8 @@ sim.es <- function(model="ANN", obs=10, nsim=1,
         }
     }
 
-# If the chosen randomizer is not rnorm, rt and runif and no parameters are provided, change to rnorm.
-    if(all(randomizer!=c("rnorm","rlnorm","rt","runif")) & (length(args)==0)){
+    # If the chosen randomizer is not default and no parameters are provided, change to rnorm.
+    if(all(randomizer!=c("rnorm","rt","rlaplace","rs","rlnorm")) & (length(args)==0)){
         warning(paste0("The chosen randomizer - ",randomizer," - needs some arbitrary parameters! Changing to 'rnorm' now."),call.=FALSE);
         randomizer = "rnorm";
     }
@@ -407,7 +422,7 @@ sim.es <- function(model="ANN", obs=10, nsim=1,
     }
 
 # Generate seasonal states if they were not supplied
-    if(componentSeasonal==TRUE & is.null(initialSeason)){
+    if(componentSeasonal & is.null(initialSeason)){
 # Create and normalize seasonal components. Use geometric mean for multiplicative case
         if(Stype == "A"){
             arrvt[1:maxlag,componentsNumber+1,] <- runif(nsim*maxlag,-500,500);
@@ -424,7 +439,7 @@ sim.es <- function(model="ANN", obs=10, nsim=1,
         initialSeason <- matrix(arrvt[1:maxlag,componentsNumber+1,],ncol=nsim);
     }
 # If the seasonal model is chosen, fill in the first "frequency" values of seasonal component.
-    else if(componentSeasonal==TRUE & !is.null(initialSeason)){
+    else if(componentSeasonal & !is.null(initialSeason)){
         arrvt[1:maxlag,componentsNumber+1,] <- rep(initialSeason,nsim);
         initialSeason <- matrix(arrvt[1:maxlag,componentsNumber+1,],ncol=nsim);
     }
@@ -432,26 +447,22 @@ sim.es <- function(model="ANN", obs=10, nsim=1,
 # Check if any argument was passed in dots
     if(length(args)==0){
 # Create vector of the errors
-        if(any(randomizer==c("rnorm","runif"))){
+        if(any(randomizer==c("rnorm","rlaplace","rs"))){
             materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,")")));
+        }
+        else if(randomizer=="rt"){
+            # The degrees of freedom are df = n - k.
+            materrors[,] <- rt(nsim*obs,obs-(persistenceLength + maxlag));
         }
         else if(randomizer=="rlnorm"){
             materrors[,] <- rlnorm(n=nsim*obs,0,0.01+(1-iprob));
             materrors <- materrors - 1;
         }
-        else if(randomizer=="rt"){
-# The degrees of freedom are df = n - k.
-            materrors[,] <- rt(nsim*obs,obs-(persistenceLength + maxlag));
-        }
 
         if(randomizer!="rlnorm"){
-            if(randomizer=="runif"){
-                # Center errors just in case
-                materrors <- materrors - colMeans(materrors);
-            }
-# If the error is multiplicative, scale it!
+            # If the error is multiplicative, scale it!
             if(Etype=="M"){
-# Errors will be lognormal, decrease variance, so it behaves better
+                # Errors will be lognormal, decrease variance, so it behaves better
                 if(any(iprob!=1)){
                     materrors <- materrors * 0.5;
                 }
@@ -465,6 +476,9 @@ sim.es <- function(model="ANN", obs=10, nsim=1,
             else if(Etype=="A"){
 # Change variance to make some sense. Errors should not be rediculously high and not too low.
                 materrors <- materrors * sqrt(abs(arrvt[1,1,]));
+                if(randomizer=="rs"){
+                    materrors <- materrors / 4;
+                }
             }
         }
     }
@@ -484,9 +498,12 @@ sim.es <- function(model="ANN", obs=10, nsim=1,
         else if(randomizer=="rlnorm"){
             materrors <- materrors - 1;
         }
-    }
 
-    veclikelihood <- -obs/2 *(log(2*pi*exp(1)) + log(colMeans(materrors^2)));
+        # Deal with rlaplace and rs in the case of multiplicative model
+        if(Etype=="M" & any(randomizer==c("rlaplace","rs","rt"))){
+            materrors <- exp(materrors) - 1;
+        }
+    }
 
 # Generate ones for the possible intermittency
     if(all(iprob == 1)){
@@ -507,6 +524,23 @@ sim.es <- function(model="ANN", obs=10, nsim=1,
     # }
     arrvt <- simulateddata$arrvt;
     dimnames(arrvt) <- list(NULL,componentsNames,NULL);
+
+    if(any(randomizer==c("rnorm","rt"))){
+        veclikelihood <- -obs/2 *(log(2*pi*exp(1)) + log(colMeans(materrors^2)));
+    }
+    else if(randomizer=="rlaplace"){
+        veclikelihood <- -obs*(log(2*exp(1)) + log(colMeans(abs(materrors))));
+    }
+    else if(randomizer=="rs"){
+        veclikelihood <- -2*obs*(log(2*exp(1)) + log(0.5*colMeans(sqrt(abs(materrors)))));
+    }
+    else if(randomizer=="rlnorm"){
+        veclikelihood <- -obs/2 *(log(2*pi*exp(1)) + log(colMeans(materrors^2))) - colSums(log(matyt));
+    }
+    # If this is something unknown, forget about it
+    else{
+        veclikelihood <- NA;
+    }
 
     if(nsim==1){
         matyt <- ts(matyt[,1],frequency=frequency);

@@ -242,7 +242,7 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
 
     if(var(ot)==0){
         warning(paste0("There is no variability in the occurrence of the variable in-sample.\n",
-                       "Switching to intermitten='none'."),call.=FALSE)
+                       "Switching to intermittent='none'."),call.=FALSE)
         intermittent <- "n";
     }
 
@@ -368,7 +368,7 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
 #### Logistic ####
     else if(intermittent=="l"){
         if(is.null(model)){
-            model <- "YYY";
+            model <- "XXX";
         }
         if(is.null(initial)){
             initial <- "o";
@@ -400,14 +400,14 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
             cfType <- "LogisticD";
             modelNew <- gsub("Z","X",model);
             logisticModel[[1]] <- es(iyt,modelNew,persistence=persistence,initial=initial,
-                                 ic=ic,silent=TRUE,h=h,cfType=cfType,xreg=xreg,
-                                 initialSeason=initialSeason);
+                                     ic=ic,silent=TRUE,h=h,cfType=cfType,xreg=xreg,
+                                     initialSeason=initialSeason);
 
             cfType <- "LogisticL";
             modelNew <- gsub("Z","Y",model);
             logisticModel[[2]] <- es(iyt,modelNew,persistence=persistence,initial=initial,
-                                 ic=ic,silent=TRUE,h=h,cfType=cfType,xreg=xreg,
-                                 initialSeason=initialSeason);
+                                     ic=ic,silent=TRUE,h=h,cfType=cfType,xreg=xreg,
+                                     initialSeason=initialSeason);
 
             if(logisticModel[[1]]$ICs[nrow(logisticModel[[1]]$ICs),ic] <
                logisticModel[[2]]$ICs[nrow(logisticModel[[2]]$ICs),ic]){
@@ -440,7 +440,7 @@ iss <- function(data, intermittent=c("none","fixed","interval","probability","sb
                        persistence=NULL, initial=NULL, initialSeason=NULL);
     }
     output$intermittent <- intermittent;
-    output$logLik <- (sum(log(output$fitted[y==1])) +
-                      sum(log(1-output$fitted[y==0])));
+    output$logLik <- (sum(log(output$fitted[ot!=0])) +
+                      sum(log(1-output$fitted[ot==0])));
     return(structure(output,class="iss"));
 }

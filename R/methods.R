@@ -164,6 +164,12 @@ covar.default <- function(object, type=c("analytical","empirical","simulated"), 
 #' @export
 covar.smooth <- function(object, type=c("analytical","empirical","simulated"), ...){
     # Function extracts the conditional variances from the model
+
+    if(any(class(object)=="smoothC")){
+        stop("Sorry, but covariance matrix is not available for the combinations.",
+            call.=FALSE)
+    }
+
     type <- substr(type[1],1,1);
 
     if(is.null(object$persistence) & any(type==c("a","s"))){
@@ -424,6 +430,10 @@ pls.default <- function(object, holdout=NULL, ...){
 #' @aliases pls.smooth
 #' @export
 pls.smooth <- function(object, holdout=NULL, ...){
+    if(any(class(object)=="smoothC")){
+        stop("Sorry, but PLS is not available for the combinations.",
+             call.=FALSE)
+    }
     # If holdout is provided, check it and use it. Otherwise try extracting from the model
     yForecast <- object$forecast;
     covarMat <- covar(object, ...);
@@ -545,6 +555,9 @@ pls.smooth <- function(object, holdout=NULL, ...){
 #' values are biased, so you would possibly need to take number of degrees of freedom
 #' into account in order to have an unbiased estimator.
 #'
+#' This value is based on the general likelihood (not its concentrated version), so
+#' the sum of these values may slightly differ from the output of logLik.
+#'
 #' @aliases pointLik
 #' @param object Time series model.
 #' @param ...  Some stuff.
@@ -562,7 +575,7 @@ pls.smooth <- function(object, holdout=NULL, ...){
 #' pointLik(ourModel) - nParam(ourModel)
 #'
 #' # Bias correction in AIC style
-#' 2*(nParam(ourModel) - pointLik(ourModel))
+#' 2*(nParam(ourModel)/nobs(ourModel) - pointLik(ourModel))
 #'
 #' # BIC calculation based on pointLik
 #' log(nobs(ourModel))*nParam(ourModel) - 2*sum(pointLik(ourModel))
@@ -574,8 +587,17 @@ pointLik <- function(object, ...) UseMethod("pointLik")
 pointLik.default <- function(object, ...){
     obs <- nobs(object);
     errors <- residuals(object);
-    s2 <- sigma(object)^2;
-    likValues <- -1/2 * log(2*pi*s2) - 1/2 * errors^2 / s2;
+    likValues <- dnorm(errors, 0, sigma(object), TRUE);
+
+    return(likValues);
+}
+
+#' @export
+pointLik.ets <- function(object, ...){
+    likValues <- pointLik.default(object);
+    if(errorType(object)=="M"){
+        likValues <- likValues - log(abs(fitted(object)));
+    }
 
     return(likValues);
 }
@@ -584,22 +606,74 @@ pointLik.default <- function(object, ...){
 pointLik.smooth <- function(object, ...){
     obs <- nobs(object);
     errors <- residuals(object);
-    s2 <- sigma(object)^2;
     likValues <- vector("numeric",obs);
+    cfType <- object$cfType;
 
-    if(errorType(object)=="A"){
-        likValues <- -1/2 * log(2*pi*s2) - 1/2 * errors^2 / s2;
+    if(errorType(object)=="M"){
+        errors <- log(1+errors);
+        likValues <- likValues - log(getResponse(object));
+    }
+
+    if(any(cfType==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
+        likValues <- likValues + dlaplace(errors, 0, mean(abs(errors)), TRUE);
+    }
+    else if(any(cfType==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
+        likValues <- likValues + ds(errors, 0, mean(sqrt(abs(errors))/2), TRUE);
     }
     else{
-        likValues <- -1/2 * log(2*pi*s2) - 1/2 * errors^2 / s2 - log(getResponse(object));
+        likValues <- likValues + dnorm(errors, 0, sqrt(mean(abs(errors)^2)), TRUE);
     }
+
+    likValues <- ts(as.vector(likValues), start=start(errors), frequency=frequency(errors));
+
     return(likValues);
 }
+
+#' Point AIC
+#'
+#' This function returns a vector of AIC values for the in-sample observations
+#'
+#' This is based on \link[smooth]{pointLik} function. The formula for this is:
+#' pAIC_t = 2 * k - 2 * T * l_t ,
+#' where k is the number of parameters, T is the number of observations and l_t is
+#' the point likelihood. This way we preserve the property that AIC = mean(pAIC).
+#'
+#' @aliases pAIC
+#' @param object Time series model.
+#' @param ...  Some stuff.
+#' @return The function returns the vector of point AIC values.
+#' @template ssAuthor
+#' @seealso \link[smooth]{pointLik}
+#' @keywords htest
+#' @examples
+#'
+#' ourModel <- ces(rnorm(100,0,1),h=10)
+#'
+#' pAICValues <- pAIC(ourModel)
+#'
+#' mean(pAICValues)
+#' AIC(ourModel)
+#'
+#' @export pAIC
+pAIC <- function(object, ...) UseMethod("pAIC")
+
+#' @export
+pAIC.default <- function(object, ...){
+    obs <- nobs(object);
+    k <- nParam(object);
+    return(2*k - 2 * obs * pointLik(object));
+}
+
 
 #' @importFrom stats sigma
 #' @export
 sigma.smooth <- function(object, ...){
     return(sqrt(object$s2));
+}
+
+#' @export
+sigma.ets <- function(object, ...){
+    return(sqrt(object$sigma2));
 }
 
 #### Extraction of parameters of models ####
@@ -851,6 +925,16 @@ lags.smooth.sim <- lags.smooth;
 #' @export
 errorType.default <- function(object, ...){
     return("A");
+}
+
+#' @export
+errorType.ets <- function(object, ...){
+    if(substr(object$method,5,5)=="M"){
+        return("M");
+    }
+    else{
+        return("A");
+    }
 }
 
 #' @export
@@ -1157,10 +1241,10 @@ plot.smooth.sim <- function(x, ...){
     }
 
     if(is.null(dim(x$data))){
-        nsim <- 1
+        nsim <- 1;
     }
     else{
-        nsim <- dim(x$data)[2]
+        nsim <- dim(x$data)[2];
     }
 
     if(nsim==1){
@@ -1171,9 +1255,9 @@ plot.smooth.sim <- function(x, ...){
         do.call(plot, ellipsis);
     }
     else{
-        message(paste0("You have generated ",nsim," time series. Not sure which of them to plot.\n",
-                       "Please use plot(ourSimulation$data[,k]) instead. Plotting a random series."));
         randomNumber <- ceiling(runif(1,1,nsim));
+        message(paste0("You have generated ",nsim," time series. Not sure which of them to plot.\n",
+                       "Please use plot(ourSimulation$data[,k]) instead. Plotting randomly selected series N",randomNumber,"."));
         if(is.null(ellipsis$ylab)){
             ellipsis$ylab <- paste0("Series N",randomNumber);
         }
@@ -1436,26 +1520,85 @@ print.iss <- function(x, ...){
 #### Simulate data using provided object ####
 #' @export
 simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
+    ellipsis <- list(...);
     if(is.null(obs)){
-        obs <- length(object$actuals);
+        obs <- nobs(object);
     }
     if(!is.null(seed)){
         set.seed(seed);
     }
 
+    # Start a list of arguments
+    args <- vector("list",0);
+
+    cfType <- object$cfType;
+    if(any(cfType==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
+        randomizer <- "rlaplace";
+        if(!is.null(ellipsis$mu)){
+            args$mu <- ellipsis$mu;
+        }
+        else{
+            args$mu <- 0;
+        }
+
+        if(!is.null(ellipsis$b)){
+            args$b <- ellipsis$b;
+        }
+        else{
+            args$b <- mean(abs(residuals(object)));
+        }
+    }
+    else if(any(cfType==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
+        randomizer <- "rs";
+        if(!is.null(ellipsis$mu)){
+            args$mu <- ellipsis$mu;
+        }
+        else{
+            args$mu <- 0;
+        }
+
+        if(!is.null(ellipsis$b)){
+            args$b <- ellipsis$b;
+        }
+        else{
+            args$b <- mean(sqrt(abs(residuals(object))));
+        }
+    }
+    else{
+        if(errorType(object)=="A"){
+            randomizer <- "rnorm";
+        }
+        else{
+            randomizer <- "rlnorm";
+        }
+        if(!is.null(ellipsis$mean)){
+            args$mean <- ellipsis$mean;
+        }
+        else{
+            args$mean <- 0;
+        }
+
+        if(!is.null(ellipsis$sd)){
+            args$sd <- ellipsis$sd;
+        }
+        else{
+            args$sd <- sigma(object);
+        }
+    }
+    args$randomizer <- randomizer;
+    args$frequency <- frequency(object$actuals);
+    args$obs <- obs;
+    args$nsim <- nsim;
+    args$initial <- object$initial;
+    args$iprob <- object$iprob[length(object$iprob)];
+
     if(gregexpr("ETS",object$model)!=-1){
         model <- modelType(object);
         if(any(unlist(gregexpr("C",model))==-1)){
-            if(substr(model,1,1)=="A"){
-                randomizer <- "rnorm";
-            }
-            else{
-                randomizer <- "rlnorm";
-            }
-            simulatedData <- sim.es(model=model, frequency=frequency(object$actuals), phi=object$phi,
-                                    persistence=object$persistence, initial=object$initial, initialSeason=object$initialSeason,
-                                    obs=obs,nsim=nsim,iprob=object$iprob[length(object$iprob)],
-                                    randomizer=randomizer,mean=0,sd=sqrt(object$s2),...);
+            args <- c(args,list(model=model, phi=object$phi, persistence=object$persistence,
+                                initialSeason=object$initialSeason));
+
+            simulatedData <- do.call("sim.es",args);
         }
         else{
             message("Sorry, but we cannot simulate data from combined model.");
@@ -1464,13 +1607,10 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     }
     else if(gregexpr("ARIMA",object$model)!=-1){
         if(any(unlist(gregexpr("combine",object$model))==-1)){
-            orders <- orders(object);
-            lags <- lags(object);
-            randomizer <- "rnorm";
-            simulatedData <- sim.ssarima(orders=orders, lags=lags,
-                                         frequency=frequency(object$actuals), AR=object$AR, MA=object$MA, constant=object$constant,
-                                         initial=object$initial, obs=obs, nsim=nsim,
-                                         iprob=object$iprob[length(object$iprob)], randomizer=randomizer, mean=0, sd=sqrt(object$s2),...);
+            args <- c(args,list(orders=orders(object), lags=lags(object),
+                                AR=object$AR, MA=object$MA, constant=object$constant));
+
+            simulatedData <- do.call("sim.ssarima",args);
         }
         else{
             message("Sorry, but we cannot simulate data from combined model.");
@@ -1478,33 +1618,21 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
         }
     }
     else if(gregexpr("CES",object$model)!=-1){
-        model <- modelType(object);
-        initial <- object$initial;
-        randomizer <- "rnorm";
-        simulatedData <- sim.ces(seasonality=model,
-                                 frequency=frequency(object$actuals), A=object$A, B=object$B,
-                                 initial=object$initial, obs=obs, nsim=nsim,
-                                 iprob=object$iprob[length(object$iprob)], randomizer=randomizer, mean=0, sd=sqrt(object$s2),...);
+        args <- c(args,list(seasonality=modelType(object), A=object$A, B=object$B));
+
+        simulatedData <- do.call("sim.ces",args);
     }
     else if(gregexpr("GES",object$model)!=-1){
-        model <- object$model;
-        orders <- orders(object);
-        lags <- lags(object);
-        initial <- object$initial;
-        randomizer <- "rnorm";
-        simulatedData <- sim.ges(orders=orders, lags=lags, frequency=frequency(object$actuals), measurement=object$measurement,
-                                 transition=object$transition, persistence=object$persistence, initial=object$initial,
-                                 obs=obs, nsim=nsim,
-                                 iprob=object$iprob[length(object$iprob)], randomizer=randomizer, mean=0, sd=sigma(object),...);
+        args <- c(args,list(orders=orders(object), lags=lags(object),
+                            measurement=object$measurement, transition=object$transition,
+                            persistence=object$persistence));
 
+        simulatedData <- do.call("sim.ges",args);
     }
     else if(gregexpr("SMA",object$model)!=-1){
-        orders <- orders(object);
-        randomizer <- "rnorm";
-        simulatedData <- sim.sma(order=orders,
-                                 frequency=frequency(object$actuals),
-                                 initial=object$initial, obs=obs, nsim=nsim,
-                                 iprob=object$iprob[length(object$iprob)], randomizer=randomizer, mean=0, sd=sqrt(object$s2),...);
+        args <- c(args,list(order=orders(object)));
+
+        simulatedData <- do.call("sim.sma",args);
     }
     else{
         model <- substring(object$model,1,unlist(gregexpr("\\(",object$model))[1]-1);

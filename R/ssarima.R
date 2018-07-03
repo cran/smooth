@@ -52,7 +52,9 @@ utils::globalVariables(c("normalizer","constantValue","constantRequired","consta
 #' \code{i} and \code{ma}. Example:
 #' \code{orders=list(ar=c(1,2),i=c(1),ma=c(1,1,1))}. If a variable is not
 #' provided in the list, then it is assumed to be equal to zero. At least one
-#' variable should have the same length as \code{lags}.
+#' variable should have the same length as \code{lags}. Another option is to
+#' specify orders as a vector of a form \code{orders=c(p,d,q)}. The non-seasonal
+#' ARIMA(p,d,q) is constructed in this case.
 #' @param lags Defines lags for the corresponding orders (see examples above).
 #' The length of \code{lags} must correspond to the length of either \code{ar},
 #' \code{i} or \code{ma} in \code{orders} variable. There is no restrictions on
@@ -233,6 +235,16 @@ ssarima <- function(data, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1),
             if(is.null(xreg)){
                 xreg <- model$xreg;
             }
+            else{
+                if(is.null(model$xreg)){
+                    xreg <- NULL;
+                }
+                else{
+                    if(ncol(xreg)!=ncol(model$xreg)){
+                        xreg <- xreg[,colnames(model$xreg)];
+                    }
+                }
+            }
             initialX <- model$initialX;
             persistenceX <- model$persistenceX;
             transitionX <- model$transitionX;
@@ -262,9 +274,17 @@ ssarima <- function(data, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1),
         }
     }
     else if(!is.null(orders)){
-        ar.orders <- orders$ar;
-        i.orders <- orders$i;
-        ma.orders <- orders$ma;
+        if(is.list(orders)){
+            ar.orders <- orders$ar;
+            i.orders <- orders$i;
+            ma.orders <- orders$ma;
+        }
+        else if(is.vector(orders)){
+            ar.orders <- orders[1];
+            i.orders <- orders[2];
+            ma.orders <- orders[3];
+            lags <- 1;
+        }
     }
 
 # If orders are provided in ellipsis via ar.orders, write them down.
@@ -355,11 +375,6 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     environment(likelihoodFunction) <- environment();
     environment(ICFunction) <- environment();
 
-    nParam <- (1 + nComponents*(initialType=="o") + sum(ar.orders)*(ARRequired * AREstimate) +
-                   sum(ma.orders)*(MARequired * MAEstimate) + 1*(constantRequired * constantEstimate) +
-                   nExovars * initialXEstimate +
-                   (updateX)*((nExovars^2)*FXEstimate + nExovars*gXEstimate));
-
     # If there is something to optimise, let's do it.
     if(any((initialType=="o"),(AREstimate),(MAEstimate),
            (initialXEstimate),(FXEstimate),(gXEstimate),(constantEstimate))){
@@ -418,6 +433,9 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
             C <- res$solution;
         }
         cfObjective <- res$objective;
+
+        # Parameters estimated + variance
+        nParam <- length(C) + 1;
     }
     else{
         C <- NULL;
@@ -431,19 +449,9 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
         }
 
         cfObjective <- CF(C);
-    }
 
-# Change cfType for model selection
-    if(multisteps){
-        #     if(substring(cfType,1,1)=="a"){
-        cfType <- "aTFL";
-        #     }
-        #     else{
-        #         cfType <- "TFL";
-        #     }
-    }
-    else{
-        cfType <- "MSE";
+        # Only variance is estimated
+        nParam <- 1;
     }
 
     ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
@@ -451,9 +459,6 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
     ICs <- ICValues$ICs;
     bestIC <- ICs[ic];
     logLik <- ICValues$llikelihood;
-
-# Revert to the provided cost function
-    cfType <- cfTypeOriginal
 
     return(list(cfObjective=cfObjective,C=C,ICs=ICs,bestIC=bestIC,nParam=nParam,logLik=logLik));
 }
@@ -779,8 +784,17 @@ CreatorSSARIMA <- function(silentText=FALSE,...){
             parametersNumber[1,1] <- parametersNumber[1,1] + length(initialValue);
         }
     }
+
     if(initialXEstimate){
         initialX <- matat[1,];
+        names(initialX) <- colnames(matat);
+    }
+
+    # Make initialX NULL if all xreg were dropped
+    if(length(initialX)==1){
+        if(initialX==0){
+            initialX <- NULL;
+        }
     }
 
     if(gXEstimate){

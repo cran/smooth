@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-05-31" />
+<meta name="date" content="2018-07-03" />
 
 <title>ces() - Complex Exponential Smoothing</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">ces() - Complex Exponential Smoothing</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-05-31</em></h4>
+<h4 class="date"><em>2018-07-03</em></h4>
 
 
 
@@ -81,7 +81,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p><code>ces()</code> function allows constructing Complex Exponential Smoothing either with no seasonality, or with simple / partial / full seasonality. A simple call for <code>ces()</code> results in estimation of non-seasonal model:</p>
 <p>For the same series from M3 dataset <code>ces()</code> can be constructed using:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ces</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.64 seconds
+<pre><code>## Time elapsed: 0.57 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.09841+1.01221i
 ## Initial values were optimised.
@@ -101,7 +101,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ces</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">intervals=</span><span class="st">&quot;p&quot;</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</code></pre></div>
 <pre><code>## Estimating CES with seasonality: &quot;n&quot; &quot;s&quot; &quot;f&quot;  
 ## The best model is with seasonality = &quot;n&quot;</code></pre>
-<pre><code>## Time elapsed: 2.02 seconds
+<pre><code>## Time elapsed: 1.91 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.09841+1.01221i
 ## Initial values were optimised.
@@ -121,7 +121,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>Note that prediction intervals are too narrow and do not include 95% of values. This is because CES is pure additive model and it cannot take into account possible heteroscedasticity.</p>
 <p>If for some reason we want to optimise initial values then we call:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ces</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">initial=</span><span class="st">&quot;o&quot;</span>, <span class="dt">intervals=</span><span class="st">&quot;sp&quot;</span>)</code></pre></div>
-<pre><code>## Time elapsed: 0.8 seconds
+<pre><code>## Time elapsed: 0.72 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.09841+1.01221i
 ## Initial values were optimised.
@@ -141,17 +141,17 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">x &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">rnorm</span>(<span class="kw">length</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x),<span class="dv">50</span>,<span class="dv">3</span>),<span class="kw">rnorm</span>(<span class="kw">length</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x),<span class="dv">100</span>,<span class="dv">7</span>))</code></pre></div>
 <p><code>ces()</code> allows using exogenous variables and different types of prediction intervals in exactly the same manner as <code>es()</code>:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ces</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x, <span class="dt">xregDo=</span><span class="st">&quot;select&quot;</span>, <span class="dt">intervals=</span><span class="st">&quot;p&quot;</span>)</code></pre></div>
-<pre><code>## Time elapsed: 2.05 seconds
+<pre><code>## Time elapsed: 2.02 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.09841+1.01221i
 ## Initial values were optimised.
 ## 5 parameters were estimated in the process
-## Residuals standard deviation: 1438.091
+## Residuals standard deviation: 1430.254
 ## Cost function type: MSE; Cost function value: 1940181.381
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
-## 1691.668 1692.602 1707.117 1709.252 
+## 1689.668 1690.328 1702.542 1704.050 
 ## 95% parametric prediction intervals were constructed
 ## 61% of values are in the prediction interval
 ## Forecast errors:
@@ -159,23 +159,23 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## MASE: 2.622; sMAE: 107%; RelMAE: 1.12; sMSE: 202.9%</code></pre>
 <p>The same model but with updated parameters of exogenous variables is called:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">auto.ces</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x, <span class="dt">updateX=</span><span class="ot">TRUE</span>, <span class="dt">intervals=</span><span class="st">&quot;p&quot;</span>)</code></pre></div>
-<pre><code>## Time elapsed: 2.66 seconds
+<pre><code>## Time elapsed: 2.78 seconds
 ## Model estimated: CESX(n)
-## a0 + ia1: 0.99992+1.0092i
+## a0 + ia1: 1.20215+1.00628i
 ## Initial values were optimised.
 ## 13 parameters were estimated in the process
-## Residuals standard deviation: 1428.811
+## Residuals standard deviation: 1299.028
 ## Xreg coefficients were estimated in a crazy style
-## Cost function type: MSE; Cost function value: 1767898.678
+## Cost function type: MSE; Cost function value: 1461317.751
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
-## 1696.648 1701.034 1730.120 1740.151 
+## 1678.174 1682.560 1711.646 1721.677 
 ## 95% parametric prediction intervals were constructed
 ## 56% of values are in the prediction interval
 ## Forecast errors:
-## MPE: 21.8%; sCE: -1754.9%; Bias: 83.2%; MAPE: 38.5%
-## MASE: 2.811; sMAE: 114.7%; RelMAE: 1.201; sMSE: 228.7%</code></pre>
+## MPE: 13.5%; sCE: -1431.1%; Bias: 73.1%; MAPE: 36.9%
+## MASE: 2.576; sMAE: 105.1%; RelMAE: 1.101; sMSE: 197.4%</code></pre>
 
 
 

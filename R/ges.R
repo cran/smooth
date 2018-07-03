@@ -202,6 +202,16 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
         if(is.null(xreg)){
             xreg <- model$xreg;
         }
+        else{
+            if(is.null(model$xreg)){
+                xreg <- NULL;
+            }
+            else{
+                if(ncol(xreg)!=ncol(model$xreg)){
+                    xreg <- xreg[,colnames(model$xreg)];
+                }
+            }
+        }
         initialX <- model$initialX;
         persistenceX <- model$persistenceX;
         transitionX <- model$transitionX;
@@ -322,13 +332,6 @@ CreatorGES <- function(silentText=FALSE,...){
     environment(likelihoodFunction) <- environment();
     environment(ICFunction) <- environment();
 
-    # 1 stands for the variance
-    nParam <- (1 + nComponents*measurementEstimate + nComponents*persistenceEstimate +
-                   (nComponents^2)*transitionEstimate +
-                   orders %*% lags * (initialType=="o") +
-                   nExovars * initialXEstimate +
-                   (updateX)*((nExovars^2)*FXEstimate + nExovars*gXEstimate));
-
 # If there is something to optimise, let's do it.
     if(any((initialType=="o"),(measurementEstimate),(transitionEstimate),(persistenceEstimate),
        (initialXEstimate),(FXEstimate),(gXEstimate))){
@@ -408,6 +411,9 @@ CreatorGES <- function(silentText=FALSE,...){
 
         C <- res$solution;
         cfObjective <- res$objective;
+
+        # Parameters estimated + variance
+        nParam <- length(C) + 1;
     }
     else{
 # matw, matF, vecg, vt
@@ -421,14 +427,9 @@ CreatorGES <- function(silentText=FALSE,...){
                c(persistenceX));
 
         cfObjective <- CF(C);
-    }
 
-# Change cfType for model selection
-    if(multisteps){
-        cfType <- "aTFL";
-    }
-    else{
-        cfType <- "MSE";
+        # Only variance is estimated
+        nParam <- 1;
     }
 
     ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
@@ -437,9 +438,6 @@ CreatorGES <- function(silentText=FALSE,...){
     logLik <- ICValues$llikelihood;
 
     icBest <- ICs[ic];
-
-# Revert to the provided cost function
-    cfType <- cfTypeOriginal
 
     return(list(cfObjective=cfObjective,C=C,ICs=ICs,icBest=icBest,nParam=nParam,logLik=logLik));
 }
@@ -581,14 +579,14 @@ CreatorGES <- function(silentText=FALSE,...){
     }
 
     if(!is.null(providedC)){
-        nParam <- (nComponents*measurementEstimate + nComponents*persistenceEstimate +
-                       (nComponents^2)*transitionEstimate);
+        nParamToEstimate <- (nComponents*measurementEstimate + nComponents*persistenceEstimate +
+                                 (nComponents^2)*transitionEstimate);
         if(initialType=="o"){
-            nParam <- nParam + orders %*% lags;
+            nParamToEstimate <- nParamToEstimate + orders %*% lags;
         }
 
-        if(length(providedC)!=nParam){
-            warning(paste0("Number of parameters to optimise differes from the length of C: ",nParam," vs ",length(providedC),".\n",
+        if(length(providedC)!=nParamToEstimate){
+            warning(paste0("Number of parameters to optimise differes from the length of C: ",nParamToEstimate," vs ",length(providedC),".\n",
                            "We will have to drop parameter C."),call.=FALSE);
             providedC <- NULL;
         }
@@ -784,8 +782,17 @@ CreatorGES <- function(silentText=FALSE,...){
             parametersNumber[1,1] <- parametersNumber[1,1] + orders %*% lags;
         }
     }
+
     if(initialXEstimate){
         initialX <- matat[1,];
+        names(initialX) <- colnames(matat);
+    }
+
+    # Make initialX NULL if all xreg were dropped
+    if(length(initialX)==1){
+        if(initialX==0){
+            initialX <- NULL;
+        }
     }
 
     if(gXEstimate){
