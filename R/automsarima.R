@@ -1,14 +1,15 @@
 utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType","ar.orders","i.orders","ma.orders"));
 
-#' State Space ARIMA
+#' Automatic Multiple Seasonal ARIMA
 #'
 #' Function selects the best State Space ARIMA based on information criteria,
 #' using fancy branch and bound mechanism. The resulting model can be not
 #' optimal in IC meaning, but it is usually reasonable.
 #'
 #' The function constructs bunch of ARIMAs in Single Source of Error
-#' state space form (see \link[smooth]{ssarima} documentation) and selects the
-#' best one based on information criterion.
+#' state space form (see \link[smooth]{msarima} documentation) and selects the
+#' best one based on information criterion. It works faster than
+#' \link[smooth]{auto.ssarima} on large datasets and high frequency data.
 #'
 #' Due to the flexibility of the model, multiple seasonalities can be used. For
 #' example, something crazy like this can be constructed:
@@ -46,25 +47,25 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' vector, defining max orders of AR, SAR etc.  \code{i.orders} - Maximum order
 #' of I. Can be vector, defining max orders of I, SI etc.  \code{ma.orders} -
 #' Maximum order of MA term. Can be vector, defining max orders of MA, SMA etc.
-#' @return Object of class "smooth" is returned. See \link[smooth]{ssarima} for
+#' @return Object of class "smooth" is returned. See \link[smooth]{msarima} for
 #' details.
 #' @seealso \code{\link[forecast]{ets}, \link[smooth]{es}, \link[smooth]{ces},
-#' \link[smooth]{sim.es}, \link[smooth]{gum}, \link[smooth]{ssarima}}
+#' \link[smooth]{sim.es}, \link[smooth]{gum}, \link[smooth]{msarima}}
 #'
 #' @examples
 #'
 #' x <- rnorm(118,100,3)
 #'
 #' # The best ARIMA for the data
-#' ourModel <- auto.ssarima(x,orders=list(ar=c(2,1),i=c(1,1),ma=c(2,1)),lags=c(1,12),
+#' ourModel <- auto.msarima(x,orders=list(ar=c(2,1),i=c(1,1),ma=c(2,1)),lags=c(1,12),
 #'                      h=18,holdout=TRUE,intervals="np")
 #'
 #' # The other one using optimised states
-#' \dontrun{auto.ssarima(x,orders=list(ar=c(3,2),i=c(2,1),ma=c(3,2)),lags=c(1,12),
+#' \dontrun{auto.msarima(x,orders=list(ar=c(3,2),i=c(2,1),ma=c(3,2)),lags=c(1,12),
 #'                      initial="o",h=18,holdout=TRUE)}
 #'
 #' # And now combined ARIMA
-#' \dontrun{auto.ssarima(x,orders=list(ar=c(3,2),i=c(2,1),ma=c(3,2)),lags=c(1,12),
+#' \dontrun{auto.msarima(x,orders=list(ar=c(3,2),i=c(2,1),ma=c(3,2)),lags=c(1,12),
 #'                       combine=TRUE,h=18,holdout=TRUE)}
 #'
 #' summary(ourModel)
@@ -72,8 +73,8 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' plot(forecast(ourModel))
 #'
 #'
-#' @export auto.ssarima
-auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,frequency(data)),
+#' @export auto.msarima
+auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,frequency(data)),
                          combine=FALSE, workFast=TRUE, constant=NULL,
                          initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC","BICc"),
                          cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
@@ -84,7 +85,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                          silent=c("all","graph","legend","output","none"),
                          xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                          updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
-# Function estimates several ssarima models and selects the best one using the selected information criterion.
+# Function estimates several msarima models and selects the best one using the selected information criterion.
 #
 #    Copyright (C) 2015 - 2016  Ivan Svetunkov
 
@@ -143,7 +144,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
 
 ##### Set environment for ssInput and make all the checks #####
     environment(ssAutoInput) <- environment();
-    ssAutoInput("auto.ssarima",ParentEnvironment=environment());
+    ssAutoInput("auto.msarima",ParentEnvironment=environment());
 
     if(is.null(constant)){
         constantCheck <- TRUE;
@@ -343,7 +344,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
 ### If for some reason we have model with zeroes for orders, return it.
     if(all(c(arMax,iMax,maMax)==0)){
         cat("\b\b\b\bDone!\n");
-        bestModel <- ssarima(data, orders=list(ar=arBest,i=(iBest),ma=(maBest)), lags=(lags),
+        bestModel <- msarima(data, orders=list(ar=arBest,i=(iBest),ma=(maBest)), lags=(lags),
                              constant=constantValue, initial=initialType, cfType=cfType,
                              h=h, holdout=holdout, cumulative=cumulative,
                              intervals=intervalsType, level=level,
@@ -378,7 +379,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
         if(silent[1]=="d"){
             cat("I: ");cat(iOrders[d,]);cat(", ");
         }
-        testModel <- ssarima(data, orders=list(ar=0,i=iOrders[d,],ma=0), lags=lags,
+        testModel <- msarima(data, orders=list(ar=0,i=iOrders[d,],ma=0), lags=lags,
                              constant=constantValue, initial=initialType, cfType=cfType,
                              h=h, holdout=holdout, cumulative=cumulative,
                              intervals=intervalsType, level=level,
@@ -445,7 +446,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                         if(silent[1]=="d"){
                             cat("MA: ");cat(maTest);cat(", ");
                         }
-                        testModel <- ssarima(dataI, orders=list(ar=0,i=0,ma=maTest), lags=lags,
+                        testModel <- msarima(dataI, orders=list(ar=0,i=0,ma=maTest), lags=lags,
                                              constant=FALSE, initial=initialType, cfType=cfType,
                                              h=h, holdout=FALSE,
                                              intervals=intervalsType, level=level,
@@ -511,7 +512,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                         if(silent[1]=="d"){
                                             cat("AR: ");cat(arTest);cat(", ");
                                         }
-                                        testModel <- ssarima(dataMA, orders=list(ar=arTest,i=0,ma=0), lags=lags,
+                                        testModel <- msarima(dataMA, orders=list(ar=arTest,i=0,ma=0), lags=lags,
                                                              constant=FALSE, initial=initialType, cfType=cfType,
                                                              h=h, holdout=FALSE,
                                                              intervals=intervalsType, level=level,
@@ -584,7 +585,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                             if(silent[1]=="d"){
                                 cat("AR: ");cat(arTest);cat(", ");
                             }
-                            testModel <- ssarima(dataMA, orders=list(ar=arTest,i=0,ma=0), lags=lags,
+                            testModel <- msarima(dataMA, orders=list(ar=arTest,i=0,ma=0), lags=lags,
                                                  constant=FALSE, initial=initialType, cfType=cfType,
                                                  h=h, holdout=FALSE,
                                                  intervals=intervalsType, level=level,
@@ -644,7 +645,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
         }
 
         if(any(c(arBest,iBest,maBest)!=0)){
-            testModel <- ssarima(data, orders=list(ar=(arBest),i=(iBest),ma=(maBest)), lags=(lags),
+            testModel <- msarima(data, orders=list(ar=(arBest),i=(iBest),ma=(maBest)), lags=(lags),
                                  constant=FALSE, initial=initialType, cfType=cfType,
                                  h=h, holdout=holdout, cumulative=cumulative,
                                  intervals=intervalsType, level=level,
@@ -665,15 +666,21 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                 testTransition[[m]] <- testModel$transition;
                 testPersistence[[m]] <- testModel$persistence;
             }
-            # cat("Constant: ");print(ICValue);
+            if(silent[1]=="d"){
+                cat("No constant: "); cat(ICValue); cat("\n");
+            }
             if(ICValue < bestIC){
                 bestModel <- testModel;
                 constantValue <- FALSE;
+                bestIC <- ICValue;
             }
             else{
                 constantValue <- TRUE;
             }
         }
+    }
+    if(silent[1]=="d"){
+        cat("Best IC: "); cat(bestIC); cat("\n");
     }
 
     if(combine){
@@ -725,7 +732,7 @@ auto.ssarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
     }
     else{
         #### Reestimate the best model in order to get rid of bias ####
-        bestModel <- ssarima(data, orders=list(ar=(arBest),i=(iBest),ma=(maBest)), lags=(lags),
+        bestModel <- msarima(data, orders=list(ar=(arBest),i=(iBest),ma=(maBest)), lags=(lags),
                              constant=constantValue, initial=initialType, cfType=cfType,
                              h=h, holdout=holdout, cumulative=cumulative,
                              intervals=intervalsType, level=level,

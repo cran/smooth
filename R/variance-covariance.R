@@ -1,10 +1,10 @@
-covarAnal <- function(lagsModel, h, nComponents, measurement, transition, persistence, s2){
+covarAnal <- function(lagsModel, h, measurement, transition, persistence, s2){
     # Function returns analytical conditional h-steps ahead covariance matrix
     # This is used in covar() method and in the construction of parametric prediction intervals
     covarMat <- diag(h);
     if(h > min(lagsModel)){
             lagsUnique <- unique(lagsModel);
-            steps <- lagsUnique[lagsUnique<=h];
+            steps <- sort(lagsUnique[lagsUnique<=h]);
             stepsNumber <- length(steps);
             nComponents <- nrow(transition);
             arrayTransition <- array(0,c(nComponents,nComponents,stepsNumber));

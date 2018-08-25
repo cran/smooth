@@ -4,15 +4,16 @@
 \alias{smoothCombine}
 \title{Combination of forecasts of state space models}
 \usage{
-smoothCombine(data, models = NULL, initial = c("optimal", "backcasting"),
-  ic = c("AICc", "AIC", "BIC", "BICc"), cfType = c("MSE", "MAE", "HAM",
-  "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
-  cumulative = FALSE, intervals = c("none", "parametric", "semiparametric",
-  "nonparametric"), level = 0.95, bins = 200,
-  intervalsCombine = c("quantile", "probability"), intermittent = c("none",
-  "auto", "fixed", "interval", "probability", "sba", "logistic"),
-  imodel = "MNN", bounds = c("admissible", "none"), silent = c("all",
-  "graph", "legend", "output", "none"), xreg = NULL, xregDo = c("use",
+smoothCombine(data, models = NULL, initial = c("optimal",
+  "backcasting"), ic = c("AICc", "AIC", "BIC", "BICc"),
+  cfType = c("MSE", "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"),
+  h = 10, holdout = FALSE, cumulative = FALSE,
+  intervals = c("none", "parametric", "semiparametric", "nonparametric"),
+  level = 0.95, bins = 200, intervalsCombine = c("quantile",
+  "probability"), intermittent = c("none", "auto", "fixed", "interval",
+  "probability", "sba", "logistic"), imodel = "MNN",
+  bounds = c("admissible", "none"), silent = c("all", "graph",
+  "legend", "output", "none"), xreg = NULL, xregDo = c("use",
   "select"), initialX = NULL, updateX = FALSE, persistenceX = NULL,
   transitionX = NULL, ...)
 }
@@ -181,7 +182,7 @@ cumulative error) and Bias coefficient.
 }}
 }
 \description{
-Function constructs ETS, SSARIMA, CES, GES and SMA and combines their
+Function constructs ETS, SSARIMA, CES, GUM and SMA and combines their
 forecasts using IC weights.
 }
 \details{
@@ -238,7 +239,7 @@ Quantiles? Management Science 59(7):1594-1611. DOI:
 }
 \seealso{
 \code{\link[smooth]{es}, \link[smooth]{auto.ssarima},
-\link[smooth]{auto.ces}, \link[smooth]{auto.ges}, \link[smooth]{sma}}
+\link[smooth]{auto.ces}, \link[smooth]{auto.gum}, \link[smooth]{sma}}
 }
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}

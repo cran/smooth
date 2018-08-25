@@ -46,8 +46,8 @@ utils::globalVariables(c("yForecastStart"));
 #' \item \code{nParam} - table with the number of estimated / provided parameters.
 #' If a previous model was reused, then its initials are reused and the number of
 #' provided parameters will take this into account.
-#' \item \code{fitted} - the fitted values of ETS.
-#' \item \code{forecast} - the point forecast of ETS.
+#' \item \code{fitted} - the fitted values.
+#' \item \code{forecast} - the point forecast.
 #' \item \code{lower} - the lower bound of prediction interval. When
 #' \code{intervals=FALSE} then NA is returned.
 #' \item \code{upper} - the higher bound of prediction interval. When
@@ -70,6 +70,13 @@ utils::globalVariables(c("yForecastStart"));
 #' holdout sample. Includes: MPE, MAPE, SMAPE, MASE, sMAE, RelMAE, sMSE and
 #' Bias coefficient (based on complex numbers). This is available only when
 #' \code{holdout=TRUE}.
+#' }
+#'
+#' @references \itemize{
+#' \item Svetunkov, I., & Petropoulos, F. (2017). Old dog, new tricks: a
+#' modelling view of simple moving averages. International Journal of
+#' Production Research, 7543(January), 1-14.
+#' \url{https://doi.org/10.1080/00207543.2017.1380326}
 #' }
 #'
 #' @seealso \code{\link[forecast]{ma}, \link[smooth]{es},
@@ -109,7 +116,7 @@ sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC","BICc"),
         if(is.null(model$model)){
             stop("The provided model is not Simple Moving Average!",call.=FALSE);
         }
-        else if(gregexpr("SMA",model$model)==-1){
+        else if(smoothType(model)!="SMA"){
             stop("The provided model is not Simple Moving Average!",call.=FALSE);
         }
         else{
@@ -130,9 +137,9 @@ sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC","BICc"),
     environment(ssInput) <- environment();
     ssInput("sma",ParentEnvironment=environment());
 
-##### Preset y.fit, y.for, errors and basic parameters #####
-    y.fit <- rep(NA,obsInsample);
-    y.for <- rep(NA,h);
+##### Preset yFitted, yForecast, errors and basic parameters #####
+    yFitted <- rep(NA,obsInsample);
+    yForecast <- rep(NA,h);
     errors <- rep(NA,obsInsample);
     maxlag <- 1;
 
@@ -259,20 +266,20 @@ CreatorSMA <- function(silentText=FALSE,...){
 ##### Do final check and make some preparations for output #####
 
     if(holdout==T){
-        y.holdout <- ts(data[(obsInsample+1):obsAll],start=yForecastStart,frequency=frequency(data));
+        yHoldout <- ts(data[(obsInsample+1):obsAll],start=yForecastStart,frequency=frequency(data));
         if(cumulative){
-            errormeasures <- Accuracy(sum(y.holdout),y.for,h*y);
+            errormeasures <- Accuracy(sum(yHoldout),yForecast,h*y);
         }
         else{
-            errormeasures <- Accuracy(y.holdout,y.for,y);
+            errormeasures <- Accuracy(yHoldout,yForecast,y);
         }
 
         if(cumulative){
-            y.holdout <- ts(sum(y.holdout),start=yForecastStart,frequency=datafreq);
+            yHoldout <- ts(sum(yHoldout),start=yForecastStart,frequency=dataFreq);
         }
     }
     else{
-        y.holdout <- NA;
+        yHoldout <- NA;
         errormeasures <- NA;
     }
 
@@ -280,23 +287,23 @@ CreatorSMA <- function(silentText=FALSE,...){
 
 ##### Make a plot #####
     if(!silentGraph){
-        y.for.new <- y.for;
-        y.high.new <- y.high;
-        y.low.new <- y.low;
+        yForecastNew <- yForecast;
+        yUpperNew <- yUpper;
+        yLowerNew <- yLower;
         if(cumulative){
-            y.for.new <- ts(rep(y.for/h,h),start=yForecastStart,frequency=datafreq)
+            yForecastNew <- ts(rep(yForecast/h,h),start=yForecastStart,frequency=dataFreq)
             if(intervals){
-                y.high.new <- ts(rep(y.high/h,h),start=yForecastStart,frequency=datafreq)
-                y.low.new <- ts(rep(y.low/h,h),start=yForecastStart,frequency=datafreq)
+                yUpperNew <- ts(rep(yUpper/h,h),start=yForecastStart,frequency=dataFreq)
+                yLowerNew <- ts(rep(yLower/h,h),start=yForecastStart,frequency=dataFreq)
             }
         }
 
         if(intervals){
-            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit, lower=y.low.new,upper=y.high.new,
+            graphmaker(actuals=data,forecast=yForecastNew,fitted=yFitted, lower=yLowerNew,upper=yUpperNew,
                        level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
         else{
-            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit,
+            graphmaker(actuals=data,forecast=yForecastNew,fitted=yFitted,
                        legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
     }
@@ -306,9 +313,9 @@ CreatorSMA <- function(silentText=FALSE,...){
                   states=matvt,transition=matF,persistence=vecg,
                   measurement=matw,
                   order=order, initial=matvt[1,], initialType=initialType, nParam=parametersNumber,
-                  fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
+                  fitted=yFitted,forecast=yForecast,lower=yLower,upper=yUpper,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
-                  actuals=data,holdout=y.holdout,imodel=NULL,
+                  actuals=data,holdout=yHoldout,imodel=NULL,
                   ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,accuracy=errormeasures);
     return(structure(model,class="smooth"));
 }

@@ -4,7 +4,7 @@
 \alias{Accuracy}
 \title{Accuracy of forecasts}
 \usage{
-Accuracy(holdout, forecast, actual, digits = 3)
+Accuracy(holdout, forecast, actual, digits = NULL)
 }
 \arguments{
 \item{holdout}{The vector of the holdout values.}
@@ -13,7 +13,8 @@ Accuracy(holdout, forecast, actual, digits = 3)
 
 \item{actual}{The vector of actual in-sample values.}
 
-\item{digits}{Number of digits of the output.}
+\item{digits}{Number of digits of the output. If \code{NULL}
+then \code{digits=100}.}
 }
 \value{
 The functions returns the named vector of errors:
@@ -47,19 +48,23 @@ Accuracy(y[91:100],esmodel$forecast,y[1:90],digits=5)
 }
 \references{
 \itemize{
-\item Fildes, R. (1992). The evaluation of
+\item Svetunkov, I. (2017). Naughty APEs and the quest for the holy grail.
+\url{https://forecasting.svetunkov.ru/en/2017/07/29/naughty-apes-and-the-quest-for-the-holy-grail/}
+\item Fildes R. (1992). The evaluation of
 extrapolative forecasting methods. International Journal of Forecasting, 8,
 pp.81-98.
 \item Hyndman R.J., Koehler A.B. (2006). Another look at measures of
 forecast accuracy. International Journal of Forecasting, 22, pp.679-688.
-\item Makridakis, S. (1993). Accuracy measures: Theoretical and practical
-concerns. International Journal of Forecasting, 9, pp.527-529.
 \item Petropoulos F., Kourentzes N. (2015). Forecast combinations for
 intermittent demand. Journal of the Operational Research Society, 66,
 pp.914-924.
 \item Wallstrom P., Segerstedt A. (2010). Evaluation of forecasting error
 measurements and techniques for intermittent demand. International Journal
 of Production Economics, 128, pp.625-636.
+\item Davydenko, A., Fildes, R. (2013). Measuring Forecasting Accuracy:
+The Case Of Judgmental Adjustments To Sku-Level Demand Forecasts.
+International Journal of Forecasting, 29(3), 510-522.
+\url{https://doi.org/10.1016/j.ijforecast.2012.09.002}
 }
 }
 \author{

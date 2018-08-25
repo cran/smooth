@@ -92,7 +92,26 @@ double errorf(double const &yact, double &yfit, char const &E){
     }
     else if(E=='D'){
         // This is a logistic additive error
-        double yProb = exp(yfit) / (1 + exp(yfit));
+        double yProb;
+        if(yfit > 500){
+            if(yact==1){
+                yProb = 1;
+            }
+            else{
+                return(-yfit);
+            }
+        }
+        else if(yfit < -500){
+            if(yact==0){
+                yProb = 0;
+            }
+            else{
+                return(-yfit);
+            }
+        }
+        else{
+            yProb = exp(yfit) / (1 + exp(yfit));
+        }
         return log((1 + yact - yProb)/(1 - yact + yProb));
     }
     else if(E=='L'){
@@ -120,7 +139,9 @@ arma::mat errorvf(arma::mat yact, arma::mat yfit, char const &E){
     }
     else if(E=='D'){
         // This is an additive logistic error
+        yfit = clamp(yfit, -500,500);
         yfit = exp(yfit) / (1 + exp(yfit));
+
         return log((1 + yact - yfit)/(1 - yact + yfit));
     }
     else if(E=='L'){
@@ -716,7 +737,8 @@ List polysos(arma::uvec const &arOrders, arma::uvec const &maOrders, arma::uvec 
              arma::mat &matrixVt, arma::vec &vecG, arma::mat &matrixF,
              char const &fitterType, int const &nexo, arma::mat &matrixAt, arma::mat &matrixFX, arma::vec &vecGX,
              bool const &arEstimate, bool const &maEstimate, bool const &constRequired, bool const &constEstimate,
-             bool const &xregEstimate, bool const &wild, bool const &fXEstimate, bool const &gXEstimate, bool const &initialXEstimate){
+             bool const &xregEstimate, bool const &wild, bool const &fXEstimate, bool const &gXEstimate, bool const &initialXEstimate,
+             bool const &arimaOld, arma::uvec const &modelLags, arma::umat const &ARILags, arma::umat const &MALags){
 
 // Form matrices with parameters, that are then used for polynomial multiplication
     arma::mat arParameters(max(arOrders % lags)+1, arOrders.n_elem, arma::fill::zeros);
@@ -795,43 +817,90 @@ List polysos(arma::uvec const &arOrders, arma::uvec const &maOrders, arma::uvec 
     }
     ariPolynomial = polyMult(arPolynomial, iPolynomial);
 
-    if(maPolynomial.n_elem!=(nComponents+1)){
+    if(arimaOld){
         maPolynomial.resize(nComponents+1);
-    }
-    if(ariPolynomial.n_elem!=(nComponents+1)){
         ariPolynomial.resize(nComponents+1);
+        arPolynomial.resize(nComponents+1);
+    }
+    else{
+        // R dies without this resize... Weird!
+        maPolynomial.resize(sum(maOrders % lags)+1);
+        ariPolynomial.resize(sum(arOrders % lags)+sum(iOrders % lags)+1);
+        arPolynomial.resize(sum(arOrders % lags)+1);
     }
 
 // Fill in transition matrix
     if(ariPolynomial.n_elem>1){
-        matrixF.submat(0,0,ariPolynomial.n_elem-2,0) = -ariPolynomial.rows(1,ariPolynomial.n_elem-1);
+        if(arimaOld){
+            matrixF.submat(0,0,ariPolynomial.n_elem-2,0) = -ariPolynomial.rows(1,ariPolynomial.n_elem-1);
+        }
+        else{
+            // This thing does not take into account the possibility of q > p
+            arma::rowvec unitVector(matrixF.n_cols, arma::fill::ones);
+            if(constRequired){
+                unitVector(unitVector.n_elem-1) = 0;
+            }
+            matrixF.rows(ARILags.col(1)) = -ariPolynomial(ARILags.col(0)) * unitVector;
+            if(constRequired){
+                matrixF.col(matrixF.n_cols-1).fill(1);
+            }
+        }
     }
 
 // Fill in persistence vector
     if(nComponents>0){
-        vecG.rows(0,ariPolynomial.n_elem-2) = -ariPolynomial.rows(1,ariPolynomial.n_elem-1) + maPolynomial.rows(1,maPolynomial.n_elem-1);
+        if(arimaOld){
+            vecG.rows(0,ariPolynomial.n_elem-2) = -ariPolynomial.rows(1,ariPolynomial.n_elem-1) + maPolynomial.rows(1,maPolynomial.n_elem-1);
+        }
+        else{
+            vecG.fill(0);
+            vecG(ARILags.col(1)) = -ariPolynomial(ARILags.col(0));
+            vecG(MALags.col(1)) += maPolynomial(MALags.col(0));
+        }
 
 // Fill in initials of state vector
         if(fitterType=='o'){
-            matrixVt.submat(0,0,0,nComponents-1) = C.rows(nParam,nParam+nComponents-1).t();
-            nParam += nComponents;
+            if(arimaOld){
+                matrixVt.submat(0,0,0,nComponents-1) = C.rows(nParam,nParam+nComponents-1).t();
+                nParam += nComponents;
+            }
+            else{
+            }
         }
         else if(fitterType=='b'){
-            for(unsigned int i=1; i < nComponents; i=i+1){
-                matrixVt.submat(0,i,nComponents-i-1,i) = matrixVt.submat(1,i-1,nComponents-i,i-1) -
-                                                         matrixVt.submat(0,0,nComponents-i-1,0) * matrixF.submat(i-1,0,i-1,0);
+            if(arimaOld){
+                for(unsigned int i=1; i < nComponents; i=i+1){
+                    matrixVt.submat(0,i,nComponents-i-1,i) = matrixVt.submat(1,i-1,nComponents-i,i-1) -
+                        matrixVt.submat(0,0,nComponents-i-1,0) * matrixF.submat(i-1,0,i-1,0);
+                }
             }
+            // else{
+            //     for(unsigned int i=0; i < nComponents; i=i+1){
+            //         matrixVt.submat(0,i,nComponents-i,i) = matrixVt.submat(0,i,nComponents-i,i) * matrixF.submat(i,0,i,0);
+            //     }
+            // }
         }
     }
 
 // Deal with constant if needed
     if(constRequired){
-        if(constEstimate){
-            matrixVt(0,matrixVt.n_cols-1) = C(nParam);
-            nParam += 1;
+        if(arimaOld){
+            if(constEstimate){
+                matrixVt(0,matrixVt.n_cols-1) = C(nParam);
+                nParam += 1;
+            }
+            else{
+                matrixVt(0,matrixVt.n_cols-1) = constValue;
+            }
         }
         else{
-            matrixVt(0,matrixVt.n_cols-1) = constValue;
+            if(constEstimate){
+                matrixVt.col(matrixVt.n_cols-1).fill(C(nParam));
+                nParam += 1;
+            }
+            else{
+                matrixVt.col(matrixVt.n_cols-1).fill(constValue);
+            }
         }
     }
 
@@ -868,7 +937,8 @@ RcppExport SEXP polysoswrap(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP ARI
                             SEXP matvt, SEXP vecg, SEXP matF,
                             SEXP fittertype, SEXP nexovars, SEXP matat, SEXP matFX, SEXP vecgX,
                             SEXP estimAR, SEXP estimMA, SEXP requireConst, SEXP estimConst,
-                            SEXP estimxreg, SEXP gowild, SEXP estimFX, SEXP estimgX, SEXP estiminitX){
+                            SEXP estimxreg, SEXP gowild, SEXP estimFX, SEXP estimgX, SEXP estiminitX,
+                            SEXP ssarimaOld, SEXP modellags, SEXP nonZeroARI, SEXP nonZeroMA){
 
     IntegerVector ARorders_n(ARorders);
     arma::uvec arOrders = as<arma::uvec>(ARorders_n);
@@ -911,7 +981,7 @@ RcppExport SEXP polysoswrap(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP ARI
     arma::mat matrixVt(matvt_n.begin(), matvt_n.nrow(), matvt_n.ncol());
 
     NumericMatrix vecg_n(vecg);
-    arma::vec vecG(vecg_n.begin(), vecg_n.nrow(), false);
+    arma::vec vecG(vecg_n.begin(), vecg_n.nrow());
 
     NumericMatrix matF_n(matF);
     arma::mat matrixF(matF_n.begin(), matF_n.nrow(), matF_n.ncol());
@@ -939,13 +1009,25 @@ RcppExport SEXP polysoswrap(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP ARI
     bool gXEstimate = as<bool>(estimgX);
     bool initialXEstimate = as<bool>(estiminitX);
 
+    bool arimaOld = as<bool>(ssarimaOld);
+
+    IntegerVector modellags_n(modellags);
+    arma::uvec modelLags = as<arma::uvec>(modellags_n);
+
+    // Create two uvec objects instead of umat?
+    IntegerMatrix nonZeroARI_n(nonZeroARI);
+    arma::umat ARILags = as<arma::umat>(nonZeroARI_n);
+
+    IntegerMatrix nonZeroMA_n(nonZeroMA);
+    arma::umat MALags = as<arma::umat>(nonZeroMA_n);
 
     return wrap(polysos(arOrders, maOrders, iOrders, lags, nComponents,
                         arValues, maValues, constValue, C,
                         matrixVt, vecG, matrixF,
                         fitterType, nexo, matrixAt, matrixFX, vecGX,
                         arEstimate, maEstimate, constRequired, constEstimate,
-                        xregEstimate, wild, fXEstimate, gXEstimate, initialXEstimate));
+                        xregEstimate, wild, fXEstimate, gXEstimate, initialXEstimate,
+                        arimaOld, modelLags, ARILags, MALags));
 }
 
 // # Fitter for univariate models
@@ -987,8 +1069,14 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
         lagrows = i * nComponents - lagsInternal + nComponents - 1;
 
 /* # Measurement equation and the error term */
-        vecYfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
-                                                         matrixXt.row(i-maxlag), matrixAt.col(i-1));
+        vecYfit(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
+                                                     matrixXt.row(i-maxlag), matrixAt.col(i-1));
+
+        // This is a failsafe for cases of ridiculously high and ridiculously low values
+        if(vecYfit(i-maxlag) > 1e+100){
+            vecYfit(i-maxlag) = vecYfit(i-maxlag-1);
+        }
+
         vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
 
 /* # Transition equation */
@@ -1008,6 +1096,14 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
                 matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
             }
         }
+        if(any(matrixVt.col(i)>1e+100)){
+            matrixVt.col(i) = matrixVt(lagrows);
+        }
+
+        if(E=='D'){
+            // This is a restriction of values for logistic additive error model
+            matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
+        }
 
 /* Renormalise components if the seasonal model is chosen */
         if(S!='N'){
@@ -1025,13 +1121,30 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
         lagrows = i * nComponents - lagsInternal + nComponents - 1;
         matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
         matrixAt.col(i) = matrixFX * matrixAt.col(i-1);
-    }
 
-    // matrixVt = matrixVt.t();
-    // matrixAt = matrixAt.t();
+/* Failsafe for cases when unreasonable value for state vector was produced */
+        if(!matrixVt.col(i).is_finite()){
+            matrixVt.col(i) = matrixVt(lagrows);
+        }
+        if((S=='M') & (matrixVt(matrixVt.n_rows-1,i) <= 0)){
+            matrixVt(matrixVt.n_rows-1,i) = arma::as_scalar(matrixVt(lagrows.row(matrixVt.n_rows-1)));
+        }
+        if(T=='M'){
+            if((matrixVt(0,i) <= 0) | (matrixVt(1,i) <= 0)){
+                matrixVt(0,i) = arma::as_scalar(matrixVt(lagrows.row(0)));
+                matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
+            }
+        }
+
+        if(E=='D'){
+            // This is a restriction of values for logistic additive error model
+            matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
+        }
+    }
 
     if(E=='D'){
         // This is a logistic additive error
+        vecYfit = clamp(vecYfit, -500,500);
         vecYfit = exp(vecYfit) / (1 + exp(vecYfit));
     }
     else if(E=='L'){
@@ -1055,14 +1168,35 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
     * # matrixAt is the matrix with the parameters for the exogenous
     */
 
-    int nloops = 1;
+    int nloops;
+    // If... this is ssarima, don't do backcasting
+    if(all(lags==1) & (lags.n_elem > 3)){
+        nloops = 0;
+    }
+    else{
+    // This means that we do only one loop (forward -> backwards -> forward)
+        nloops = 1;
+    }
 
     matrixVt = matrixVt.t();
     matrixAt = matrixAt.t();
     arma::mat matrixXtTrans = matrixXt.t();
 
     // Inverse transition matrix for backcasting
-    // arma::mat matrixFInv;
+    // arma::mat matrixFInv = matrixF;
+    // arma::rowvec rowvecWInv = rowvecW;
+    // Values needed for eigenvalues calculation
+    // arma::cx_vec eigval;
+    //
+    // if(arma::eig_gen(eigval, matrixF)){
+    //     if(any(abs(eigval) >= 1)){
+    //         if(!arma::inv(matrixFInv,matrixF)){
+    //             matrixFInv = arma::pinv(matrixF);
+    //             rowvecWInv = rowvecW * matrixFInv * matrixFInv;
+    //         }
+    //     }
+    // }
+
     // if(!arma::inv(matrixFInv,matrixF)){
     //     matrixFInv = matrixF.t();
     //     matrixFInv(0,0) = 0;
@@ -1098,9 +1232,20 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
             lagrows = i * nComponents - (lagsInternal + lagsModifier) + nComponents - 1;
 
 /* # Measurement equation and the error term */
-            vecYfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
-                                                             matrixXt.row(i-maxlag), matrixAt.col(i-1));
+            vecYfit(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
+                                                         matrixXt.row(i-maxlag), matrixAt.col(i-1));
+
+            // This is a failsafe for cases of ridiculously high and ridiculously low values
+            if(vecYfit(i-maxlag) > 1e+100){
+                vecYfit(i-maxlag) = vecYfit(i-maxlag-1);
+            }
+
             vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
+
+            // This is a failsafe for cases of ridiculously high and ridiculously low values
+            if(!vecYfit.row(i-maxlag).is_finite()){
+                vecYfit(i-maxlag) = vecYfit(i-maxlag-1);
+            }
 
 /* # Transition equation */
             matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S) +
@@ -1118,6 +1263,14 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
                     matrixVt(0,i) = arma::as_scalar(matrixVt(lagrows.row(0)));
                     matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
                 }
+            }
+            if(any(matrixVt.col(i)>1e+100)){
+                matrixVt.col(i) = matrixVt(lagrows);
+            }
+
+            if(E=='D'){
+                // This is a restriction of values for logistic additive error model
+                matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
             }
 
 /* Renormalise components if the seasonal model is chosen */
@@ -1136,6 +1289,28 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
             lagrows = i * nComponents - (lagsInternal + lagsModifier) + nComponents - 1;
             matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
             matrixAt.col(i) = matrixFX * matrixAt.col(i-1);
+
+/* Failsafe for cases when unreasonable value for state vector was produced */
+            if(!matrixVt.col(i).is_finite()){
+                matrixVt.col(i) = matrixVt(lagrows);
+            }
+            if((S=='M') & (matrixVt(matrixVt.n_rows-1,i) <= 0)){
+                matrixVt(matrixVt.n_rows-1,i) = arma::as_scalar(matrixVt(lagrows.row(matrixVt.n_rows-1)));
+            }
+            if(T=='M'){
+                if((matrixVt(0,i) <= 0) | (matrixVt(1,i) <= 0)){
+                    matrixVt(0,i) = arma::as_scalar(matrixVt(lagrows.row(0)));
+                    matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
+                }
+            }
+            if(any(matrixVt.col(i)>1e+100)){
+                matrixVt.col(i) = matrixVt(lagrows);
+            }
+
+            if(E=='D'){
+                // This is a restriction of values for logistic additive error model
+                matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
+            }
         }
 
 /* # If this is the last loop, stop here and don't do backcast */
@@ -1150,6 +1325,12 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
 /* # Measurement equation and the error term */
             vecYfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
                                                              matrixXt.row(i-maxlag), matrixAt.col(i+1));
+
+            // This is for cases of ridiculously high and ridiculously low values
+            if(vecYfit(i-maxlag) > 1e+100){
+                vecYfit.col(i-maxlag) = vecYfit(i-maxlag+1);
+            }
+
             vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
 
 /* # Transition equation */
@@ -1169,6 +1350,14 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
                     matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
                 }
             }
+            if(any(matrixVt.col(i)>1e+100)){
+                matrixVt.col(i) = matrixVt(lagrows);
+            }
+
+            if(E=='D'){
+                // This is a restriction of values for logistic additive error model
+                matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
+            }
 
 /* Skipping renormalisation of components in backcasting */
 
@@ -1181,14 +1370,34 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
             lagrows = i * nComponents + lagsInternal - lagsModifier + nComponents - 1;
             matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S);
             matrixAt.col(i) = matrixFX * matrixAt.col(i+1);
+
+/* Failsafe for cases when unreasonable value for state vector was produced */
+            if(!matrixVt.col(i).is_finite()){
+                matrixVt.col(i) = matrixVt(lagrows);
+            }
+            if((S=='M') & (matrixVt(matrixVt.n_rows-1,i) <= 0)){
+                matrixVt(matrixVt.n_rows-1,i) = arma::as_scalar(matrixVt(lagrows.row(matrixVt.n_rows-1)));
+            }
+            if(T=='M'){
+                if((matrixVt(0,i) <= 0) | (matrixVt(1,i) <= 0)){
+                    matrixVt(0,i) = arma::as_scalar(matrixVt(lagrows.row(0)));
+                    matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
+                }
+            }
+            if(any(matrixVt.col(i)>1e+100)){
+                matrixVt.col(i) = matrixVt(lagrows);
+            }
+
+            if(E=='D'){
+                // This is a restriction of values for logistic additive error model
+                matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
+            }
         }
     }
 
-    // matrixVt = matrixVt.t();
-    // matrixAt = matrixAt.t();
-
     if(E=='D'){
         // This is a logistic additive error
+        vecYfit = clamp(vecYfit, -500,500);
         vecYfit = exp(vecYfit) / (1 + exp(vecYfit));
     }
     else if(E=='L'){
@@ -1329,21 +1538,27 @@ arma::mat errorer(arma::mat const &matrixVt, arma::mat const &matrixF, arma::mat
                   int const &hor, char const &E, char const &T, char const &S, arma::uvec const &lags,
                   arma::mat const &matrixXt, arma::mat const &matrixAt, arma::mat const &matrixFX, arma::vec const &vecOt){
     int obs = vecYt.n_rows;
+    // This is needed for cases, when hor>obs
     int hh = 0;
-    arma::mat matErrors(obs+hor-1, hor, arma::fill::zeros);
+    arma::mat matErrors(obs, hor, arma::fill::zeros);
     unsigned int maxlag = max(lags);
 
-    for(int i = 0; i < obs; i=i+1){
+    for(int i = 0; i < (obs-hor); i=i+1){
         hh = std::min(hor, obs-i);
-        matErrors.submat(hor-1+i, 0, hor-1+i, hh-1) = arma::trans(vecOt.rows(i, i+hh-1) % errorvf(vecYt.rows(i, i+hh-1),
+        matErrors.submat(i, 0, i, hh-1) = arma::trans(vecOt.rows(i, i+hh-1) % errorvf(vecYt.rows(i, i+hh-1),
             forecaster(matrixVt.rows(i,i+maxlag-1), matrixF, rowvecW, hh, E, T, S, lags, matrixXt.rows(i, i+hh-1),
                 matrixAt.rows(i, i+hh-1), matrixFX), E));
     }
 
-// Fix for GV in order to perform better in the sides of the series
-    for(int i=0; i<(hor-1); i=i+1){
-        matErrors.submat((hor-2)-(i),i+1,(hor-2)-(i),hor-1) = matErrors.submat(hor-1,0,hor-1,hor-i-2) * sqrt(1.0+i);
+    // Cut-off the redundant last part
+    if(obs>hor){
+        matErrors = matErrors.rows(0,obs-hor-1);
     }
+
+// Fix for GV in order to perform better in the sides of the series
+    // for(int i=0; i<(hor-1); i=i+1){
+    //     matErrors.submat((hor-2)-(i),i+1,(hor-2)-(i),hor-1) = matErrors.submat(hor-1,0,hor-1,hor-i-2) * sqrt(1.0+i);
+    // }
 
     return matErrors;
 }
@@ -1444,15 +1659,15 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
     int CFSwitch = CFtypeswitch(CFtypeNew);
 
     arma::uvec nonzeroes = find(vecOt>0);
-    int obs = nonzeroes.n_rows;
+    unsigned int obs = nonzeroes.n_rows;
     double CFres = 0;
-    int matobs = obs + hor - 1;
+    int matobs = obs - hor;
 
 // yactsum is needed for multiplicative error models
     double yactsum = 0;
     if((CFSwitch==7) | (CFSwitch==11) | (CFSwitch==15)){
         arma::vec vecYtNonZero = vecYt.elem(nonzeroes);
-        for(int i=0; i<(obs-hor); ++i){
+        for(unsigned int i=0; i<(obs-hor); ++i){
             yactsum += log(sum(vecYtNonZero.rows(i,i+hor)));
         }
     }
@@ -1629,7 +1844,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         break;
         // TSB
         case 22:
-            CFres = -(sum(log(vecYfit.elem(find(vecYt>0.5)))) + sum(log(1-vecYfit.elem(find(vecYt<0.5)))));
+            CFres = -sum(log(vecYfit.elem(find(vecYt>=0.5)))) - sum(log(1-vecYfit.elem(find(vecYt<0.5))));
         }
     break;
     case 'M':
@@ -1735,7 +1950,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         break;
         // TSB
         case 22:
-            CFres = -(sum(log(vecYfit.elem(find(vecYt>0.5)))) + sum(log(1-vecYfit.elem(find(vecYt<0.5)))));
+            CFres = -sum(log(vecYfit.elem(find(vecYt>=0.5)))) - sum(log(1-vecYfit.elem(find(vecYt<0.5))));
         }
     }
     return CFres;
@@ -1893,7 +2108,7 @@ RcppExport SEXP costfunc(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP vecg,
             }
         }
     }
-    else if(boundtype=='a'){
+    else if((boundtype=='a') | (boundtype=='r')){
         if(arma::eig_gen(eigval, matrixF - vecG * rowvecW)){
             if(max(abs(eigval))> (1 + 1E-50)){
                 return wrap(max(abs(eigval))*1E+100);
@@ -1933,7 +2148,7 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
                               SEXP nexovars, SEXP matxt, SEXP matat, SEXP matFX, SEXP vecgX, SEXP ot,
                               SEXP estimAR, SEXP estimMA, SEXP requireConst, SEXP estimConst,
                               SEXP estimxreg, SEXP gowild, SEXP estimFX, SEXP estimgX, SEXP estiminitX,
-                              SEXP bounds) {
+                              SEXP bounds, SEXP ssarimaOld, SEXP nonZeroARI, SEXP nonZeroMA) {
 
     IntegerVector ARorders_n(ARorders);
     arma::uvec arOrders = as<arma::uvec>(ARorders_n);
@@ -2004,13 +2219,41 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
     bool gXEstimate = as<bool>(estimgX);
     bool initialXEstimate = as<bool>(estiminitX);
 
+    bool arimaOld = as<bool>(ssarimaOld);
+
+    IntegerVector modellags_n(modellags);
+    arma::uvec modelLags = as<arma::uvec>(modellags_n);
+
+    // IntegerMatrix nonZeroARI_n(nonZeroARI);
+    // arma::imat ARILagsSigned(nonZeroARI_n.begin(), nonZeroARI_n.nrow(), nonZeroARI_n.ncol());
+    // arma::umat ARILags = arma::conv_to<arma::umat>::from(ARILagsSigned);
+    //
+    // IntegerMatrix nonZeroMA_n(nonZeroMA);
+    // arma::imat MALagsSigned(nonZeroMA_n.begin(), nonZeroMA_n.nrow(), nonZeroMA_n.ncol());
+    // arma::umat MALags = arma::conv_to<arma::umat>::from(MALagsSigned);
+
+    IntegerMatrix nonZeroARI_n(nonZeroARI);
+    arma::umat ARILags = as<arma::umat>(nonZeroARI_n);
+
+    IntegerMatrix nonZeroMA_n(nonZeroMA);
+    arma::umat MALags = as<arma::umat>(nonZeroMA_n);
+
+    // IntegerMatrix nonZeroARI_n(nonZeroARI);
+    // arma::imat ARIStuff(nonZeroARI_n.begin(), nonZeroARI_n.nrow(), nonZeroARI_n.ncol(), false);
+    // arma::umat ARILags = arma::conv_to<arma::umat>::from(ARIStuff);
+    //
+    // IntegerMatrix nonZeroMA_n(nonZeroMA);
+    // arma::imat MAStuff(nonZeroMA_n.begin(), nonZeroMA_n.nrow(), nonZeroMA_n.ncol(), false);
+    // arma::umat MALags = arma::conv_to<arma::umat>::from(MAStuff);
+
 // Initialise ARIMA
     List polynomials = polysos(arOrders, maOrders, iOrders, lagsARIMA, nComponents,
                                arValues, maValues, constValue, C,
                                matrixVt, vecG, matrixF,
                                fitterType, nexo, matrixAt, matrixFX, vecGX,
                                arEstimate, maEstimate, constRequired, constEstimate,
-                               xregEstimate, wild, fXEstimate, gXEstimate, initialXEstimate);
+                               xregEstimate, wild, fXEstimate, gXEstimate, initialXEstimate,
+                               arimaOld, modelLags, ARILags, MALags);
 
     matvt_n = as<NumericMatrix>(polynomials["matvt"]);
     matrixVt = as<arma::mat>(matvt_n);
@@ -2025,12 +2268,9 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
     arma::vec vecYt(yt_n.begin(), yt_n.nrow(), false);
 
     vecg_n = as<NumericMatrix>(polynomials["vecg"]);
-    vecG = as<arma::mat>(vecg_n);
+    vecG = as<arma::vec>(vecg_n);
 
     int hor = as<int>(h);
-
-    IntegerVector modellags_n(modellags);
-    arma::uvec lags = as<arma::uvec>(modellags_n);
 
     char E = as<char>(Etype);
     char T = as<char>(Ttype);
@@ -2059,7 +2299,7 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
 
     char boundtype = as<char>(bounds);
 
-    if((nComponents>0) & (boundtype=='a')){
+    if((nComponents>0) & ((boundtype=='a') | (boundtype=='r'))){
         arma::cx_vec eigval;
 
 // Check stability condition
@@ -2076,9 +2316,19 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
         if(as_scalar(arOrders.t() * lagsARIMA) > 0){
             NumericMatrix arPolynom = as<NumericMatrix>(polynomials["arPolynomial"]);
             arma::mat arPolynomial = as<arma::mat>(arPolynom);
+            arma::mat arMatrixF;
 
-            arma::mat arMatrixF = matrixF.submat(0,0,arPolynomial.n_elem-2,arPolynomial.n_elem-2);
-            arMatrixF.submat(0,0,arMatrixF.n_rows-1,0) = arPolynomial.rows(1,arPolynomial.n_elem-1);
+            if(arimaOld){
+                int FnRows = arPolynomial.n_rows-2;
+                arMatrixF = matrixF.submat(0,0,FnRows,FnRows);
+                arMatrixF.submat(0,0,FnRows,0) = arPolynomial.rows(1,FnRows+1);
+            }
+            else{
+                // Not sure that this is needed - the two models should give the same solution
+                int FnRows = arPolynomial.n_elem-1;
+                arma::rowvec unitVector(FnRows, arma::fill::ones);
+                arMatrixF = arPolynomial.rows(1,FnRows) * unitVector;
+            }
 
             if(arma::eig_gen(eigval, arMatrixF)){
                 if(max(abs(eigval))> 1){
@@ -2092,7 +2342,7 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
     }
 
     return wrap(optimizer(matrixVt, matrixF, rowvecW, vecYt, vecG,
-                          hor, lags, E, T, S,
+                          hor, modelLags, E, T, S,
                           multi, CFtype, normalize, fitterType,
                           matrixXt, matrixAt, matrixFX, vecGX, vecOt));
 }

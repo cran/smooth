@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-07-03" />
+<meta name="date" content="2018-08-25" />
 
 <title>smooth: forecasting using state-space models</title>
 
@@ -32,7 +32,7 @@
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-07-03</em></h4>
+<h4 class="date"><em>2018-08-25</em></h4>
 
 
 
@@ -42,10 +42,10 @@
 <li><a href="es.html">es() - Exponential Smoothing</a>;</li>
 <li><a href="ssarima.html">ssarima() - State-Space ARIMA</a>, also known as Several Seasonalities ARIMA;</li>
 <li><a href="ces.html">ces() - Complex Exponential Smoothing</a>;</li>
-<li><a href="ges.html">ges() - Generalised Exponential Smoothing</a>;</li>
+<li><a href="gum.html">gum() - Generalised Univariate Model</a>;</li>
 <li><a href="ves.html">ves() - Vector Exponential Smoothing</a>;</li>
 <li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
-<li><a href="simulate.html">sim.es() and simulate() - simulation functions for Exponential Smoothing</a>.</li>
+<li><a href="simulate.html">Simulate functions of the package</a>.</li>
 <li><code>smoothCombine()</code> - function that combines forecasts of the main univariate functions of smooth package.</li>
 <li><code>iss()</code> – function that estimates probability of occurrence of variable using one of the following: 10. Fixed probability; 2. Croston’s probability; 3. SBA; 4. TSB probability; 5. Logistic probability. The model produced by <code>iss()</code> can then be used in any forecasting function as input variable for <code>imodel</code> parameter. There is also vector counterpart of this function called <code>viss()</code> which implements multivariate fixed and logistic probabilities.</li>
 <li><code>xregExpander()</code> – function that creates lags and leads of the provided exogenous variables (either vector or matrix) and forecasts the missing values. This thing returns the matrix.</li>
@@ -70,8 +70,8 @@
 <li><code>nParam(ourModel)</code> – number of estimated parameters (originally from <code>greybox</code> package);</li>
 <li><code>pointLik(ourModel)</code> – likelihood values for each separate observation;</li>
 <li><code>sigma(ourModel)</code> – variance of the residuals of the model;</li>
-<li><code>lags(ourModel)</code> – lags of the model (used with <code>ssarima()</code> and <code>ges()</code>);</li>
-<li><code>orders(ourModel)</code> – orders of the model (can be used with <code>ssarima()</code>, <code>ges()</code> and <code>sma()</code>);</li>
+<li><code>lags(ourModel)</code> – lags of the model (used with <code>ssarima()</code> and <code>gum()</code>);</li>
+<li><code>orders(ourModel)</code> – orders of the model (can be used with <code>ssarima()</code>, <code>gum()</code> and <code>sma()</code>);</li>
 <li><code>modelType(ourModel)</code> – returns the type of the model. Returns something like “MMM” for ETS(MMM). Can be used with <code>es()</code>, <code>ces()</code>, <code>ves()</code> and <code>ets()</code>;</li>
 <li><code>errorType(ourModel)</code> – the type of the error of a model (additive or multiplicative);</li>
 <li><code>coef(ourModel)</code> – returns the vector of all the estimated coefficients of the model;</li>

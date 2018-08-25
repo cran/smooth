@@ -4,16 +4,17 @@
 \alias{ssarima}
 \title{State Space ARIMA}
 \usage{
-ssarima(data, orders = list(ar = c(0), i = c(1), ma = c(1)), lags = c(1),
-  constant = FALSE, AR = NULL, MA = NULL, initial = c("backcasting",
-  "optimal"), ic = c("AICc", "AIC", "BIC", "BICc"), cfType = c("MSE", "MAE",
-  "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
-  cumulative = FALSE, intervals = c("none", "parametric", "semiparametric",
-  "nonparametric"), level = 0.95, intermittent = c("none", "auto", "fixed",
-  "interval", "probability", "sba", "logistic"), imodel = "MNN",
-  bounds = c("admissible", "none"), silent = c("all", "graph", "legend",
-  "output", "none"), xreg = NULL, xregDo = c("use", "select"),
-  initialX = NULL, updateX = FALSE, persistenceX = NULL,
+ssarima(data, orders = list(ar = c(0), i = c(1), ma = c(1)),
+  lags = c(1), constant = FALSE, AR = NULL, MA = NULL,
+  initial = c("backcasting", "optimal"), ic = c("AICc", "AIC", "BIC",
+  "BICc"), cfType = c("MSE", "MAE", "HAM", "MSEh", "TMSE", "GTMSE",
+  "MSCE"), h = 10, holdout = FALSE, cumulative = FALSE,
+  intervals = c("none", "parametric", "semiparametric", "nonparametric"),
+  level = 0.95, intermittent = c("none", "auto", "fixed", "interval",
+  "probability", "sba", "logistic"), imodel = "MNN",
+  bounds = c("admissible", "none"), silent = c("all", "graph",
+  "legend", "output", "none"), xreg = NULL, xregDo = c("use",
+  "select"), initialX = NULL, updateX = FALSE, persistenceX = NULL,
   transitionX = NULL, ...)
 }
 \arguments{
@@ -31,7 +32,9 @@ ARIMA(p,d,q) is constructed in this case.}
 The length of \code{lags} must correspond to the length of either \code{ar},
 \code{i} or \code{ma} in \code{orders} variable. There is no restrictions on
 the length of \code{lags} vector. It is recommended to order \code{lags}
-ascending.}
+ascending.
+The orders are set by a user. If you want the automatic order selection,
+then use \link[smooth]{auto.ssarima} function instead.}
 
 \item{constant}{If \code{TRUE}, constant term is included in the model. Can
 also be a number (constant value).}
@@ -163,9 +166,6 @@ state vector. If \code{NULL}, then estimated. Prerequisite - non-NULL
 
 \item{...}{Other non-documented parameters.
 
-Vectors of orders can be passed here using \code{ar.orders}, \code{i.orders}
-and \code{ma.orders}. \code{orders} variable needs to be NULL in this case.
-
 Parameter \code{model} can accept a previously estimated SSARIMA model and
 use all its parameters.
 
@@ -195,8 +195,8 @@ from \code{states}).
 \item \code{nParam} - table with the number of estimated / provided parameters.
 If a previous model was reused, then its initials are reused and the number of
 provided parameters will take this into account.
-\item \code{fitted} - the fitted values of ETS.
-\item \code{forecast} - the point forecast of ETS.
+\item \code{fitted} - the fitted values.
+\item \code{forecast} - the point forecast.
 \item \code{lower} - the lower bound of prediction interval. When
 \code{intervals="none"} then NA is returned.
 \item \code{upper} - the higher bound of prediction interval. When
@@ -298,7 +298,7 @@ ssarima(rnorm(118,100,3),model=ourModel,h=18,holdout=TRUE)
 ssarima(rnorm(118,100,3),orders=list(ar=c(1),i=c(1),ma=c(1,1)),
         lags=c(1,4),h=18,holdout=TRUE,initial="o")}
 
-# SARIMA of a perculiar order on AirPassengers data
+# SARIMA of a peculiar order on AirPassengers data
 \dontrun{ssarima(AirPassengers,orders=list(ar=c(1,0,3),i=c(1,0,1),ma=c(0,1,2)),lags=c(1,6,12),
         h=10,holdout=TRUE)}
 
@@ -338,8 +338,8 @@ Springer-Verlag. \url{http://dx.doi.org/10.1007/978-3-540-71918-2}.
 }
 }
 \seealso{
-\code{\link[forecast]{auto.arima}, \link[smooth]{orders},
-\link[smooth]{lags}, \link[smooth]{sim.ssarima}}
+\code{\link[smooth]{auto.ssarima}, \link[smooth]{orders},
+\link[smooth]{lags}, \link[smooth]{sim.ssarima}, \link[forecast]{auto.arima}}
 }
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}

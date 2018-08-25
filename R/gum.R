@@ -1,10 +1,10 @@
 utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
                          "persistenceEstimate","obsAll","obsInsample","multisteps","ot","obsNonzero","ICs","cfObjective",
-                         "y.for","y.low","y.high","normalizer","yForecastStart"));
+                         "yForecast","yLower","yUpper","normalizer","yForecastStart"));
 
-#' General Exponential Smoothing
+#' Generalised Univariate Model
 #'
-#' Function constructs General Exponential Smoothing, estimating matrices F, w,
+#' Function constructs Generalised Univariate Model, estimating matrices F, w,
 #' vector g and initial parameters.
 #'
 #' The function estimates the Single Source of Error state space model of the
@@ -45,7 +45,7 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' have lag 12. The length of \code{lags} must correspond to the length of
 #' \code{orders}.
 #' @param type Type of model. Can either be \code{"A"} - additive - or
-#' \code{"M"} - multiplicative. The latter means that the GES is fitted on
+#' \code{"M"} - multiplicative. The latter means that the GUM is fitted on
 #' log-transformed data.
 #' @param transition Transition matrix \eqn{F}. Can be provided as a vector.
 #' Matrix will be formed using the default \code{matrix(transition,nc,nc)},
@@ -54,7 +54,7 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' @param measurement Measurement vector \eqn{w}. If \code{NULL}, then
 #' estimated.
 #' @param ...  Other non-documented parameters.  For example parameter
-#' \code{model} can accept a previously estimated GES model and use all its
+#' \code{model} can accept a previously estimated GUM model and use all its
 #' parameters.  \code{FI=TRUE} will make the function produce Fisher
 #' Information matrix, which then can be used to calculated variances of
 #' parameters of the model.
@@ -68,7 +68,7 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' \itemize{
 #' \item \code{model} - name of the estimated model.
 #' \item \code{timeElapsed} - time elapsed for the construction of the model.
-#' \item \code{states} - matrix of fuzzy components of GES, where \code{rows}
+#' \item \code{states} - matrix of fuzzy components of GUM, where \code{rows}
 #' correspond to time and \code{cols} to states.
 #' \item \code{initialType} - Type of the initial values used.
 #' \item \code{initial} - initial values of state vector (extracted from
@@ -80,8 +80,8 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' \item \code{transition} - matrix F.
 #' \item \code{persistence} - persistence vector. This is the place, where
 #' smoothing parameters live.
-#' \item \code{fitted} - fitted values of ETS.
-#' \item \code{forecast} - point forecast of ETS.
+#' \item \code{fitted} - fitted values.
+#' \item \code{forecast} - point forecast.
 #' \item \code{lower} - lower bound of prediction interval. When
 #' \code{intervals="none"} then NA is returned.
 #' \item \code{upper} - higher bound of prediction interval. When
@@ -124,40 +124,41 @@ utils::globalVariables(c("measurementEstimate","transitionEstimate", "C",
 #' @examples
 #'
 #' # Something simple:
-#' ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="a",intervals="p")
+#' gum(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="a",intervals="p")
 #'
 #' # A more complicated model with seasonality
-#' \dontrun{ourModel <- ges(rnorm(118,100,3),orders=c(2,1),lags=c(1,4),h=18,holdout=TRUE)}
+#' \dontrun{ourModel <- gum(rnorm(118,100,3),orders=c(2,1),lags=c(1,4),h=18,holdout=TRUE)}
 #'
 #' # Redo previous model on a new data and produce prediction intervals
-#' \dontrun{ges(rnorm(118,100,3),model=ourModel,h=18,intervals="sp")}
+#' \dontrun{gum(rnorm(118,100,3),model=ourModel,h=18,intervals="sp")}
 #'
 #' # Produce something crazy with optimal initials (not recommended)
-#' \dontrun{ges(rnorm(118,100,3),orders=c(1,1,1),lags=c(1,3,5),h=18,holdout=TRUE,initial="o")}
+#' \dontrun{gum(rnorm(118,100,3),orders=c(1,1,1),lags=c(1,3,5),h=18,holdout=TRUE,initial="o")}
 #'
 #' # Simpler model estiamted using trace forecast error cost function and its analytical analogue
-#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="n",cfType="TMSE")
-#' ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="n",cfType="aTMSE")}
+#' \dontrun{gum(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="n",cfType="TMSE")
+#' gum(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,bounds="n",cfType="aTMSE")}
 #'
 #' # Introduce exogenous variables
-#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118))}
+#' \dontrun{gum(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118))}
 #'
 #' # Ask for their update
-#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118),updateX=TRUE)}
+#' \dontrun{gum(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118),updateX=TRUE)}
 #'
 #' # Do the same but now let's shrink parameters...
-#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,xreg=c(1:118),updateX=TRUE,cfType="TMSE")
-#' ourModel <- ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,cfType="aTMSE")}
+#' \dontrun{gum(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,xreg=c(1:118),updateX=TRUE,cfType="TMSE")
+#' ourModel <- gum(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,cfType="aTMSE")}
 #'
 #' # Or select the most appropriate one
-#' \dontrun{ges(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118),xregDo="s")
+#' \dontrun{gum(rnorm(118,100,3),orders=c(1),lags=c(1),h=18,holdout=TRUE,xreg=c(1:118),xregDo="s")
 #'
 #' summary(ourModel)
 #' forecast(ourModel)
 #' plot(forecast(ourModel))}
 #'
-#' @export ges
-ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
+#' @rdname gum
+#' @export gum
+gum <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
                 persistence=NULL, transition=NULL, measurement=NULL,
                 initial=c("optimal","backcasting"), ic=c("AICc","AIC","BIC","BICc"),
                 cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
@@ -165,11 +166,11 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
                 intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                 intermittent=c("none","auto","fixed","interval","probability","sba","logistic"),
                 imodel="MNN",
-                bounds=c("admissible","none"),
+                bounds=c("restricted","admissible","none"),
                 silent=c("all","graph","legend","output","none"),
                 xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                 updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
-# General Exponential Smoothing function. Crazy thing...
+# General Univariate Model function. Crazy thing...
 #
 #    Copyright (C) 2016 - Inf Ivan Svetunkov
 
@@ -182,15 +183,13 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
     # If a previous model provided as a model, write down the variables
     if(exists("model",inherits=FALSE)){
         if(is.null(model$model)){
-            stop("The provided model is not GES.",call.=FALSE);
+            stop("The provided model is not GUM.",call.=FALSE);
         }
-        else if(gregexpr("GES",model$model)==-1){
-            stop("The provided model is not GES.",call.=FALSE);
+        else if(smoothType(model)!="GUM"){
+            stop("The provided model is not GUM.",call.=FALSE);
         }
 
-        if(gregexpr("MGES",model$model)!=-1){
-            type <- "M";
-        }
+        type <- errorType(model);
 
         if(!is.null(model$imodel)){
             imodel <- model$imodel;
@@ -228,10 +227,10 @@ ges <- function(data, orders=c(1,1), lags=c(1,frequency(data)), type=c("A","M"),
 
 ##### Set environment for ssInput and make all the checks #####
     environment(ssInput) <- environment();
-    ssInput("ges",ParentEnvironment=environment());
+    ssInput("gum",ParentEnvironment=environment());
 
-##### Initialise ges #####
-ElementsGES <- function(C){
+##### Initialise gum #####
+ElementsGUM <- function(C){
     n.coef <- 0;
     if(measurementEstimate){
         matw <- matrix(C[n.coef+(1:nComponents)],1,nComponents);
@@ -304,9 +303,9 @@ ElementsGES <- function(C){
     return(list(matw=matw,matF=matF,vecg=vecg,vt=vt,at=at,matFX=matFX,vecgX=vecgX));
 }
 
-##### Cost Function for GES #####
+##### Cost Function for GUM #####
 CF <- function(C){
-    elements <- ElementsGES(C);
+    elements <- ElementsGUM(C);
     matw <- elements$matw;
     matF <- elements$matF;
     vecg <- elements$vecg;
@@ -327,8 +326,8 @@ CF <- function(C){
     return(cfRes);
 }
 
-##### Estimate ges or just use the provided values #####
-CreatorGES <- function(silentText=FALSE,...){
+##### Estimate gum or just use the provided values #####
+CreatorGUM <- function(silentText=FALSE,...){
     environment(likelihoodFunction) <- environment();
     environment(ICFunction) <- environment();
 
@@ -341,17 +340,25 @@ CreatorGES <- function(silentText=FALSE,...){
 # matw, matF, vecg, vt
             if(measurementEstimate){
                 C <- c(C,rep(1,nComponents));
-                Clb <- c(Clb,rep(0,nComponents));
-                Cub <- c(Cub,rep(1,nComponents));
-                # Clb <- c(Clb,rep(-Inf,nComponents));
-                # Cub <- c(Cub,rep(Inf,nComponents));
+                if(bounds=="r"){
+                    Clb <- c(Clb,rep(0,nComponents));
+                    Cub <- c(Cub,rep(1,nComponents));
+                }
+                else{
+                    Clb <- c(Clb,rep(-Inf,nComponents));
+                    Cub <- c(Cub,rep(Inf,nComponents));
+                }
             }
             if(transitionEstimate){
                 C <- c(C,rep(1,nComponents^2));
-                Clb <- c(Clb,rep(0,nComponents^2));
-                Cub <- c(Cub,rep(1,nComponents^2));
-                # Clb <- c(Clb,rep(-Inf,nComponents^2));
-                # Cub <- c(Cub,rep(Inf,nComponents^2));
+                if(bounds=="r"){
+                    Clb <- c(Clb,rep(0,nComponents^2));
+                    Cub <- c(Cub,rep(1,nComponents^2));
+                }
+                else{
+                    Clb <- c(Clb,rep(-Inf,nComponents^2));
+                    Cub <- c(Cub,rep(Inf,nComponents^2));
+                }
             }
             if(persistenceEstimate){
                 C <- c(C,rep(0.1,nComponents));
@@ -442,10 +449,10 @@ CreatorGES <- function(silentText=FALSE,...){
     return(list(cfObjective=cfObjective,C=C,ICs=ICs,icBest=icBest,nParam=nParam,logLik=logLik));
 }
 
-##### Preset y.fit, y.for, errors and basic parameters #####
+##### Preset yFitted, yForecast, errors and basic parameters #####
     matvt <- matrix(NA,nrow=obsStates,ncol=nComponents);
-    y.fit <- rep(NA,obsInsample);
-    y.for <- rep(NA,h);
+    yFitted <- rep(NA,obsInsample);
+    yForecast <- rep(NA,h);
     errors <- rep(NA,obsInsample);
 
 ##### Prepare exogenous variables #####
@@ -502,7 +509,7 @@ CreatorGES <- function(silentText=FALSE,...){
         # If transition is provided and not identity, and other things are provided, write them as "provided"
         parametersNumber[2,2] <- (length(matFX)*(!is.null(transitionX) & !all(matFX==diag(ncol(matat)))) +
                                       nrow(vecgX)*(!is.null(persistenceX)) +
-                                      ncol(matat)*(!is.null(initialX)) - nParamExo);
+                                      ncol(matat)*(!is.null(initialX)));
     }
 
 ##### Check number of observations vs number of max parameters #####
@@ -530,7 +537,7 @@ CreatorGES <- function(silentText=FALSE,...){
 
 # If this is tiny sample, use SES instead
     if(tinySample){
-        warning("Not enough observations to fit GES Switching to ETS(A,N,N).",call.=FALSE);
+        warning("Not enough observations to fit GUM Switching to ETS(A,N,N).",call.=FALSE);
         return(es(data,"ANN",initial=initial,cfType=cfType,
                   h=h,holdout=holdout,cumulative=cumulative,
                   intervals=intervals,level=level,
@@ -543,8 +550,8 @@ CreatorGES <- function(silentText=FALSE,...){
     }
 
 ##### Preset values of matvt ######
-    slope <- cov(yot[1:min(max(12,datafreq),obsNonzero),],c(1:min(max(12,datafreq),obsNonzero)))/var(c(1:min(max(12,datafreq),obsNonzero)));
-    intercept <- sum(yot[1:min(max(12,datafreq),obsNonzero),])/min(max(12,datafreq),obsNonzero) - slope * (sum(c(1:min(max(12,datafreq),obsNonzero)))/min(max(12,datafreq),obsNonzero) - 1);
+    slope <- cov(yot[1:min(max(12,dataFreq),obsNonzero),],c(1:min(max(12,dataFreq),obsNonzero)))/var(c(1:min(max(12,dataFreq),obsNonzero)));
+    intercept <- sum(yot[1:min(max(12,dataFreq),obsNonzero),])/min(max(12,dataFreq),obsNonzero) - slope * (sum(c(1:min(max(12,dataFreq),obsNonzero)))/min(max(12,dataFreq),obsNonzero) - 1);
 
     vtvalues <- intercept;
     if((orders %*% lags)>1){
@@ -612,7 +619,7 @@ CreatorGES <- function(silentText=FALSE,...){
     environment(ssForecaster) <- environment();
     environment(ssFitter) <- environment();
 
-    # If auto intermittent, then estimate model with intermittent="n" first.
+    # If auto intermittent, then estimate model with intermittent="n" first
     if(any(intermittent==c("a","n"))){
         intermittentParametersSetter(intermittent="n",ParentEnvironment=environment());
     }
@@ -621,7 +628,7 @@ CreatorGES <- function(silentText=FALSE,...){
         intermittentMaker(intermittent=intermittent,ParentEnvironment=environment());
     }
 
-    gesValues <- CreatorGES(silentText=silentText);
+    gumValues <- CreatorGUM(silentText=silentText);
 
 ##### If intermittent=="a", run a loop and select the best one #####
     if(intermittent=="a"){
@@ -636,13 +643,13 @@ CreatorGES <- function(silentText=FALSE,...){
         intermittentModelsPool <- c("n","f","i","p","s","l");
         intermittentCFs <- intermittentICs <- rep(NA,length(intermittentModelsPool));
         intermittentModelsList <- list(NA);
-        intermittentICs[1] <- gesValues$icBest;
-        intermittentCFs[1] <- gesValues$cfObjective;
+        intermittentICs[1] <- gumValues$icBest;
+        intermittentCFs[1] <- gumValues$cfObjective;
 
         for(i in 2:length(intermittentModelsPool)){
             intermittentParametersSetter(intermittent=intermittentModelsPool[i],ParentEnvironment=environment());
             intermittentMaker(intermittent=intermittentModelsPool[i],ParentEnvironment=environment());
-            intermittentModelsList[[i]] <- CreatorGES(silentText=TRUE);
+            intermittentModelsList[[i]] <- CreatorGUM(silentText=TRUE);
             intermittentICs[i] <- intermittentModelsList[[i]]$icBest[ic];
             intermittentCFs[i] <- intermittentModelsList[[i]]$cfObjective;
         }
@@ -661,7 +668,7 @@ CreatorGES <- function(silentText=FALSE,...){
         }
         if(iBest!=1){
             intermittent <- intermittentModelsPool[iBest];
-            gesValues <- intermittentModelsList[[iBest]];
+            gumValues <- intermittentModelsList[[iBest]];
         }
         else{
             intermittent <- "n"
@@ -671,11 +678,11 @@ CreatorGES <- function(silentText=FALSE,...){
         intermittentMaker(intermittent=intermittent,ParentEnvironment=environment());
     }
 
-    list2env(gesValues,environment());
+    list2env(gumValues,environment());
 
     if(xregDo!="u"){
 # Prepare for fitting
-        elements <- ElementsGES(C);
+        elements <- ElementsGUM(C);
         matw <- elements$matw;
         matF <- elements$matF;
         vecg <- elements$vecg;
@@ -717,8 +724,8 @@ CreatorGES <- function(silentText=FALSE,...){
         }
 
         if(!is.null(xreg)){
-            gesValues <- CreatorGES(silentText=TRUE);
-            list2env(gesValues,environment());
+            gumValues <- CreatorGUM(silentText=TRUE);
+            list2env(gumValues,environment());
         }
     }
 
@@ -733,7 +740,7 @@ CreatorGES <- function(silentText=FALSE,...){
         }
     }
 # Prepare for fitting
-    elements <- ElementsGES(C);
+    elements <- ElementsGUM(C);
     matw <- elements$matw;
     matF <- elements$matF;
     vecg <- elements$vecg;
@@ -742,22 +749,16 @@ CreatorGES <- function(silentText=FALSE,...){
     matFX <- elements$matFX;
     vecgX <- elements$vecgX;
 
-    # Write down Fisher Information if needed
-    if(FI){
-        environment(likelihoodFunction) <- environment();
-        FI <- -numDeriv::hessian(likelihoodFunction,C);
-    }
-
 ##### Fit simple model and produce forecast #####
     ssFitter(ParentEnvironment=environment());
     ssForecaster(ParentEnvironment=environment());
 
     if(modelIsMultiplicative){
         y <- exp(y);
-        y.fit <- exp(y.fit);
-        y.for <- exp(y.for);
-        y.low <- exp(y.low);
-        y.high <- exp(y.high);
+        yFitted <- exp(yFitted);
+        yForecast <- exp(yForecast);
+        yLower <- exp(yLower);
+        yUpper <- exp(yUpper);
 
         environment(likelihoodFunction) <- environment();
         environment(ICFunction) <- environment();
@@ -807,7 +808,7 @@ CreatorGES <- function(silentText=FALSE,...){
     parametersNumber[1,1] <- parametersNumber[1,1] + 1;
 
     # Write down the probabilities from intermittent models
-    pt <- ts(c(as.vector(pt),as.vector(pt.for)),start=dataStart,frequency=datafreq);
+    pt <- ts(c(as.vector(pt),as.vector(pForecast)),start=dataStart,frequency=dataFreq);
     # Write down the number of parameters of imodel
     if(all(intermittent!=c("n","provided")) & !imodelProvided){
         parametersNumber[1,3] <- imodel$nParam;
@@ -846,29 +847,39 @@ CreatorGES <- function(silentText=FALSE,...){
     parametersNumber[1,4] <- sum(parametersNumber[1,1:3]);
     parametersNumber[2,4] <- sum(parametersNumber[2,1:3]);
 
-    if(holdout==T){
-        y.holdout <- ts(data[(obsInsample+1):obsAll],start=yForecastStart,frequency=frequency(data));
+    # Write down Fisher Information if needed
+    if(FI & parametersNumber[1,4]>1){
+        environment(likelihoodFunction) <- environment();
+        FI <- -numDeriv::hessian(likelihoodFunction,C);
+    }
+    else{
+        FI <- NA;
+    }
+
+##### Deal with the holdout sample #####
+    if(holdout){
+        yHoldout <- ts(data[(obsInsample+1):obsAll],start=yForecastStart,frequency=frequency(data));
         if(cumulative){
-            errormeasures <- Accuracy(sum(y.holdout),y.for,h*y);
+            errormeasures <- Accuracy(sum(yHoldout),yForecast,h*y);
         }
         else{
-            errormeasures <- Accuracy(y.holdout,y.for,y);
+            errormeasures <- Accuracy(yHoldout,yForecast,y);
         }
 
         if(cumulative){
-            y.holdout <- ts(sum(y.holdout),start=yForecastStart,frequency=datafreq);
+            yHoldout <- ts(sum(yHoldout),start=yForecastStart,frequency=dataFreq);
         }
     }
     else{
-        y.holdout <- NA;
+        yHoldout <- NA;
         errormeasures <- NA;
     }
 
     if(!is.null(xreg)){
-        modelname <- "GESX";
+        modelname <- "GUMX";
     }
     else{
-        modelname <- "GES";
+        modelname <- "GUM";
     }
     modelname <- paste0(modelname,"(",paste(orders,"[",lags,"]",collapse=",",sep=""),")");
     if(all(intermittent!=c("n","none"))){
@@ -882,7 +893,7 @@ CreatorGES <- function(silentText=FALSE,...){
 ##### Print output #####
     if(!silentText){
         if(any(abs(eigen(matF - vecg %*% matw)$values)>(1 + 1E-10))){
-            if(bounds!="a"){
+            if(bounds=="n"){
                 warning("Unstable model was estimated! Use bounds='admissible' to address this issue!",
                         call.=FALSE);
             }
@@ -895,23 +906,23 @@ CreatorGES <- function(silentText=FALSE,...){
 
 ##### Make a plot #####
     if(!silentGraph){
-        y.for.new <- y.for;
-        y.high.new <- y.high;
-        y.low.new <- y.low;
+        yForecastNew <- yForecast;
+        yUpperNew <- yUpper;
+        yLowerNew <- yLower;
         if(cumulative){
-            y.for.new <- ts(rep(y.for/h,h),start=yForecastStart,frequency=datafreq)
+            yForecastNew <- ts(rep(yForecast/h,h),start=yForecastStart,frequency=dataFreq)
             if(intervals){
-                y.high.new <- ts(rep(y.high/h,h),start=yForecastStart,frequency=datafreq)
-                y.low.new <- ts(rep(y.low/h,h),start=yForecastStart,frequency=datafreq)
+                yUpperNew <- ts(rep(yUpper/h,h),start=yForecastStart,frequency=dataFreq)
+                yLowerNew <- ts(rep(yLower/h,h),start=yForecastStart,frequency=dataFreq)
             }
         }
 
         if(intervals){
-            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit, lower=y.low.new,upper=y.high.new,
+            graphmaker(actuals=data,forecast=yForecastNew,fitted=yFitted, lower=yLowerNew,upper=yUpperNew,
                        level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
         else{
-            graphmaker(actuals=data,forecast=y.for.new,fitted=y.fit,
+            graphmaker(actuals=data,forecast=yForecastNew,fitted=yFitted,
                        legend=!silentLegend,main=modelname,cumulative=cumulative);
         }
     }
@@ -921,10 +932,17 @@ CreatorGES <- function(silentText=FALSE,...){
                   states=matvt,measurement=matw,transition=matF,persistence=vecg,
                   initialType=initialType,initial=initialValue,
                   nParam=parametersNumber,
-                  fitted=y.fit,forecast=y.for,lower=y.low,upper=y.high,residuals=errors,
+                  fitted=yFitted,forecast=yForecast,lower=yLower,upper=yUpper,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
-                  actuals=data,holdout=y.holdout,imodel=imodel,
+                  actuals=data,holdout=yHoldout,imodel=imodel,
                   xreg=xreg,updateX=updateX,initialX=initialX,persistenceX=persistenceX,transitionX=transitionX,
                   ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,FI=FI,accuracy=errormeasures);
     return(structure(model,class="smooth"));
+}
+
+#' @rdname gum
+#' @export
+ges <- function(...){
+    warning("You are using the old name of the function. Please, use 'gum' instead.", call.=FALSE);
+    return(gum(...));
 }

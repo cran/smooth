@@ -1,6 +1,6 @@
 #' Combination of forecasts of state space models
 #'
-#' Function constructs ETS, SSARIMA, CES, GES and SMA and combines their
+#' Function constructs ETS, SSARIMA, CES, GUM and SMA and combines their
 #' forecasts using IC weights.
 #'
 #' The combination of these models using information criteria weights is
@@ -71,7 +71,7 @@
 #' }
 #'
 #' @seealso \code{\link[smooth]{es}, \link[smooth]{auto.ssarima},
-#' \link[smooth]{auto.ces}, \link[smooth]{auto.ges}, \link[smooth]{sma}}
+#' \link[smooth]{auto.ces}, \link[smooth]{auto.gum}, \link[smooth]{sma}}
 #'
 #' @examples
 #'
@@ -178,9 +178,9 @@ smoothCombine <- function(data, models=NULL,
                                      xreg=xreg,xregDo=xregDo,updateX=updateX,
                                      initialX=initialX,persistenceX=persistenceX,transitionX=transitionX);
         if(!silentText){
-            cat(", GES");
+            cat(", GUM");
         }
-        gesModel <- auto.ges(data,initial=initial,ic=ic,cfType=cfType,h=h,holdout=holdout,
+        gumModel <- auto.gum(data,initial=initial,ic=ic,cfType=cfType,h=h,holdout=holdout,
                              cumulative=cumulative,intervals="n",intermittent=intermittent,
                              imodel=imodel,bounds=bounds,silent=TRUE,
                              xreg=xreg,xregDo=xregDo,updateX=updateX,
@@ -193,8 +193,8 @@ smoothCombine <- function(data, models=NULL,
         if(!silentText){
             cat(". Done!\n");
         }
-        models <- list(esModel, cesModel, ssarimaModel, gesModel, smaModel);
-        names(models) <- c("ETS","CES","SSARIMA","GES","SMA");
+        models <- list(esModel, cesModel, ssarimaModel, gumModel, smaModel);
+        names(models) <- c("ETS","CES","SSARIMA","GUM","SMA");
     }
 
     yForecastTest <- forecast(models[[1]],h=h,intervals="none",holdout=holdout);
@@ -205,11 +205,9 @@ smoothCombine <- function(data, models=NULL,
     # Calculate AIC weights
     ICs <- unlist(lapply(models, IC));
     if(is.null(names(models))){
-        names(ICs) <- paste0("model", c(1:nModels), " ", ic);
+        names(models) <- unlist(lapply(models,smoothType));
     }
-    else{
-        names(ICs) <- paste0(names(models), " ", ic);
-    }
+    names(ICs) <- paste0(names(models), " ", ic);
 
     icBest <- min(ICs);
     icWeights <- exp(-0.5*(ICs-icBest)) / sum(exp(-0.5*(ICs-icBest)));
@@ -219,10 +217,10 @@ smoothCombine <- function(data, models=NULL,
                               xreg=xreg);
 
     yForecast <- as.matrix(as.data.frame(lapply(modelsForecasts,`[[`,"mean")));
-    yForecast <- ts(c(yForecast %*% icWeights),start=yForecastStart,frequency=datafreq);
+    yForecast <- ts(c(yForecast %*% icWeights),start=yForecastStart,frequency=dataFreq);
 
     yFitted <- as.matrix(as.data.frame(lapply(models,fitted)));
-    yFitted <- ts(c(yFitted %*% icWeights),start=dataStart,frequency=datafreq);
+    yFitted <- ts(c(yFitted %*% icWeights),start=dataStart,frequency=dataFreq);
 
     lower <- upper <- NA;
 
@@ -317,10 +315,11 @@ smoothCombine <- function(data, models=NULL,
                                                                                     `[[`,"upper"))));
         }
 
-        lower <- ts(quantilesReturned[1,],start=yForecastStart,frequency=datafreq);
-        upper <- ts(quantilesReturned[2,],start=yForecastStart,frequency=datafreq);
+        lower <- ts(quantilesReturned[1,],start=yForecastStart,frequency=dataFreq);
+        upper <- ts(quantilesReturned[2,],start=yForecastStart,frequency=dataFreq);
     }
 
+    y <- y[1:length(yFitted)];
     errors <- c(y[1:length(yFitted)])-c(yFitted);
     s2 <- mean(errors^2);
 
@@ -334,7 +333,7 @@ smoothCombine <- function(data, models=NULL,
         }
 
         if(cumulative){
-            yHoldout <- ts(sum(yHoldout),start=yForecastStart,frequency=datafreq);
+            yHoldout <- ts(sum(yHoldout),start=yForecastStart,frequency=dataFreq);
         }
     }
     else{
@@ -346,10 +345,10 @@ smoothCombine <- function(data, models=NULL,
         upperNew <- upper;
         lowerNew <- lower;
         if(cumulative){
-            yForecastNew <- ts(rep(yForecast/h,h),start=yForecastStart,frequency=datafreq)
+            yForecastNew <- ts(rep(yForecast/h,h),start=yForecastStart,frequency=dataFreq)
             if(intervals){
-                upperNew <- ts(rep(upper/h,h),start=yForecastStart,frequency=datafreq)
-                lowerNew <- ts(rep(lower/h,h),start=yForecastStart,frequency=datafreq)
+                upperNew <- ts(rep(upper/h,h),start=yForecastStart,frequency=dataFreq)
+                lowerNew <- ts(rep(lower/h,h),start=yForecastStart,frequency=dataFreq)
             }
         }
 
