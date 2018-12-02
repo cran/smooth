@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-08-25" />
+<meta name="date" content="2018-11-30" />
 
 <title>smooth: forecasting using state-space models</title>
 
@@ -32,11 +32,11 @@
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-08-25</em></h4>
+<h4 class="date"><em>2018-11-30</em></h4>
 
 
 
-<p>This vignette explains how to use functions in <code>smooth</code> package, what they produce, what each field in outputs and what returned values mean. Underlying statistical models are not discussed here, but if you want to know more about them, then there is a document “<a href="https://github.com/config-i1/smooth/blob/master/inst/doc/smooth-Documentation.pdf">Statistical models underlying functions of ‘smooth’ package for R</a>”. Some of the features of the package are also explained in my <a href="https://forecasting.svetunkov.ru/en/tag/smooth/">blog</a>.</p>
+<p>This vignette explains how to use functions in <code>smooth</code> package, what they produce, what each field in outputs and what returned values mean. Underlying statistical models are not discussed here, but if you want to know more about them, then there is a document “<a href="https://github.com/config-i1/smooth/blob/master/vignettes/smooth-Documentation.pdf">Statistical models underlying functions of ‘smooth’ package for R</a>”. Some of the features of the package are also explained in my <a href="https://forecasting.svetunkov.ru/en/tag/smooth/">blog</a>.</p>
 <p>The package includes the following functions:</p>
 <ol style="list-style-type: decimal">
 <li><a href="es.html">es() - Exponential Smoothing</a>;</li>
@@ -54,7 +54,7 @@
 <p>The functions (1) - (4) and (6) return object of class <code>smooth</code>, (5) returns the object of class <code>vsmooth</code>, (7) returns <code>smooth.sim</code> class and finally (8) returns <code>iss</code> or <code>viss</code> (depending on the function used). There are several methods for these classes in the package.</p>
 <div id="methods-for-the-class-smooth" class="section level2">
 <h2>Methods for the class <code>smooth</code></h2>
-<p>There are several functions that can be used together with the forecasing functions of the package. So when a model is saved to some object <code>ourModel</code>, these function will do some things. Here’s the list of all the available methods with brief explanations:</p>
+<p>There are several functions that can be used together with the forecasting functions of the package. So when a model is saved to some object <code>ourModel</code>, these function will do some things. Here’s the list of all the available methods with brief explanations:</p>
 <ol style="list-style-type: decimal">
 <li><code>summary(ourModel)</code> – function prints brief output with explanation of what was fitted, with what parameters and errors;</li>
 <li><code>fitted(ourModel)</code> – fitted values of the model;</li>

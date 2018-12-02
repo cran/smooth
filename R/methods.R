@@ -177,7 +177,7 @@ covar.default <- function(object, type=c("analytical","empirical","simulated"), 
 covar.smooth <- function(object, type=c("analytical","empirical","simulated"), ...){
     # Function extracts the conditional variances from the model
 
-    if(any(class(object)=="smoothC")){
+    if(is.smoothC(object)){
         stop("Sorry, but covariance matrix is not available for the combinations.",
             call.=FALSE)
     }
@@ -442,7 +442,7 @@ pls.default <- function(object, holdout=NULL, ...){
 #' @aliases pls.smooth
 #' @export
 pls.smooth <- function(object, holdout=NULL, ...){
-    if(any(class(object)=="smoothC")){
+    if(is.smoothC(object)){
         stop("Sorry, but PLS is not available for the combinations.",
              call.=FALSE)
     }
@@ -484,18 +484,28 @@ pls.smooth <- function(object, holdout=NULL, ...){
     densityFunction <- function(cfType, ...){
         if(cfType=="MAE"){
         # This is a simplification. The real multivariate Laplace is bizarre!
-            b <- sqrt(diag(covarMat)/2);
-            plsValue <- sum(dlaplace(errors, 0, b, log=TRUE));
+            scale <- sqrt(diag(covarMat)/2);
+            plsValue <- sum(dlaplace(errors, 0, scale, log=TRUE));
         }
         else if(cfType=="HAM"){
         # This is a simplification. We don't have multivariate HAM yet.
-            b <- (diag(covarMat)/120)^0.25;
-            plsValue <- sum(ds(errors, 0, b, log=TRUE));
+            scale <- (diag(covarMat)/120)^0.25;
+            plsValue <- sum(ds(errors, 0, scale, log=TRUE));
         }
         else{
             if(is.infinite(det(covarMat))){
                 plsValue <- -as.vector((log(2*pi)+(abs(determinant(covarMat)$modulus)))/2 +
                                            (t(errors) %*% solve(covarMat) %*% errors) / 2);
+            }
+            # This is the case with overfitting the data
+            else if(det(covarMat)==0){
+                # If there is any non-zero error, then it means that the model is completely wrong (because it predicts that sigma=0)
+                if(any(errors!=0)){
+                    plsValue <- -Inf;
+                }
+                else{
+                    plsValue <- 0;
+                }
             }
             else{
                 # Here and later in the code the abs() is needed for weird cases of wrong covarMat
@@ -567,11 +577,6 @@ pls.smooth <- function(object, holdout=NULL, ...){
 #' @export
 sigma.smooth <- function(object, ...){
     return(sqrt(object$s2));
-}
-
-#' @export
-sigma.ets <- function(object, ...){
-    return(sqrt(object$sigma2));
 }
 
 #### pointLik for smooth ####
@@ -740,7 +745,7 @@ forecast.smooth <- function(object, h=10,
     }
     else if(smoothType=="ARIMA"){
         if(any(unlist(gregexpr("combine",object$model))==-1)){
-            if(any(class(object)=="msarima")){
+            if(is.msarima(object)){
                 newModel <- msarima(object$actuals,model=object,h=h,intervals=intervals,level=level,silent="all",...);
             }
             else{
@@ -927,7 +932,7 @@ errorType.iss <- function(object, ...){
 ##### Function returns the modellags from the model - internal function #####
 modelLags.default <- function(object, ...){
     modelLags <- NA;
-    if(any(class(object)=="msarima")){
+    if(is.msarima(object)){
         modelLags <- object$modelLags;
     }
     else{
@@ -1359,11 +1364,11 @@ print.smooth <- function(x, ...){
             }
         }
     }
-    if(class(x$imodel)!="iss"){
-        intermittent <- "n";
+    if(is.iss(x$imodel)){
+        intermittent <- x$imodel$intermittent;
     }
     else{
-        intermittent <- x$imodel$intermittent;
+        intermittent <- "n";
     }
 
     ssOutput(x$timeElapsed, x$model, persistence=x$persistence, transition=x$transition, measurement=x$measurement,
@@ -1562,11 +1567,11 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
             args$mu <- 0;
         }
 
-        if(!is.null(ellipsis$b)){
-            args$b <- ellipsis$b;
+        if(!is.null(ellipsis$scale)){
+            args$scale <- ellipsis$scale;
         }
         else{
-            args$b <- mean(abs(residuals(object)));
+            args$scale <- mean(abs(residuals(object)));
         }
     }
     else if(any(cfType==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
@@ -1578,11 +1583,11 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
             args$mu <- 0;
         }
 
-        if(!is.null(ellipsis$b)){
-            args$b <- ellipsis$b;
+        if(!is.null(ellipsis$scale)){
+            args$scale <- ellipsis$scale;
         }
         else{
-            args$b <- mean(sqrt(abs(residuals(object))));
+            args$scale <- mean(sqrt(abs(residuals(object))));
         }
     }
     else{

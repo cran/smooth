@@ -437,9 +437,10 @@ arma::mat normaliser(arma::mat Vt, int &obsall, unsigned int &maxlag, char const
 
 /* # initparams - function that initialises the basic parameters of ETS */
 // [[Rcpp::export]]
-RcppExport SEXP initparams(SEXP Ttype, SEXP Stype, SEXP datafreq, SEXP obsR, SEXP obsallR, SEXP yt,
+RcppExport SEXP initparams(SEXP Etype, SEXP Ttype, SEXP Stype, SEXP datafreq, SEXP obsR, SEXP obsallR, SEXP yt,
                            SEXP damped, SEXP phi, SEXP smoothingparameters, SEXP initialstates, SEXP seasonalcoefs){
 
+    char E = as<char>(Etype);
     char T = as<char>(Ttype);
     char S = as<char>(Stype);
     int freq = as<int>(datafreq);
@@ -520,7 +521,7 @@ RcppExport SEXP initparams(SEXP Ttype, SEXP Stype, SEXP datafreq, SEXP obsR, SEX
 //    matrixVt.resize(obs+maxlag, ncomponents);
 
     if(persistence.n_rows < ncomponents){
-        if((T=='M') | (S=='M')){
+        if((E=='M') | (T=='M') | (S=='M')){
             vecG = persistence.submat(0,1,persistence.n_rows-1,1);
         }
         else{
@@ -528,7 +529,7 @@ RcppExport SEXP initparams(SEXP Ttype, SEXP Stype, SEXP datafreq, SEXP obsR, SEX
         }
     }
     else{
-        if((T=='M') | (S=='M')){
+        if((E=='M') | (T=='M') | (S=='M')){
             vecG = persistence.submat(0,1,ncomponents-1,1);
         }
         else{
@@ -1815,7 +1816,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
                 CFres = double(log(arma::prod(eig_sym(trans(matErrors / normalize) * (matErrors / normalize) / matobs))) +
                     hor * log(pow(normalize,2)));
             }
-            catch(const std::runtime_error){
+            catch(const std::runtime_error&){
                 CFres = double(log(arma::det(arma::trans(matErrors / normalize) * (matErrors / normalize) / matobs)) +
                     hor * log(pow(normalize,2)));
             }
@@ -1833,7 +1834,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
                 CFres = double(log(arma::prod(eig_sym(as_scalar(mean(pow(matErrors / normalize,2))) * matrixSigma
                                                           ))) + hor*log(pow(normalize,2)));
             }
-            catch(const std::runtime_error){
+            catch(const std::runtime_error&){
                 CFres = log(arma::det(as_scalar(mean(pow(matErrors / normalize,2))) * matrixSigma
                                           )) + hor*log(pow(normalize,2));
             }
@@ -1917,7 +1918,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
             try{
                 CFres = double(log(arma::prod(eig_sym(trans(matErrors) * (matErrors) / matobs))));
             }
-            catch(const std::runtime_error){
+            catch(const std::runtime_error&){
                 CFres = double(log(arma::det(arma::trans(matErrors) * matErrors / double(matobs))));
             }
             CFres = CFres + (2 / double(matobs)) * double(hor) * yactsum;
@@ -1938,7 +1939,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
                 CFres = double(log(arma::prod(eig_sym(as_scalar(mean(pow(matErrors / normalize,2))) * matrixSigma
                                                           ))) + hor*log(pow(normalize,2)));
             }
-            catch(const std::runtime_error){
+            catch(const std::runtime_error&){
                 CFres = log(arma::det(as_scalar(mean(pow(matErrors / normalize,2))) * matrixSigma
                                           )) + hor*log(pow(normalize,2));
             }

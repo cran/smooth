@@ -1,3 +1,24 @@
+smooth v2.4.7 (Release data: 2018-11-30)
+==============
+
+Changes:
+* graphmaker() is now moved to greybox package.
+* Moved sigma.ets() to greybox package.
+* pls.smooth() returns more or less reasonable values, when the model overfits the data.
+* A set of is-functions, checking whether the object is produced by smooth functions.
+* New function - gsi() - ETS with Group Seasonal Indices. This is based on VES with some restrictions. The work in progress...
+* The number of degrees of freedom in vector models (ves and gsi) is now calculated per series, not overall. This corresponds to Lutkepohl (2005), p.75.
+* Minor updates in the vignettes for ves with references to Lutkepohl and a couple of papers.
+* ETS(M,Z,Z) now returns correct semi and non parametric intervals in case of intermittent data.
+* Given the recent update in greybox, changed the "b" to "scale" in distribution functions.
+
+Bugfixes
+* ETS(M,X,X) sometimes could not be optimised because of the too high smoothing parameters values and negative initials. This should be fixed now.
+* sim.ves() wasn't working correctly in case of AAA models and provided initials.
+* The error generated in sim.ves() was always multiplied by the initial state, so if it was zero, then nothing would happen.
+* Found bug due to which the exogenous variables wer ignored for the forecasts from ETS(M,Z,Z) models.
+
+
 smooth v2.4.6 (Release data: 2018-08-25)
 ==============
 

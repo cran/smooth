@@ -60,7 +60,7 @@ vssInput <- function(smoothType=c("ves"),...){
     }
 
     #### Check data ####
-    if(any(class(data)=="vsmooth.sim")){
+    if(any(is.vsmooth.sim(data))){
         data <- data$data;
         if(length(dim(data))==3){
             warning("Simulated data contains several samples. Selecting a random one.",call.=FALSE);
@@ -227,15 +227,15 @@ vssInput <- function(smoothType=c("ves"),...){
     }
 
     ##### imodel #####
-    if(class(imodel)!="viss"){
-        intermittentModel <- imodel;
-        imodelProvided <- FALSE;
-        imodel <- NULL;
-    }
-    else{
+    if(is.viss(imodel)){
         intermittentModel <- imodel$model;
         intermittent <- imodel$intermittent;
         imodelProvided <- TRUE;
+    }
+    else{
+        intermittentModel <- imodel;
+        imodelProvided <- FALSE;
+        imodel <- NULL;
     }
 
     ##### intermittent #####
@@ -879,18 +879,20 @@ vICFunction <- function(nParam=nParam,A,Etype=Etype){
     # And it is based on the mean of the sum squared residuals either than sum.
     # Hyndman likelihood is: llikelihood <- obs*log(obs*cfObjective)
 
+    # Number of parameters per series needs to be used in the calculations of information criteria
+    nParamPerSeries <- nParam / nSeries;
     llikelihood <- vLikelihoodFunction(A);
 
-    coefAIC <- 2*nParam - 2*llikelihood;
-    coefBIC <- log(obsInSample)*nParam - 2*llikelihood;
+    coefAIC <- 2*nParamPerSeries - 2*llikelihood;
+    coefBIC <- log(obsInSample)*nParamPerSeries - 2*llikelihood;
 
     # max here is needed in order to take into account cases with higher number of parameters than observations
-    coefAICc <- ((2*obsInSample*(nParam*nSeries + nSeries*(nSeries+1)/2)) /
-                                 max(obsInSample - (nParam + nSeries + 1),0)) -2*llikelihood;
+    coefAICc <- ((2*obsInSample*(nParamPerSeries*nSeries + nSeries*(nSeries+1)/2)) /
+                                 max(obsInSample - (nParamPerSeries + nSeries + 1),0)) -2*llikelihood;
 
-    coefBICc <- (((nParam + nSeries*(nSeries+1)/2) *
+    coefBICc <- (((nParamPerSeries + nSeries*(nSeries+1)/2) *
                       log(obsInSample * nSeries) * obsInSample * nSeries) /
-                     (obsInSample * nSeries - nParam - nSeries*(nSeries+1)/2)) -2*llikelihood;
+                     (obsInSample * nSeries - nParamPerSeries - nSeries*(nSeries+1)/2)) -2*llikelihood;
 
     ICs <- c(coefAIC, coefAICc, coefBIC, coefBICc);
     names(ICs) <- c("AIC", "AICc", "BIC", "BICc");
@@ -932,7 +934,8 @@ vssIntervals <- function(level=0.95, intervalsType=c("c","u","i"), Sigma=NULL,
                          nComponents=1, nSeries=1, h=1){
 
     maxlag <- max(modelLags);
-    nElements <- nComponents*nSeries;
+    # nElements <- nComponents*nSeries;
+    nElements <- length(modelLags);
 
     # This is a temporary solution, needed while we work on other types.
     if(intervalsType!="i"){
@@ -1073,7 +1076,10 @@ vssForecaster <- function(...){
     ellipsis <- list(...);
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
 
-    df <- (otObs - nParam);
+    # Division by nSeries gives the df per series, which agrees with Lutkepohl (2005), p.75
+    nParamPerSeries <- nParam / nSeries;
+
+    df <- (otObs - nParamPerSeries);
     if(any(df<=0)){
         warning(paste0("Number of degrees of freedom is negative. It looks like we have overfitted the data."),call.=FALSE);
         df <- otObs;
@@ -1082,7 +1088,7 @@ vssForecaster <- function(...){
     Sigma <- (errors %*% t(errors)) / df;
     rownames(Sigma) <- colnames(Sigma) <- dataNames;
 
-    if(any((otObs - nParam)<=0)){
+    if(any((otObs - nParamPerSeries)<=0)){
         df <- 0;
     }
     else{

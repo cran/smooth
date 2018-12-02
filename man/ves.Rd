@@ -180,6 +180,7 @@ values:
 \item \code{initial} - The initial values of the non-seasonal components;
 \item \code{initialSeason} - The initial values of the seasonal components;
 \item \code{nParam} - The number of estimated parameters;
+\item \code{imodel} - The intermittent model estimated with VES;
 \item \code{actuals} - The matrix with the original data;
 \item \code{fitted} - The matrix of the fitted values;
 \item \code{holdout} - The matrix with the holdout values (if \code{holdout=TRUE} in
@@ -281,6 +282,10 @@ multivariate forecasting. Statistical Modelling, 10 (4), pp.353-374
 \item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 Forecasting with exponential smoothing: the state space approach,
 Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
+\item Lütkepohl, H. (2005). New Introduction to Multiple Time Series
+Analysis. New introduction to Multiple Time Series Analysis. Berlin,
+Heidelberg: Springer Berlin Heidelberg.
+\url{https://doi.org/10.1007/978-3-540-27752-1}
 }
 }
 \seealso{

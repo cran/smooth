@@ -254,26 +254,26 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
     startTime <- Sys.time();
 
     #This overrides the similar thing in ssfunctions.R but only for data generated from sim.es()
-    if(class(data)=="smooth.sim"){
+    if(is.smooth.sim(data)){
         if(smoothType(data)=="ETS"){
             model <- data;
             data <- data$data;
         }
     }
-    else if(class(data)=="smooth"){
+    else if(is.smooth(data)){
         model <- data;
         data <- data$actuals;
     }
 
 # If a previous model provided as a model, write down the variables
-    if(any(class(model)=="smooth") | any(class(model)=="smooth.sim")){
+    if(any(is.smooth(model)) | any(is.smooth.sim(model))){
         if(smoothType(model)!="ETS"){
             stop("The provided model is not ETS.",call.=FALSE);
         }
         if(!is.null(model$imodel)){
             imodel <- model$imodel;
         }
-        if(class(model)=="smooth.sim" & !is.null(dim(model$data))){
+        if(is.smooth.sim(model) & !is.null(dim(model$data))){
             warning("The provided model has several submodels. Choosing a random one.",call.=FALSE);
             i <- round(runif(1,1:length(model$persistence)));
             persistence <- model$persistence[,i];
@@ -317,7 +317,7 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
             initial <- "o";
         }
     }
-    else if(any(class(model)=="ets")){
+    else if(is.ets(model)){
         # Extract smoothing parameters
         i <- 1;
         persistence <- coef(model)[i];
@@ -361,7 +361,7 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
         }
         model <- modelType(model);
     }
-    else if(any(class(model)=="character")){
+    else if(is.character(model)){
         # Everything is okay
     }
     else{
@@ -422,7 +422,13 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
                     CUpper <- c(CUpper,Inf);
                 }
                 else{
-                    C <- c(C,abs(matvt[maxlag,1:(nComponents - (Stype!="N"))]));
+                    if(Ttype=="A"){
+                        # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
+                        C <- c(C,mean(y[1:dataFreq]),0);
+                    }
+                    else{
+                        C <- c(C,abs(matvt[maxlag,1:(nComponents - (Stype!="N"))]));
+                    }
                     CLower <- c(CLower,1E-10);
                     CUpper <- c(CUpper,Inf);
                 }
@@ -463,12 +469,19 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
         }
         if(any(initialType==c("o","p"))){
             if(initialType=="o"){
-                C <- c(C,matvt[maxlag,1:(nComponents - (Stype!="N"))]);
                 if(Etype=="A"){
+                    C <- c(C,matvt[maxlag,1:(nComponents - (Stype!="N"))]);
                     CLower <- c(CLower,-Inf);
                     CUpper <- c(CUpper,Inf);
                 }
                 else{
+                    if(Ttype=="A"){
+                        # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
+                        C <- c(C,mean(y[1:dataFreq]),0);
+                    }
+                    else{
+                        C <- c(C,abs(matvt[maxlag,1:(nComponents - (Stype!="N"))]));
+                    }
                     CLower <- c(CLower,0.1);
                     CUpper <- c(CUpper,Inf);
                 }
@@ -509,12 +522,19 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
         }
         if(any(initialType==c("o","p"))){
             if(initialType=="o"){
-                C <- c(C,matvt[maxlag,1:(nComponents - (Stype!="N"))]);
                 if(Etype=="A"){
+                    C <- c(C,matvt[maxlag,1:(nComponents - (Stype!="N"))]);
                     CLower <- c(CLower,-Inf);
                     CUpper <- c(CUpper,Inf);
                 }
                 else{
+                    if(Ttype=="A"){
+                        # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
+                        C <- c(C,mean(y[1:dataFreq]),0);
+                    }
+                    else{
+                        C <- c(C,abs(matvt[maxlag,1:(nComponents - (Stype!="N"))]));
+                    }
                     CLower <- c(CLower,0.1);
                     CUpper <- c(CUpper,Inf);
                 }
@@ -581,7 +601,7 @@ BasicMakerES <- function(...){
     ellipsis <- list(...);
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
 
-    basicparams <- initparams(Ttype, Stype, dataFreq, obsInsample, obsAll, y,
+    basicparams <- initparams(Etype, Ttype, Stype, dataFreq, obsInsample, obsAll, y,
                               damped, phi, smoothingParameters, initialstates, seasonalCoefs);
     list2env(basicparams,ParentEnvironment);
 }
@@ -646,33 +666,45 @@ EstimatorES <- function(...){
 
     # Parameters are chosen to speed up the optimisation process and have decent accuracy
     res <- nloptr(C, CF, lb=CLower, ub=CUpper,
-                  opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval));
+                  opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval, print_level=0));
     C <- res$solution;
 
-    # If the optimisation failed, then probably this is because of smoothing parameters in mixed models. Set them eqaul to zero.
-    if(any(C==Cs$C)){
-        if(C[1]==Cs$C[1]){
-            C[1] <- max(0,CLower[1]);
-        }
+    # If the optimisation failed, then probably this is because of mixed models...
+    if(any(res$objective==c(1e+100,1e+300))){
+        # Reset the smoothing parameters
+        j <- 1;
+        C[j] <- max(0.1,CLower[j]);
         if(Ttype!="N"){
-            if(C[2]==Cs$C[2]){
-                C[2] <- max(0,CLower[2]);
-            }
+            j <- j+1;
+            C[j] <- max(0.05,CLower[j]);
             if(Stype!="N"){
-                if(C[3]==Cs$C[3]){
-                    C[3] <- max(0,CLower[3]);
-                }
+                j <- j+1;
+                C[j] <- max(0.1,CLower[j]);
             }
         }
         else{
             if(Stype!="N"){
-                if(C[2]==Cs$C[2]){
-                    C[2] <- max(0,CLower[2]);
-                }
+                j <- j+1;
+                C[j] <- max(0.05,CLower[j]);
             }
         }
+
+        # If the optimiser fails, then it's probably due to the mixed models. So make all the initials non-negative
+        if(any(c(Etype,Ttype,Stype)=="M")){
+            C <- abs(C);
+            if(Ttype=="A"){
+                if(damped & phiEstimate){
+                    j <- j+1;
+                }
+                j <- j+1;
+                C[j] <- mean(y[1:dataFreq]);
+                j <- j+1;
+                C[j] <- 0;
+            }
+        }
+
         res <- nloptr(C, CF, lb=CLower, ub=CUpper,
-                      opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval));
+                      opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval, print_level=0));
         C <- res$solution;
     }
     # Change C if it is out of the bounds
@@ -686,8 +718,9 @@ EstimatorES <- function(...){
     if(rounded){
         cfType <- "Rounded";
     }
+
     res2 <- nloptr(C, CF, lb=CLower, ub=CUpper,
-                  opts=list("algorithm"="NLOPT_LN_NELDERMEAD", "xtol_rel"=xtol_rel * 10^2, "maxeval"=maxeval));
+                  opts=list("algorithm"="NLOPT_LN_NELDERMEAD", "xtol_rel"=xtol_rel * 10^2, "maxeval"=maxeval, print_level=0));
 
     # This condition is needed in order to make sure that we did not make the solution worse
     if((res2$objective <= res$objective) | rounded){
@@ -1294,7 +1327,7 @@ CreatorES <- function(silent=FALSE,...){
     yForecast <- rep(NA,h);
     errors <- rep(NA,obsInsample);
 
-    basicparams <- initparams(Ttype, Stype, dataFreq, obsInsample, obsAll, y,
+    basicparams <- initparams(Etype, Ttype, Stype, dataFreq, obsInsample, obsAll, y,
                               damped, phi, smoothingParameters, initialstates, seasonalCoefs);
 
 ##### Prepare exogenous variables #####

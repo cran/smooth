@@ -13,9 +13,8 @@ sim.ves(model = "ANN", obs = 10, nsim = 1, nSeries = 2,
 \arguments{
 \item{model}{Type of ETS model. This can consist of 3 or 4 chars:
 \code{ANN}, \code{AAN}, \code{AAdN}, \code{AAA}, \code{AAdA} etc.
-Only pure additive and pure multiplicative models are supported. In the
-latter case the data is generated using additive model and then
-exponentiated.}
+Only pure additive models are supported. If you want to have multiplicative
+one, then just take exponent of the generated data.}
 
 \item{obs}{Number of observations in each generated time series.}
 
@@ -94,13 +93,23 @@ Function generates data using VES model as a data generating process.
 
 # Create 40 observations of quarterly data using AAA model with errors
 # from normal distribution
-\dontrun{VES.AAA <- sim.ves(model="AAA",frequency=4,obs=40,nSeries=3,
+\dontrun{VESAAA <- sim.ves(model="AAA",frequency=4,obs=40,nSeries=3,
                    randomizer="rnorm",mean=0,sd=100)}
 
 # You can also use mvrnorm function from MASS package as randomizer,
 # but you need to provide mu and Sigma explicitly
-\dontrun{VES.ANN <- sim.ves(model="ANN",frequency=4,obs=40,nSeries=2,
+\dontrun{VESANN <- sim.ves(model="ANN",frequency=4,obs=40,nSeries=2,
                    randomizer="mvrnorm",mu=c(100,50),Sigma=matrix(c(40,20,20,30),2,2))}
+
+# When generating the data with multiplicative model a more diligent definitiion
+# of parameters is needed. Here's an example with MMM model:
+
+VESMMM <- sim.ves("AAA", obs=120, nSeries=2, frequency=12, initial=c(10,0),
+          initialSeason=runif(12,-1,1), persistence=c(0.06,0.05,0.2), mean=0, sd=0.03)
+VESMMM$data <- exp(VESMMM$data)
+
+# Note that smoothing parameters should be low and the standard diviation should
+# definitely be less than 0.1. Otherwise you might face the explosions.
 
 }
 \references{
@@ -111,6 +120,10 @@ multivariate forecasting. Statistical Modelling, 10 (4), pp.353-374
 \item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 Forecasting with exponential smoothing: the state space approach,
 Springer-Verlag. \url{http://www.exponentialsmoothing.net}.
+\item Lütkepohl, H. (2005). New Introduction to Multiple Time Series
+Analysis. New introduction to Multiple Time Series Analysis. Berlin,
+Heidelberg: Springer Berlin Heidelberg.
+\url{https://doi.org/10.1007/978-3-540-27752-1}
 }
 }
 \seealso{
