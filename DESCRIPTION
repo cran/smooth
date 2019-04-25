@@ -1,8 +1,8 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using State Space Models
-Version: 2.4.7
-Date: 2018-11-30
+Version: 2.5.0
+Date: 2019-04-25
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
 URL: https://github.com/config-i1/smooth
@@ -14,7 +14,7 @@ Description: Functions implementing Single Source of Error state space models fo
              Smoothing in state space forms, several simulation functions and intermittent demand
              state space models.
 License: GPL (>= 2)
-Depends: R (>= 3.0.2), greybox (>= 0.3.3)
+Depends: R (>= 3.0.2), greybox (>= 0.5.0)
 Imports: Rcpp (>= 0.12.3), stats, graphics, forecast, nloptr, utils,
         zoo
 LinkingTo: Rcpp, RcppArmadillo (>= 0.8.100.0.0)
@@ -23,9 +23,9 @@ VignetteBuilder: knitr
 RoxygenNote: 6.1.1
 Encoding: UTF-8
 NeedsCompilation: yes
-Packaged: 2018-11-30 15:46:23 UTC; isvetunkov
+Packaged: 2019-04-25 18:08:23 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2018-12-02 17:00:03 UTC
+Date/Publication: 2019-04-25 22:50:56 UTC

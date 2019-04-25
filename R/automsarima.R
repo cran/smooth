@@ -4,7 +4,8 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #'
 #' Function selects the best State Space ARIMA based on information criteria,
 #' using fancy branch and bound mechanism. The resulting model can be not
-#' optimal in IC meaning, but it is usually reasonable.
+#' optimal in IC meaning, but it is usually reasonable. This mechanism is
+#' described in Svetunkov & Boylan (2019).
 #'
 #' The function constructs bunch of ARIMAs in Single Source of Error
 #' state space form (see \link[smooth]{msarima} documentation) and selects the
@@ -14,7 +15,7 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' Due to the flexibility of the model, multiple seasonalities can be used. For
 #' example, something crazy like this can be constructed:
 #' SARIMA(1,1,1)(0,1,1)[24](2,0,1)[24*7](0,0,1)[24*30], but the estimation may
-#' take a lot of time...
+#' take some time...
 #'
 #' @template ssBasicParam
 #' @template ssAdvancedParam
@@ -24,6 +25,7 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #'
 #' @template ssGeneralRef
 #' @template ssIntermittentRef
+#' @template ssARIMARef
 #'
 #' @param orders List of maximum orders to check, containing vector variables
 #' \code{ar}, \code{i} and \code{ma}. If a variable is not provided in the
@@ -80,7 +82,8 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                          cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                          h=10, holdout=FALSE, cumulative=FALSE,
                          intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-                         intermittent=c("none","auto","fixed","interval","probability","sba"), imodel="MNN",
+                         occurrence=c("none","auto","fixed","general","odds-ratio","inverse-odds-ratio","direct"),
+                         oesmodel="MNN",
                          bounds=c("admissible","none"),
                          silent=c("all","graph","legend","output","none"),
                          xreg=NULL, xregDo=c("use","select"), initialX=NULL,
@@ -159,7 +162,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
             constant <- NULL;
             constantCheck <- TRUE;
             constantValue <- TRUE;
-            warning("Strange value of constant parameter. We changed it to default value.");
+            warning("Strange value of constant parameter. We changed it to the default value.");
         }
     }
 
@@ -348,7 +351,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                              constant=constantValue, initial=initialType, cfType=cfType,
                              h=h, holdout=holdout, cumulative=cumulative,
                              intervals=intervalsType, level=level,
-                             intermittent=intermittent, imodel=imodel,
+                             occurrence=occurrence, oesmodel=oesmodel,
                              bounds=bounds, silent=TRUE,
                              xreg=xreg, xregDo=xregDo, initialX=initialX,
                              updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
@@ -383,7 +386,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                              constant=constantValue, initial=initialType, cfType=cfType,
                              h=h, holdout=holdout, cumulative=cumulative,
                              intervals=intervalsType, level=level,
-                             intermittent=intermittent, imodel=imodel,
+                             occurrence=occurrence, oesmodel=oesmodel,
                              bounds=bounds, silent=TRUE,
                              xreg=xreg, xregDo=xregDo, initialX=initialX,
                              updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
@@ -450,7 +453,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                              constant=FALSE, initial=initialType, cfType=cfType,
                                              h=h, holdout=FALSE,
                                              intervals=intervalsType, level=level,
-                                             intermittent=intermittent, imodel=imodel,
+                                             occurrence=occurrence, oesmodel=oesmodel,
                                              bounds=bounds, silent=TRUE,
                                              xreg=NULL, xregDo="use", initialX=initialX,
                                              updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
@@ -516,7 +519,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                                              constant=FALSE, initial=initialType, cfType=cfType,
                                                              h=h, holdout=FALSE,
                                                              intervals=intervalsType, level=level,
-                                                             intermittent=intermittent, imodel=imodel,
+                                                             occurrence=occurrence, oesmodel=oesmodel,
                                                              bounds=bounds, silent=TRUE,
                                                              xreg=NULL, xregDo="use", initialX=initialX,
                                                              updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
@@ -589,7 +592,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                                  constant=FALSE, initial=initialType, cfType=cfType,
                                                  h=h, holdout=FALSE,
                                                  intervals=intervalsType, level=level,
-                                                 intermittent=intermittent, imodel=imodel,
+                                                 occurrence=occurrence, oesmodel=oesmodel,
                                                  bounds=bounds, silent=TRUE,
                                                  xreg=NULL, xregDo="use", initialX=initialX,
                                                  updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
@@ -649,7 +652,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                                  constant=FALSE, initial=initialType, cfType=cfType,
                                  h=h, holdout=holdout, cumulative=cumulative,
                                  intervals=intervalsType, level=level,
-                                 intermittent=intermittent, imodel=imodel,
+                                 occurrence=occurrence, oesmodel=oesmodel,
                                  bounds=bounds, silent=TRUE,
                                  xreg=xreg, xregDo=xregDo, initialX=initialX,
                                  updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
@@ -715,7 +718,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
         errors <- ts(y-c(yFitted),start=start(yFitted),frequency=frequency(yFitted));
         yHoldout <- ts(data[(obsNonzero+1):obsAll],start=start(testModel$forecast),frequency=dataFreq);
         s2 <- mean(errors^2);
-        errormeasures <- Accuracy(yHoldout,yForecast,y);
+        errormeasures <- measures(yHoldout,yForecast,y);
         ICs <- c(t(testICs) %*% icWeights);
         names(ICs) <- ic;
 
@@ -723,7 +726,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                           initialType=initialType,
                           fitted=yFitted,forecast=yForecast,cumulative=cumulative,
                           lower=yLower,upper=yUpper,residuals=errors,s2=s2,intervals=intervalsType,level=level,
-                          actuals=data,holdout=yHoldout,intermittent=intermittent,
+                          actuals=data,holdout=yHoldout,occurrence=occurrence,
                           xreg=xreg, xregDo=xregDo, initialX=initialX,
                           updateX=updateX, persistenceX=persistenceX, transitionX=transitionX,
                           ICs=ICs,ICw=icWeights,cf=NULL,cfType=cfType,accuracy=errormeasures);
@@ -736,7 +739,7 @@ auto.msarima <- function(data, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c
                              constant=constantValue, initial=initialType, cfType=cfType,
                              h=h, holdout=holdout, cumulative=cumulative,
                              intervals=intervalsType, level=level,
-                             intermittent=intermittent, imodel=imodel,
+                             occurrence=occurrence, oesmodel=oesmodel,
                              bounds=bounds, silent=TRUE,
                              xreg=xreg, xregDo=xregDo, initialX=initialX,
                              updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);

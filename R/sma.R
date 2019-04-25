@@ -112,7 +112,7 @@ sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC","BICc"),
     list2env(list(...),environment());
 
 # If a previous model provided as a model, write down the variables
-    if(exists("model")){
+    if(exists("model",inherits=FALSE)){
         if(is.null(model$model)){
             stop("The provided model is not Simple Moving Average!",call.=FALSE);
         }
@@ -125,13 +125,12 @@ sma <- function(data, order=NULL, ic=c("AICc","AIC","BIC","BICc"),
     }
 
     initial <- "backcasting";
-    intermittent <- "none";
-    imodel <- NULL;
+    occurrence <- "none";
+    oesmodel <- NULL;
     bounds <- "admissible";
     cfType <- "MSE";
     xreg <- NULL;
     nExovars <- 1;
-    ivar <- 0;
 
 ##### Set environment for ssInput and make all the checks #####
     environment(ssInput) <- environment();
@@ -223,7 +222,7 @@ CreatorSMA <- function(silentText=FALSE,...){
     C <- NULL;
     cfObjective <- CF(C);
 
-    ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
+    ICValues <- ICFunction(nParam=nParam,nParamOccurrence=nParamOccurrence,
                            C=C,Etype=Etype);
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
@@ -268,10 +267,10 @@ CreatorSMA <- function(silentText=FALSE,...){
     if(holdout==T){
         yHoldout <- ts(data[(obsInsample+1):obsAll],start=yForecastStart,frequency=frequency(data));
         if(cumulative){
-            errormeasures <- Accuracy(sum(yHoldout),yForecast,h*y);
+            errormeasures <- measures(sum(yHoldout),yForecast,h*y);
         }
         else{
-            errormeasures <- Accuracy(yHoldout,yForecast,y);
+            errormeasures <- measures(yHoldout,yForecast,y);
         }
 
         if(cumulative){
@@ -315,7 +314,7 @@ CreatorSMA <- function(silentText=FALSE,...){
                   order=order, initial=matvt[1,], initialType=initialType, nParam=parametersNumber,
                   fitted=yFitted,forecast=yForecast,lower=yLower,upper=yUpper,residuals=errors,
                   errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
-                  actuals=data,holdout=yHoldout,imodel=NULL,
+                  actuals=data,holdout=yHoldout,occurrence=NULL,
                   ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,accuracy=errormeasures);
     return(structure(model,class="smooth"));
 }

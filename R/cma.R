@@ -76,19 +76,6 @@ cma <- function(data, order=NULL, silent=TRUE){
     holdout <- FALSE;
     h <- 0;
 
-    # If a previous model provided as a model, write down the variables
-    if(exists("model")){
-        if(is.null(model$model)){
-            stop("The provided model is not a Centered Moving Average!",call.=FALSE);
-        }
-        else if(smoothType(model)!="CMA"){
-            stop("The provided model is not a Centered Moving Average!",call.=FALSE);
-        }
-        else{
-            order <- model$order;
-        }
-    }
-
     ##### data #####
     if(any(is.smooth.sim(data))){
         data <- data$data;
@@ -164,7 +151,7 @@ cma <- function(data, order=NULL, silent=TRUE){
         errors <- residuals(smaModel);
     }
     else{
-        ssarimaModel <- ssarima(y, orders=c(order+1,0,0), AR=c(0.5,rep(1,order-1),0.5)/order,
+        ssarimaModel <- msarima(y, orders=c(order+1,0,0), AR=c(0.5,rep(1,order-1),0.5)/order,
                          h=order, holdout=FALSE, silent=TRUE);
         yFitted <- c(ssarimaModel$fitted[-c(1:(order/2))],ssarimaModel$forecast);
         smaModel <- sma(y, order=1, h=order, holdout=FALSE, cumulative=FALSE, silent=TRUE);

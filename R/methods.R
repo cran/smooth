@@ -84,10 +84,10 @@ smoothType <- function(object, ...) UseMethod("smoothType")
 #' @export
 AICc.smooth <- function(object, ...){
     llikelihood <- logLik(object);
-    nParamAll <- nParam(object);
+    nParamAll <- nparam(object);
     llikelihood <- llikelihood[1:length(llikelihood)];
 
-    if(!is.null(object$imodel)){
+    if(!is.null(object$occurrence)){
         obs <- sum(object$fitted!=0);
         nParamSizes <- nParamAll - object$nParam[1,3];
         IC <- (2*nParamAll - 2*llikelihood +
@@ -105,10 +105,10 @@ AICc.smooth <- function(object, ...){
 #' @export
 BICc.smooth <- function(object, ...){
     llikelihood <- logLik(object);
-    nParamAll <- nParam(object);
+    nParamAll <- nparam(object);
     llikelihood <- llikelihood[1:length(llikelihood)];
 
-    if(!is.null(object$imodel)){
+    if(!is.null(object$occurrence)){
         obs <- sum(object$fitted!=0);
         nParamSizes <- nParamAll - object$nParam[1,3];
         IC <- - 2*llikelihood + (nParamSizes * log(obs) * obs) / (obs - nParamSizes - 1);
@@ -192,7 +192,7 @@ covar.smooth <- function(object, type=c("analytical","empirical","simulated"), .
         type <- "e";
     }
 
-    if(!is.null(object$imodel) & type=="e"){
+    if(!is.null(object$occurrence) & type=="e"){
         warning(paste0("Empirical covariance matrix can be very inaccurate in cases of ",
                        "intemittent models.\nWe recommend using type='s' or type='a' instead."),
                 call.=FALSE);
@@ -206,15 +206,15 @@ covar.smooth <- function(object, type=c("analytical","empirical","simulated"), .
         else{
             errors <- log(1 + object$errors);
         }
-        if(!is.null(object$imodel)){
+        if(!is.null(object$occurrence)){
             obs <- t((errors!=0)*1) %*% (errors!=0)*1;
             obs[obs==0] <- 1;
-            df <- obs - nParam(object);
+            df <- obs - nparam(object);
             df[df<=0] <- obs[df<=0];
         }
         else{
             obs <- matrix(nobs(object),ncol(errors),ncol(errors));
-            df <- obs - nParam(object);
+            df <- obs - nparam(object);
             df[df<=0] <- obs[df<=0];
         }
         covarMat <- t(errors) %*% errors / df;
@@ -227,7 +227,7 @@ covar.smooth <- function(object, type=c("analytical","empirical","simulated"), .
             obs <- ellipsis$obs;
         }
         else{
-            obs <- length(getResponse(object));
+            obs <- length(actuals(object));
         }
         if(any(names(ellipsis)=="nsim")){
             nsim <- ellipsis$nsim;
@@ -280,7 +280,7 @@ covar.smooth <- function(object, type=c("analytical","empirical","simulated"), .
             }
 
             # Calculate covariance matrix
-            if(!is.null(object$imodel)){
+            if(!is.null(object$occurrence)){
                 obsInSample <- t((errors!=0)*1) %*% (errors!=0)*1;
                 obsInSample[obsInSample==0] <- 1;
             }
@@ -294,7 +294,7 @@ covar.smooth <- function(object, type=c("analytical","empirical","simulated"), .
     }
     # Analytical covariance matrix
     else if(type=="a"){
-        if(!is.null(object$imodel)){
+        if(!is.null(object$occurrence)){
             ot <- (residuals(object)!=0)*1;
         }
         else{
@@ -322,7 +322,7 @@ logLik.smooth <- function(object,...){
         return(NULL);
     }
     else{
-        return(structure(object$logLik,nobs=nobs(object),df=nParam(object),class="logLik"));
+        return(structure(object$logLik,nobs=nobs(object),df=nparam(object),class="logLik"));
     }
 }
 #' @export
@@ -338,7 +338,7 @@ logLik.iss <- function(object,...){
     }
     else{
         obs <- nobs(object);
-        return(structure(object$logLik,nobs=obs,df=nParam(object),class="logLik"));
+        return(structure(object$logLik,nobs=obs,df=nparam(object),class="logLik"));
     }
 }
 
@@ -362,10 +362,10 @@ nobs.iss <- function(object, ...){
     return(length(object$fitted));
 }
 
-#' @importFrom greybox nParam
+#' @importFrom greybox nparam
 
 #' @export
-nParam.smooth <- function(object, ...){
+nparam.smooth <- function(object, ...){
     if(is.null(object$nParam)){
         warning("Number of parameters of the model is unavailable. Hint: did you use combinations?",
                 call.=FALSE);
@@ -377,7 +377,7 @@ nParam.smooth <- function(object, ...){
 }
 
 #' @export
-nParam.iss <- function(object, ...){
+nparam.iss <- function(object, ...){
     return(object$nParam);
 }
 
@@ -519,14 +519,14 @@ pls.smooth <- function(object, holdout=NULL, ...){
     # Additive models
     if(Etype=="A"){
         # Non-intermittent data
-        if(is.null(object$imodel)){
+        if(is.null(object$occurrence)){
             errors <- holdout - yForecast;
             plsValue <- densityFunction(cfType, errors, covarMat);
         }
         # Intermittent data
         else{
             ot <- holdout!=0;
-            pForecast <- object$imodel$forecast;
+            pForecast <- object$occurrence$forecast;
             errors <- holdout - yForecast / pForecast;
             if(all(ot)){
                 plsValue <- densityFunction(cfType, errors, covarMat) + sum(log(pForecast));
@@ -545,14 +545,14 @@ pls.smooth <- function(object, holdout=NULL, ...){
     # Multiplicative models
     else{
         # Non-intermittent data
-        if(is.null(object$imodel)){
+        if(is.null(object$occurrence)){
             errors <- log(holdout) - log(yForecast);
             plsValue <- densityFunction(cfType, errors, covarMat) - sum(log(holdout));
         }
         # Intermittent data
         else{
             ot <- holdout!=0;
-            pForecast <- object$imodel$forecast;
+            pForecast <- object$occurrence$forecast;
             errors <- log(holdout) - log(yForecast / pForecast);
             if(all(ot)){
                 plsValue <- (densityFunction(cfType, errors, covarMat) - sum(log(holdout)) +
@@ -590,7 +590,7 @@ pointLik.smooth <- function(object, ...){
 
     if(errorType(object)=="M"){
         errors <- log(1+errors);
-        likValues <- likValues - log(getResponse(object));
+        likValues <- likValues - log(actuals(object));
     }
 
     if(any(cfType==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
@@ -666,9 +666,7 @@ coef.smooth <- function(object, ...)
     return(parameters);
 }
 
-#' @importFrom forecast getResponse
-#' @export
-forecast::getResponse
+#' @importFrom greybox actuals
 
 #### Fitted, forecast and actual values ####
 #' @export
@@ -771,12 +769,13 @@ forecast.smooth <- function(object, h=10,
 }
 
 #' @importFrom stats window
+#' @importFrom greybox actuals
 #' @export
-getResponse.smooth <- function(object, ...){
+actuals.smooth <- function(object, ...){
     return(window(object$actuals,start(object$actuals),end(object$fitted)));
 }
 #' @export
-getResponse.smooth.forecast <- function(object, ...){
+actuals.smooth.forecast <- function(object, ...){
     return(window(object$model$actuals,start(object$model$actuals),end(object$model$fitted)));
 }
 
@@ -791,7 +790,7 @@ lags.ets <- function(object, ...){
     modelName <- modelType(object);
     lags <- c(1);
     if(substr(modelName,nchar(modelName),nchar(modelName))!="N"){
-        lags <- c(lags,frequency(getResponse(object)));
+        lags <- c(lags,frequency(actuals(object)));
     }
     return(lags);
 }
@@ -834,12 +833,12 @@ lags.smooth <- function(object, ...){
             modelName <- modelType(object);
             lags <- c(1);
             if(substr(modelName,nchar(modelName),nchar(modelName))!="N"){
-                lags <- c(lags,frequency(getResponse(object)));
+                lags <- c(lags,frequency(actuals(object)));
             }
         }
         else if(smoothType=="CES"){
             modelName <- modelType(object);
-            dataFreq <- frequency(getResponse(object));
+            dataFreq <- frequency(actuals(object));
             if(modelName=="none"){
                 lags <- c(1);
             }
@@ -1056,6 +1055,11 @@ modelType.iss <- function(object, ...){
     return(object$model);
 }
 
+#' @export
+modelType.oesg <- function(object, ...){
+    return(modelType(object$modelA));
+}
+
 #### Function extracts orders of provided model ####
 #' @export
 orders.default <- function(object, ...){
@@ -1152,6 +1156,18 @@ orders.Arima <- function(object, ...){
 
 #### Plots of smooth objects ####
 #' @importFrom graphics plot
+#' @export
+plot.oes <- function(x, ...){
+    ellipsis <- list(...);
+
+    if(is.null(ellipsis$main)){
+        graphmaker(x$actuals,x$forecast,x$fitted,x$lower,x$upper,main=x$model,...);
+    }
+    else{
+        graphmaker(x$actuals,x$forecast,x$fitted,x$lower,x$upper, ...);
+    }
+}
+
 #' @export
 plot.smooth <- function(x, ...){
     ellipsis <- list(...);
@@ -1354,7 +1370,7 @@ print.smooth <- function(x, ...){
             if(any(smoothType==c("SMA","CMA"))){
                 x$iprob <- 1;
                 x$initialType <- "b";
-                intermittent <- "n";
+                occurrence <- "n";
             }
             else if(smoothType=="ETS"){
                 # If cumulative forecast and Etype=="M", report that this was "parameteric" interval
@@ -1364,11 +1380,11 @@ print.smooth <- function(x, ...){
             }
         }
     }
-    if(is.iss(x$imodel)){
-        intermittent <- x$imodel$intermittent;
+    if(is.oes(x$occurrence)){
+        occurrence <- x$occurrence$occurrence;
     }
     else{
-        intermittent <- "n";
+        occurrence <- "n";
     }
 
     ssOutput(x$timeElapsed, x$model, persistence=x$persistence, transition=x$transition, measurement=x$measurement,
@@ -1377,7 +1393,7 @@ print.smooth <- function(x, ...){
              cfType=x$cfType, cfObjective=x$cf, intervals=intervals, cumulative=cumulative,
              intervalsType=intervalsType, level=x$level, ICs=x$ICs,
              holdout=holdout, insideintervals=insideintervals, errormeasures=x$accuracy,
-             intermittent=intermittent);
+             occurrence=occurrence);
 }
 
 #' @export
@@ -1402,8 +1418,8 @@ print.smooth.sim <- function(x, ...){
             if(x$phi!=1){
                 cat(paste0("Phi: ",x$phi,"\n"));
             }
-            if(x$intermittent!="n"){
-                cat(paste0("Intermittence type: ",x$intermittent,"\n"));
+            if(any(x$occurrence!=1)){
+                cat(paste0("The data is produced based on an occurrence model.\n"));
             }
             cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
         }
@@ -1542,7 +1558,47 @@ print.iss <- function(x, ...){
     print(ICs);
 }
 
+#' @export
+print.oes <- function(x, ...){
+    occurrence <- x$occurrence
+    if(occurrence=="g"){
+        occurrence <- "General";
+    }
+    else if(occurrence=="p"){
+        occurrence <- "Probability-based";
+    }
+    else if(occurrence=="f"){
+        occurrence <- "Fixed probability";
+    }
+    else if(occurrence=="i"){
+        occurrence <- "Inverse odds ratio";
+    }
+    else if(occurrence=="o"){
+        occurrence <- "Odds ratio";
+    }
+    else{
+        occurrence <- "None";
+    }
+    ICs <- round(c(AIC(x),AICc(x),BIC(x),BICc(x)),4);
+    names(ICs) <- c("AIC","AICc","BIC","BICc");
+    cat(paste0("Occurrence state space model estimated: ",occurrence,"\n"));
+    if(!is.null(x$model)){
+        cat(paste0("Underlying ETS model: ",x$model,"\n"));
+    }
+    if(!is.null(x$persistence)){
+        cat("Smoothing parameters:\n");
+        print(round(x$persistence[,1],3));
+    }
+    if(!is.null(x$initial)){
+        cat("Vector of initials:\n");
+        print(round(x$initial,3));
+    }
+    cat("Information criteria: \n");
+    print(ICs);
+}
+
 #### Simulate data using provided object ####
+#' @importFrom utils tail
 #' @export
 simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     ellipsis <- list(...);
@@ -1616,7 +1672,13 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     args$obs <- obs;
     args$nsim <- nsim;
     args$initial <- object$initial;
-    args$iprob <- object$iprob[length(object$iprob)];
+    # If this is an occurrence model, use the fitted values for the probabilities
+    if(is.list(object$occurrence)){
+        args$iprob <- fitted(object$occurrence);
+    }
+    else{
+        args$iprob <- 1;
+    }
 
     if(smoothType=="ETS"){
         model <- modelType(object);

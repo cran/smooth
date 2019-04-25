@@ -5,16 +5,16 @@
 \title{Vector Exponential Smoothing in SSOE state space model}
 \usage{
 ves(data, model = "ANN", persistence = c("group", "independent",
-  "dependent"), transition = c("group", "independent", "dependent"),
-  phi = c("group", "individual"), initial = c("individual", "group"),
-  initialSeason = c("group", "individual"), cfType = c("likelihood",
-  "diagonal", "trace"), ic = c("AICc", "AIC", "BIC", "BICc"), h = 10,
-  holdout = FALSE, intervals = c("none", "conditional",
-  "unconditional", "independent"), level = 0.95, cumulative = FALSE,
-  intermittent = c("none", "fixed", "logistic"), imodel = "ANN",
-  iprobability = c("dependent", "independent"),
-  bounds = c("admissible", "usual", "none"), silent = c("all", "graph",
-  "output", "none"), ...)
+  "dependent", "seasonal"), transition = c("group", "independent",
+  "dependent"), phi = c("group", "individual"),
+  initial = c("individual", "group"), initialSeason = c("group",
+  "individual"), cfType = c("likelihood", "diagonal", "trace"),
+  ic = c("AICc", "AIC", "BIC", "BICc"), h = 10, holdout = FALSE,
+  intervals = c("none", "conditional", "unconditional", "independent"),
+  level = 0.95, cumulative = FALSE, intermittent = c("none", "fixed",
+  "logistic"), imodel = "ANN", iprobability = c("dependent",
+  "independent"), bounds = c("admissible", "usual", "none"),
+  silent = c("all", "graph", "output", "none"), ...)
 }
 \arguments{
 \item{data}{The matrix with data, where series are in columns and
@@ -38,30 +38,34 @@ information criteria.}
 \item{persistence}{Persistence matrix \eqn{G}, containing smoothing
 parameters. Can be:
 \itemize{
-\item \code{independent} - each series has its own smoothing parameters
+\item \code{"independent"} - each series has its own smoothing parameters
 and no interactions are modelled (all the other values in the matrix are set
 to zero);
-\item \code{dependent} - each series has its own smoothing parameters, but
+\item \code{"dependent"} - each series has its own smoothing parameters, but
 interactions between the series are modelled (the whole matrix is estimated);
-\item \code{group} each series has the same smoothing parameters for respective
+\item \code{"group"} each series has the same smoothing parameters for respective
 components (the values of smoothing parameters are repeated, all the other values
 in the matrix are set to zero).
+\item \code{"seasonal"} - each component has its own smoothing parameter, except
+for the seasonal one, which is common across the time series.
 \item provided by user as a vector or as a matrix. The value is used by the model.
-}}
+}
+You can also use the first letter instead of writing the full word.}
 
 \item{transition}{Transition matrix \eqn{F}. Can be:
 \itemize{
-\item \code{independent} - each series has its own preset transition matrix
+\item \code{"independent"} - each series has its own preset transition matrix
 and no interactions are modelled (all the other values in the matrix are set
 to zero);
-\item \code{dependent} - each series has its own transition matrix, but
+\item \code{"dependent"} - each series has its own transition matrix, but
 interactions between the series are modelled (the whole matrix is estimated). The
 estimated model behaves similar to VAR in this case;
-\item \code{group} each series has the same transition matrix for respective
+\item \code{"group"} each series has the same transition matrix for respective
 components (the values are repeated, all the other values in the matrix are set to
 zero).
 \item provided by user as a vector or as a matrix. The value is used by the model.
-}}
+}
+You can also use the first letter instead of writing the full word.}
 
 \item{phi}{In cases of damped trend this parameter defines whether the \eqn{phi}
 should be estimated separately for each series (\code{individual}) or for the whole
@@ -99,26 +103,27 @@ is minimised in this case.
 \item{holdout}{If \code{TRUE}, holdout sample of size \code{h} is taken from
 the end of the data.}
 
-\item{intervals}{Type of intervals to construct. NOT AVAILABLE YET!
+\item{intervals}{Type of intervals to construct.
 
 This can be:
 
 \itemize{
-\item \code{none}, aka \code{n} - do not produce prediction
+\item \code{"none"}, aka \code{n} - do not produce prediction
 intervals.
-\item \code{conditional}, \code{c} - produces multidimensional elliptic
-intervals for each step ahead forecast.
-\item \code{unconditional}, \code{u} - produces separate bounds for each series
+\item \code{"conditional"}, \code{c} - produces multidimensional elliptic
+intervals for each step ahead forecast. NOT AVAILABLE YET!
+\item \code{"unconditional"}, \code{u} - produces separate bounds for each series
 based on ellipses for each step ahead. These bounds correspond to min and max
 values of the ellipse assuming that all the other series but one take values in
 the centre of the ellipse. This leads to less accurate estimates of bounds
-(wider intervals than needed), but these could still be useful.
-\item \code{independent}, \code{i} - produces intervals based on variances of
+(wider intervals than needed), but these could still be useful. NOT AVAILABLE YET!
+\item \code{"independent"}, \code{i} - produces intervals based on variances of
 each separate series. This does not take vector structure into account.
 }
 The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
-conditional intervals are constructed, while the latter is equivalent to
-\code{none}.}
+the independent intervals are constructed, while the latter is equivalent to
+\code{none}.
+You can also use the first letter instead of writing the full word.}
 
 \item{level}{Confidence level. Defines width of prediction interval.}
 

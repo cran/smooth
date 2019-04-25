@@ -520,6 +520,15 @@ CreatorGSI <- function(silent=FALSE,...){
                                dimnames=list(c("Estimated","Provided"),
                                              c("nParamInternal","nParamXreg","nParamIntermittent","nParamAll")));
 
+    if(any(is.null(weights))){
+        warning("The weights are not provided. Substituting them by equal ones.", call.=FALSE);
+        weights <- rep(1/nSeries, nSeries);
+    }
+    else if(any(is.na(weights))){
+        warning("The weights are NAs. Substituting them by equal ones.", call.=FALSE);
+        weights <- rep(1/nSeries, nSeries);
+    }
+
 ##### Cost function type #####
     cfType <- cfType[1];
     if(!any(cfType==c("likelihood","diagonal","trace","l","d","t"))){
@@ -693,13 +702,13 @@ CreatorGSI <- function(silent=FALSE,...){
         yHoldout <- ts(data[(obsInSample+1):obsAll,],start=forecastStart,frequency=dataFreq);
         colnames(yHoldout) <- dataNames;
 
-        measureFirst <- Accuracy(yHoldout[,1],yForecast[,1],y[,1]);
+        measureFirst <- measures(yHoldout[,1],yForecast[,1],y[1,]);
         errorMeasures <- matrix(NA,nSeries,length(measureFirst));
         rownames(errorMeasures) <- dataNames;
         colnames(errorMeasures) <- names(measureFirst);
         errorMeasures[1,] <- measureFirst;
         for(i in 2:nSeries){
-            errorMeasures[i,] <- Accuracy(yHoldout[,i],yForecast[,i],y[,i]);
+            errorMeasures[i,] <- measures(yHoldout[,i],yForecast[,i],y[i,]);
         }
     }
     else{

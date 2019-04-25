@@ -57,8 +57,8 @@ auto.gum <- function(data, orderMax=3, lagMax=frequency(data), type=c("A","M","Z
                      cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                      h=10, holdout=FALSE, cumulative=FALSE,
                      intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-                     intermittent=c("none","auto","fixed","interval","probability","sba","logistic"),
-                     imodel="MNN",
+                     occurrence=c("none","auto","fixed","general","odds-ratio","inverse-odds-ratio","direct"),
+                     oesmodel="MNN",
                      bounds=c("restricted","admissible","none"),
                      silent=c("all","graph","legend","output","none"),
                      xreg=NULL, xregDo=c("use","select"), initialX=NULL,
@@ -94,8 +94,15 @@ auto.gum <- function(data, orderMax=3, lagMax=frequency(data), type=c("A","M","Z
     }
 
     type <- substr(type[1],1,1);
-    if(type=="Z"){
-        type <- c("A","M");
+    # Check if the multiplictive model is possible
+    if(any(type==c("Z","M"))){
+        if(any(y<=0)){
+            warning("Multiplicative model can only be used on positive data. Switching to the additive one.",call.=FALSE);
+            type <- "A";
+        }
+        if(type=="Z"){
+            type <- c("A","M");
+        }
     }
 
     icsFinal <- rep(NA,length(type));
@@ -139,7 +146,7 @@ auto.gum <- function(data, orderMax=3, lagMax=frequency(data), type=c("A","M","Z
                             initial=initial,cfType=cfType,
                             cumulative=cumulative,
                             intervals=intervalsType, level=level,
-                            intermittent=intermittent, imodel=imodel,
+                            occurrence=occurrence, oesmodel=oesmodel,
                             bounds=bounds,
                             xreg=xreg, xregDo=xregDo, initialX=initialX,
                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, ...);
@@ -180,7 +187,7 @@ auto.gum <- function(data, orderMax=3, lagMax=frequency(data), type=c("A","M","Z
                                 initial=initial,cfType=cfType,
                                 cumulative=cumulative,
                                 intervals=intervalsType, level=level,
-                                intermittent=intermittent, imodel=imodel,
+                                occurrence=occurrence, oesmodel=oesmodel,
                                 bounds=bounds,
                                 xreg=xreg, xregDo=xregDo, initialX=initialX,
                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, ...);
@@ -222,13 +229,13 @@ auto.gum <- function(data, orderMax=3, lagMax=frequency(data), type=c("A","M","Z
                             initial=initial,cfType=cfType,
                             cumulative=cumulative,
                             intervals=intervalsType, level=level,
-                            intermittent=intermittent, imodel=imodel,
+                            occurrence=occurrence, oesmodel=oesmodel,
                             bounds=bounds,
                             xreg=xreg, xregDo=xregDo, initialX=initialX,
                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, ...);
             ics[i] <- gumModel$ICs[ic];
         }
-        ordersBest <- which(ics==min(ics,na.rm=TRUE),arr.ind=TRUE)
+        ordersBest <- which(ics==min(ics,na.rm=TRUE),arr.ind=TRUE);
         if(!silentText){
             cat("\b");
             cat("Orders found.\n");
@@ -238,7 +245,7 @@ auto.gum <- function(data, orderMax=3, lagMax=frequency(data), type=c("A","M","Z
         lagsFinal[[t]] <- lagsBest;
         ordersFinal[[t]] <- ordersBest;
     }
-    t <- which(icsFinal==min(icsFinal));
+    t <- which(icsFinal==min(icsFinal))[1];
 
     if(!silentText){
         cat("Reestimating the model. ");
@@ -249,7 +256,7 @@ auto.gum <- function(data, orderMax=3, lagMax=frequency(data), type=c("A","M","Z
                      initial=initial,cfType=cfType,
                      cumulative=cumulative,
                      intervals=intervalsType, level=level,
-                     intermittent=intermittent, imodel=imodel,
+                     occurrence=occurrence, oesmodel=oesmodel,
                      bounds=bounds,
                      xreg=xreg, xregDo=xregDo, initialX=initialX,
                      updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, ...);

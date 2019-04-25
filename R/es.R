@@ -1,7 +1,7 @@
 utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dataFreq","initialType",
                          "yot","maxlag","silent","allowMultiplicative","modelCurrent",
-                         "nParamIntermittent","matF","matw","pForecast","errors.mat",
-                         "iprob","results","s2","FI","intermittent","normalizer",
+                         "nParamOccurrence","matF","matw","pForecast","errors.mat",
+                         "results","s2","FI","occurrence","normalizer",
                          "persistenceEstimate","initial","multisteps","ot",
                          "silentText","silentGraph","silentLegend","yForecastStart",
                          "icBest","icSelection","icWeights"));
@@ -14,7 +14,6 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' Function estimates ETS in a form of the Single Source of Error state space
 #' model of the following type:
 #'
-#' \deqn{y_{t} = o_{t} (w(v_{t-l}) + x_t a_{t-1} + r(v_{t-l}) \epsilon_{t})}
 #'
 #' \deqn{v_{t} = f(v_{t-l}) + g(v_{t-l}) \epsilon_{t}}
 #'
@@ -114,7 +113,8 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' \item \code{nParam} - table with the number of estimated / provided parameters.
 #' If a previous model was reused, then its initials are reused and the number of
 #' provided parameters will take this into account.
-#' \item \code{fitted} - fitted values of ETS.
+#' \item \code{fitted} - fitted values of ETS. In case of the intermittent model, the
+#' fitted are multiplied by the probability of occurrence.
 #' \item \code{forecast} - point forecast of ETS.
 #' \item \code{lower} - lower bound of prediction interval. When \code{intervals="none"}
 #' then NA is returned.
@@ -131,8 +131,8 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' \item \code{cumulative} - whether the produced forecast was cumulative or not.
 #' \item \code{actuals} - original data.
 #' \item \code{holdout} - holdout part of the original data.
-#' \item \code{imodel} - model of the class "iss" if intermittent model was estimated.
-#' If the model is non-intermittent, then imodel is \code{NULL}.
+#' \item \code{occurrence} - model of the class "oes" if the occurrence model was estimated.
+#' If the model is non-intermittent, then occurrence is \code{NULL}.
 #' \item \code{xreg} - provided vector or matrix of exogenous variables. If \code{xregDo="s"},
 #' then this value will contain only selected exogenous variables.
 #' \item \code{updateX} - boolean, defining, if the states of exogenous variables were
@@ -172,7 +172,7 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #' \item \code{cumulative},
 #' \item \code{actuals},
 #' \item \code{holdout},
-#' \item \code{imodel},
+#' \item \code{occurrence},
 #' \item \code{ICs} - combined ic,
 #' \item \code{ICw} - ic weights used in the combination,
 #' \item \code{cfType},
@@ -223,14 +223,14 @@ utils::globalVariables(c("vecg","nComponents","modellags","phiEstimate","y","dat
 #'
 #' # Intermittent data example
 #' x <- rpois(100,0.2)
-#' # Intervals-based model (Croston's method) with the best ETS for demand sizes
-#' es(x,"ZZN",intermittent="i")
-#' # Intervals-based model (TSB) on iETS(M,N,N)
-#' es(x,"MNN",intermittent="p")
+#' # Odds ratio model with the best ETS for demand sizes
+#' es(x,"ZZN",occurrence="o")
+#' # Inverse odds ratio model (underlies Croston) on iETS(M,N,N)
+#' es(x,"MNN",occurrence="i")
 #' # Constant probability based on iETS(M,N,N)
-#' es(x,"MNN",intermittent="fixed")
-#' # Best type of intermittent model based on iETS(Z,Z,N)
-#' ourModel <- es(x,"ZZN",intermittent="auto")
+#' es(x,"MNN",occurrence="fixed")
+#' # Best type of occurrence model based on iETS(Z,Z,N)
+#' ourModel <- es(x,"ZZN",occurrence="auto")
 #'
 #' summary(ourModel)
 #' forecast(ourModel)
@@ -242,8 +242,8 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
                cfType=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                h=10, holdout=FALSE, cumulative=FALSE,
                intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
-               intermittent=c("none","auto","fixed","interval","probability","sba","logistic"),
-               imodel="MNN",
+               occurrence=c("none","auto","fixed","general","odds-ratio","inverse-odds-ratio","direct"),
+               oesmodel="MNN",
                bounds=c("usual","admissible","none"),
                silent=c("all","graph","legend","output","none"),
                xreg=NULL, xregDo=c("use","select"), initialX=NULL,
@@ -270,9 +270,10 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
         if(smoothType(model)!="ETS"){
             stop("The provided model is not ETS.",call.=FALSE);
         }
-        if(!is.null(model$imodel)){
-            imodel <- model$imodel;
+        if(!is.null(model$occurrence)){
+            occurrence <- model$occurrence;
         }
+        # If this is the simulated data, extract the parameters
         if(is.smooth.sim(model) & !is.null(dim(model$data))){
             warning("The provided model has several submodels. Choosing a random one.",call.=FALSE);
             i <- round(runif(1,1:length(model$persistence)));
@@ -280,7 +281,7 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
             initial <- model$initial[,i];
             initialSeason <- model$initialSeason[,i];
             if(any(model$iprob!=1)){
-                intermittent <- "a";
+                occurrence <- "a";
             }
         }
         else{
@@ -288,7 +289,7 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
             initial <- model$initial;
             initialSeason <- model$initialSeason;
             if(any(model$iprob!=1)){
-                intermittent <- "a";
+                occurrence <- "a";
             }
         }
         phi <- model$phi;
@@ -317,7 +318,7 @@ es <- function(data, model="ZZZ", persistence=NULL, phi=NULL,
             initial <- "o";
         }
     }
-    else if(is.ets(model)){
+    else if(forecast::is.ets(model)){
         # Extract smoothing parameters
         i <- 1;
         persistence <- coef(model)[i];
@@ -387,7 +388,7 @@ CF <- function(C){
                       h, modellags, Etype, Ttype, Stype,
                       multisteps, cfType, normalizer, initialType,
                       matxt, elements$matat, elements$matFX, elements$vecgX, ot,
-                      bounds);
+                      bounds, elements$errorSD);
 
     if(is.nan(cfRes) | is.na(cfRes) | is.infinite(cfRes)){
         cfRes <- 1e+500;
@@ -424,7 +425,7 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,maxlag,nComponents,matat){
                 else{
                     if(Ttype=="A"){
                         # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
-                        C <- c(C,mean(y[1:dataFreq]),0);
+                        C <- c(C,mean(y[1:min(dataFreq,obsInsample)]),0);
                     }
                     else{
                         C <- c(C,abs(matvt[maxlag,1:(nComponents - (Stype!="N"))]));
@@ -716,6 +717,10 @@ EstimatorES <- function(...){
     }
 
     if(rounded){
+        # Take the estimate of RMSE as an initial estimate of SD
+        C <- c(C,sqrt(CF(C)));
+        CLower <- c(CLower,0);
+        CUpper <- c(CUpper,Inf);
         cfType <- "Rounded";
     }
 
@@ -728,7 +733,7 @@ EstimatorES <- function(...){
     }
     C <- res$solution;
 
-    if(all(C==Cs$C) & (initialType!="b")){
+    if(!rounded && (initialType!="b") && all(C==Cs$C)){
         if(any(persistenceEstimate,gXEstimate,FXEstimate)){
             warning(paste0("Failed to optimise the model ETS(", modelCurrent,
                            "). Try different initialisation maybe?\nAnd check all the messages and warnings...",
@@ -738,9 +743,9 @@ EstimatorES <- function(...){
     }
 
     # Parameters estimated + variance
-    nParam <- length(C) + 1;
+    nParam <- length(C) + 1*(!rounded);
 
-    ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
+    ICValues <- ICFunction(nParam=nParam,nParamOccurrence=nParamOccurrence,
                            C=res$solution,Etype=Etype);
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
@@ -766,7 +771,7 @@ XregSelector <- function(listToReturn){
     colnames(xregNew)[1] <- "errors";
     colnames(xregNew)[-1] <- xregNames;
     xregNew <- as.data.frame(xregNew);
-    xregResults <- stepwise(xregNew, ic=ic, silent=TRUE, df=nParam+nParamIntermittent-1);
+    xregResults <- stepwise(xregNew, ic=ic, silent=TRUE, df=nParam+nParamOccurrence-1);
     xregNames <- names(coef(xregResults))[-1];
     nExovars <- length(xregNames);
     if(nExovars>0){
@@ -801,6 +806,7 @@ XregSelector <- function(listToReturn){
             providedC <- c(C,coef(xregResults)[-1]);
         }
         phi <- NULL;
+
         res <- EstimatorES(ParentEnvironment=environment());
         icBest <- res$ICs[ic];
         logLik <- res$logLik;
@@ -831,18 +837,18 @@ PoolPreparerES <- function(...){
             if(!silent){
                 message("Only additive models are allowed with non-positive data.");
             }
-            errors.pool <- c("A");
-            trends.pool <- c("N","A","Ad");
-            season.pool <- c("N","A");
+            poolErrors <- c("A");
+            poolTrends <- c("N","A","Ad");
+            poolSeasonals <- c("N","A");
         }
         else{
-            errors.pool <- c("A","M");
-            trends.pool <- c("N","A","Ad","M","Md");
-            season.pool <- c("N","A","M");
+            poolErrors <- c("A","M");
+            poolTrends <- c("N","A","Ad","M","Md");
+            poolSeasonals <- c("N","A","M");
         }
 
         if(all(Etype!=c("Z","C"))){
-            errors.pool <- Etype;
+            poolErrors <- Etype;
         }
 
 # List for the estimated models in the pool
@@ -858,7 +864,7 @@ PoolPreparerES <- function(...){
 # Some preparation variables
             if(Etype!="Z"){
                 small.pool.error <- Etype;
-                errors.pool <- Etype;
+                poolErrors <- Etype;
             }
             else{
                 small.pool.error <- "A";
@@ -867,22 +873,22 @@ PoolPreparerES <- function(...){
             if(Ttype!="Z"){
                 if(Ttype=="X"){
                     small.pool.trend <- c("N","A");
-                    trends.pool <- c("N","A","Ad");
+                    poolTrends <- c("N","A","Ad");
                     check.T <- TRUE;
                 }
                 else if(Ttype=="Y"){
                     small.pool.trend <- c("N","M");
-                    trends.pool <- c("N","M","Md");
+                    poolTrends <- c("N","M","Md");
                     check.T <- TRUE;
                 }
                 else{
                     if(damped){
                         small.pool.trend <- paste0(Ttype,"d");
-                        trends.pool <- small.pool.trend;
+                        poolTrends <- small.pool.trend;
                     }
                     else{
                         small.pool.trend <- Ttype;
-                        trends.pool <- Ttype;
+                        poolTrends <- Ttype;
                     }
                     check.T <- FALSE;
                 }
@@ -895,17 +901,17 @@ PoolPreparerES <- function(...){
             if(Stype!="Z"){
                 if(Stype=="X"){
                     small.pool.season <- c("N","A");
-                    season.pool <- c("N","A");
+                    poolSeasonals <- c("N","A");
                     check.S <- TRUE;
                 }
                 else if(Stype=="Y"){
                     small.pool.season <- c("N","M");
-                    season.pool <- c("N","M");
+                    poolSeasonals <- c("N","M");
                     check.S <- TRUE;
                 }
                 else{
                     small.pool.season <- Stype;
-                    season.pool <- Stype;
+                    poolSeasonals <- Stype;
                     check.S <- FALSE;
                 }
             }
@@ -971,21 +977,21 @@ PoolPreparerES <- function(...){
                     if(results[[besti]]$ICs[ic] <= results[[i]]$ICs[ic]){
 # If Ttype is the same, then we checked seasonality
                         if(substring(modelCurrent,2,2) == substring(small.pool[bestj],2,2)){
-                            season.pool <- results[[besti]]$Stype;
+                            poolSeasonals <- results[[besti]]$Stype;
                             check.S <- FALSE;
                             j <- which(small.pool!=small.pool[bestj] &
-                                           substring(small.pool,nchar(small.pool),nchar(small.pool))==season.pool);
+                                           substring(small.pool,nchar(small.pool),nchar(small.pool))==poolSeasonals);
                         }
 # Otherwise we checked trend
                         else{
-                            trends.pool <- results[[bestj]]$Ttype;
+                            poolTrends <- results[[bestj]]$Ttype;
                             check.T <- FALSE;
                         }
                     }
                     else{
                         if(substring(modelCurrent,2,2) == substring(small.pool[besti],2,2)){
-                            season.pool <- season.pool[season.pool!=results[[besti]]$Stype];
-                            if(length(season.pool)>1){
+                            poolSeasonals <- poolSeasonals[poolSeasonals!=results[[besti]]$Stype];
+                            if(length(poolSeasonals)>1){
 # Select another seasonal model, that is not from the previous iteration and not the current one
                                 bestj <- j;
                                 besti <- i;
@@ -994,13 +1000,13 @@ PoolPreparerES <- function(...){
                             else{
                                 bestj <- j;
                                 besti <- i;
-                                j <- which(substring(small.pool,nchar(small.pool),nchar(small.pool))==season.pool &
+                                j <- which(substring(small.pool,nchar(small.pool),nchar(small.pool))==poolSeasonals &
                                           substring(small.pool,2,2)!=substring(modelCurrent,2,2));
                                 check.S <- FALSE;
                             }
                         }
                         else{
-                            trends.pool <- trends.pool[trends.pool!=results[[bestj]]$Ttype];
+                            poolTrends <- poolTrends[poolTrends!=results[[bestj]]$Ttype];
                             besti <- i;
                             bestj <- j;
                             check.T <- FALSE;
@@ -1016,9 +1022,9 @@ PoolPreparerES <- function(...){
                 }
             }
 
-            modelsPool <- paste0(rep(errors.pool,each=length(trends.pool)*length(season.pool)),
-                                  trends.pool,
-                                  rep(season.pool,each=length(trends.pool)));
+            modelsPool <- paste0(rep(poolErrors,each=length(poolTrends)*length(poolSeasonals)),
+                                  poolTrends,
+                                  rep(poolSeasonals,each=length(poolTrends)));
 
             modelsPool <- unique(c(tested.model,modelsPool));
             modelsNumber <- length(modelsPool);
@@ -1028,36 +1034,36 @@ PoolPreparerES <- function(...){
 # Make the corrections in the pool for combinations
             if(all(Ttype!=c("Z","C"))){
                 if(Ttype=="Y"){
-                    trends.pool <- c("N","M","Md");
+                    poolTrends <- c("N","M","Md");
                 }
                 else if(Ttype=="X"){
-                    trends.pool <- c("N","A","Ad");
+                    poolTrends <- c("N","A","Ad");
                 }
                 else{
                     if(damped){
-                        trends.pool <- paste0(Ttype,"d");
+                        poolTrends <- paste0(Ttype,"d");
                     }
                     else{
-                        trends.pool <- Ttype;
+                        poolTrends <- Ttype;
                     }
                 }
             }
             if(all(Stype!=c("Z","C"))){
                 if(Stype=="Y"){
-                    trends.pool <- c("N","M");
+                    poolTrends <- c("N","M");
                 }
                 else if(Stype=="X"){
-                    trends.pool <- c("N","A");
+                    poolTrends <- c("N","A");
                 }
                 else{
-                    season.pool <- Stype;
+                    poolSeasonals <- Stype;
                 }
             }
 
-            modelsNumber <- (length(errors.pool)*length(trends.pool)*length(season.pool));
-            modelsPool <- paste0(rep(errors.pool,each=length(trends.pool)*length(season.pool)),
-                                  trends.pool,
-                                  rep(season.pool,each=length(trends.pool)));
+            modelsNumber <- (length(poolErrors)*length(poolTrends)*length(poolSeasonals));
+            modelsPool <- paste0(rep(poolErrors,each=length(poolTrends)*length(poolSeasonals)),
+                                  poolTrends,
+                                  rep(poolSeasonals,each=length(poolTrends)));
             j <- 0;
         }
     }
@@ -1175,6 +1181,7 @@ CreatorES <- function(silent=FALSE,...){
                              cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=res$ICs,
                              nParam=res$nParam,FI=FI,logLik=res$logLik,xreg=xreg,
                              xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
+
         if(xregDo!="u"){
             listToReturn <- XregSelector(listToReturn=listToReturn);
         }
@@ -1206,7 +1213,7 @@ CreatorES <- function(silent=FALSE,...){
         # Only variance is estimated in this case
         nParam <- 1;
 
-        ICValues <- ICFunction(nParam=nParam,nParamIntermittent=nParamIntermittent,
+        ICValues <- ICFunction(nParam=nParam,nParamOccurrence=nParamOccurrence,
                                C=C,Etype=Etype);
         logLik <- ICValues$llikelihood;
         ICs <- ICValues$ICs;
@@ -1310,7 +1317,7 @@ CreatorES <- function(silent=FALSE,...){
     }
     else{
         # smoothingParameters <- cbind(c(0.2,0.1,0.05),rep(0.05,3));
-        if(intermittent=="n"){
+        if(occurrence=="n"){
             smoothingParameters <- cbind(c(0.3,0.2,0.1),c(0.1,0.05,0.01));
         }
         else{
@@ -1373,8 +1380,9 @@ CreatorES <- function(silent=FALSE,...){
     }
 
     nParamExo <- FXEstimate*length(matFX) + gXEstimate*nrow(vecgX) + initialXEstimate*ncol(matat);
-    nParamIntermittent <- all(intermittent!=c("n","provided"))*1;
-    nParamMax <- nParamMax + nParamExo + nParamIntermittent;
+    # If this is the intermittent model, then at least one more observation is needed.
+    nParamOccurrence <- all(occurrence!=c("n","p"))*1;
+    nParamMax <- nParamMax + nParamExo + nParamOccurrence;
 
     if(xregDo=="u"){
         parametersNumber[1,2] <- nParamExo;
@@ -1393,21 +1401,21 @@ CreatorES <- function(silent=FALSE,...){
                            "Updating pool of models."));
         }
 
-        if(obsNonzero > (3 + nParamExo + nParamIntermittent) & is.null(modelsPool)){
+        if(obsNonzero > (3 + nParamExo + nParamOccurrence) & is.null(modelsPool)){
             # We have enough observations for local level model
             modelsPool <- c("ANN");
             if(allowMultiplicative){
                 modelsPool <- c(modelsPool,"MNN");
             }
             # We have enough observations for trend model
-            if(obsNonzero > (5 + nParamExo + nParamIntermittent)){
+            if(obsNonzero > (5 + nParamExo + nParamOccurrence)){
                 modelsPool <- c(modelsPool,"AAN");
                 if(allowMultiplicative){
                     modelsPool <- c(modelsPool,"AMN","MAN","MMN");
                 }
             }
             # We have enough observations for damped trend model
-            if(obsNonzero > (6 + nParamExo + nParamIntermittent)){
+            if(obsNonzero > (6 + nParamExo + nParamOccurrence)){
                 modelsPool <- c(modelsPool,"AAdN");
                 if(allowMultiplicative){
                     modelsPool <- c(modelsPool,"AMdN","MAdN","MMdN");
@@ -1421,7 +1429,7 @@ CreatorES <- function(silent=FALSE,...){
                 }
             }
             # We have enough observations for seasonal model with trend
-            if((obsNonzero > (6 + dataFreq + nParamExo + nParamIntermittent)) & (obsNonzero > 2*dataFreq) & dataFreq!=1){
+            if((obsNonzero > (6 + dataFreq + nParamExo + nParamOccurrence)) & (obsNonzero > 2*dataFreq) & dataFreq!=1){
                 modelsPool <- c(modelsPool,"AAA");
                 if(allowMultiplicative){
                     modelsPool <- c(modelsPool,"AAM","AMA","AMM","MAA","MAM","MMA","MMM");
@@ -1444,17 +1452,16 @@ CreatorES <- function(silent=FALSE,...){
                 model <- "ZZZ";
             }
         }
-        else if(obsNonzero > (3 + nParamExo + nParamIntermittent) & !is.null(modelsPool)){
-            modelsPool.new <- modelsPool;
+        else if(obsNonzero > (3 + nParamExo + nParamOccurrence) & !is.null(modelsPool)){
             # We don't have enough observations for seasonal models with damped trend
-            if((obsNonzero <= (6 + dataFreq + 1 + nParamExo + nParamIntermittent))){
+            if((obsNonzero <= (6 + dataFreq + 1 + nParamExo + nParamOccurrence))){
                 modelsPool <- modelsPool[!(nchar(modelsPool)==4 &
                                                substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="A")];
                 modelsPool <- modelsPool[!(nchar(modelsPool)==4 &
                                                substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="M")];
             }
             # We don't have enough observations for seasonal models with trend
-            if((obsNonzero <= (5 + dataFreq + 1 + nParamExo + nParamIntermittent))){
+            if((obsNonzero <= (5 + dataFreq + 1 + nParamExo + nParamOccurrence))){
                 modelsPool <- modelsPool[!(substr(modelsPool,2,2)!="N" &
                                                substr(modelsPool,nchar(modelsPool),nchar(modelsPool))!="N")];
             }
@@ -1463,14 +1470,15 @@ CreatorES <- function(silent=FALSE,...){
                 modelsPool <- modelsPool[substr(modelsPool,nchar(modelsPool),nchar(modelsPool))=="N"];
             }
             # We don't have enough observations for damped trend
-            if(obsNonzero <= (6 + nParamExo + nParamIntermittent)){
+            if(obsNonzero <= (6 + nParamExo + nParamOccurrence)){
                 modelsPool <- modelsPool[nchar(modelsPool)!=4];
             }
             # We don't have enough observations for any trend
-            if(obsNonzero <= (5 + nParamExo + nParamIntermittent)){
+            if(obsNonzero <= (5 + nParamExo + nParamOccurrence)){
                 modelsPool <- modelsPool[substr(modelsPool,2,2)=="N"];
             }
 
+            modelsPool <- unique(modelsPool);
             warning("Not enough of non-zero observations for the fit of ETS(",model,")! Fitting what we can...",call.=FALSE);
             if(modelDo=="combine"){
                 model <- "CNN";
@@ -1725,77 +1733,72 @@ CreatorES <- function(silent=FALSE,...){
     EtypeOriginal <- Etype;
     TtypeOriginal <- Ttype;
     StypeOriginal <- Stype;
-# If auto intermittent, then estimate model with intermittent="n" first.
-    if(any(intermittent==c("a","n"))){
-        intermittentParametersSetter(intermittent="n",ParentEnvironment=environment());
-        if(intermittent=="a"){
-            if(Etype=="M"){
-                Etype <- "A";
-            }
-            if(Ttype=="M"){
-                Ttype <- "A";
-            }
-            if(Stype=="M"){
-                Stype <- "A";
-            }
+
+    #### The occurrence model ####
+# If auto occurrence, then estimate model with occurrence="n" first.
+    if(occurrence=="a"){
+        if(!silentText){
+            cat("Selecting the best occurrence model...\n");
         }
+        # First produce the auto model
+        intermittentParametersSetter(occurrence="a",ParentEnvironment=environment());
+        intermittentMaker(occurrence="a",ParentEnvironment=environment());
+        intermittentModel <- CreatorES(silent=silentText);
+        occurrenceBest <- occurrence;
+        occurrenceModelBest <- occurrenceModel;
+
+        Etype[] <- switch(Etype,
+                          "Z"=,
+                          "Y"=,
+                          "A"=,
+                          "M"="A"
+                          );
+        Ttype[] <- switch(Ttype,
+                          "Z"=,
+                          "Y"="X",
+                          "A"=,
+                          "M"="A",
+                          "N"="N"
+                          );
+        Stype[] <- switch(Stype,
+                          "Z"=,
+                          "Y"="X",
+                          "A"=,
+                          "M"="A",
+                          "N"="N"
+                          );
+
+        if(!silentText){
+            cat("Comparing it with the best non-intermittent model...\n");
+        }
+        # Then fit the model without the occurrence part
+        occurrence[] <- "n";
+        intermittentParametersSetter(occurrence=occurrence,ParentEnvironment=environment());
+        intermittentMaker(occurrence=occurrence,ParentEnvironment=environment());
+        nonIntermittentModel <- CreatorES(silent=silentText);
+
+        # Compare the results and return the best
+        if(nonIntermittentModel$icBest[ic] <= intermittentModel$icBest[ic]){
+            esValues <- nonIntermittentModel;
+        }
+        # If this is the "auto", then use the selected occurrence to reset the parameters
+        else{
+            Etype[] <- EtypeOriginal;
+            Ttype[] <- TtypeOriginal;
+            Stype[] <- StypeOriginal;
+            esValues <- intermittentModel;
+            occurrenceModel <- occurrenceModelBest;
+            occurrence[] <- occurrenceBest;
+            intermittentParametersSetter(occurrence=occurrence,ParentEnvironment=environment());
+            intermittentMaker(occurrence=occurrence,ParentEnvironment=environment());
+        }
+        rm(intermittentModel,nonIntermittentModel,occurrenceModelBest);
     }
     else{
-        intermittentParametersSetter(intermittent=intermittent,ParentEnvironment=environment());
-        intermittentMaker(intermittent=intermittent,ParentEnvironment=environment());
-    }
-    esValues <- CreatorES(silent=silentText);
+        intermittentParametersSetter(occurrence=occurrence,ParentEnvironment=environment());
+        intermittentMaker(occurrence=occurrence,ParentEnvironment=environment());
 
-##### If intermittent=="a", run a loop and select the best one #####
-    if(intermittent=="a"){
-        Etype <- EtypeOriginal;
-        Ttype <- TtypeOriginal;
-        Stype <- StypeOriginal;
-        if(!any(cfType==c("MSE","MAE","HAM","MSEh","MAEh","HAMh","MSCE","MACE","CHAM",
-                          "TFL","aTFL","Rounded","TSB","LogisticD","LogisticL"))){
-            warning(paste0("'",cfType,
-                           "' is used as cost function instead of 'MSE'. A wrong intermittent model may be selected"),
-                    call.=FALSE);
-        }
-        if(!silentText){
-            cat("Selecting appropriate type of intermittency... ");
-        }
-# Prepare stuff for intermittency selection
-        intermittentModelsPool <- c("n","f","i","p","s","l");
-        intermittentCFs <- intermittentICs <- rep(NA,length(intermittentModelsPool));
-        intermittentModelsList <- list(NA);
-        intermittentICs[1] <- esValues$icBest[ic];
-
-        for(i in 2:length(intermittentModelsPool)){
-            intermittentParametersSetter(intermittent=intermittentModelsPool[i],ParentEnvironment=environment());
-            intermittentMaker(intermittent=intermittentModelsPool[i],ParentEnvironment=environment());
-            intermittentModelsList[[i]] <- CreatorES(silent=TRUE);
-            intermittentICs[i] <- intermittentModelsList[[i]]$icBest[ic];
-            intermittentCFs[i] <- intermittentModelsList[[i]]$cfObjective;
-        }
-        intermittentICs[is.nan(intermittentICs) | is.na(intermittentICs)] <- 1e+100;
-        intermittentCFs[is.nan(intermittentCFs) | is.na(intermittentCFs)] <- 1e+100;
-        # In cases when the data is binary, choose between intermittent models only
-        if(any(intermittentCFs==0)){
-            if(all(intermittentCFs[2:length(intermittentModelsPool)]==0)){
-                intermittentICs[1] <- Inf;
-            }
-        }
-        iBest <- which(intermittentICs==min(intermittentICs))[1];
-
-        if(!silentText){
-            cat("Done!\n");
-        }
-        if(iBest!=1){
-            intermittent <- intermittentModelsPool[iBest];
-            esValues <- intermittentModelsList[[iBest]];
-        }
-        else{
-            intermittent <- "n"
-        }
-
-        intermittentParametersSetter(intermittent=intermittent,ParentEnvironment=environment());
-        intermittentMaker(intermittent=intermittent,ParentEnvironment=environment());
+        esValues <- CreatorES(silent=silentText);
     }
 
 ##### Fit simple model and produce forecast #####
@@ -1833,26 +1836,31 @@ CreatorES <- function(silent=FALSE,...){
         }
 
         ssFitter(ParentEnvironment=environment());
+        # If this was rounded values, extract the variance
+        if(rounded){
+            s2 <- C[length(C)]^2;
+            s2g <- log(1 + vecg %*% as.vector(errors*ot)) %*% t(log(1 + vecg %*% as.vector(errors*ot)))/obsInsample;
+        }
         ssForecaster(ParentEnvironment=environment());
 
-        component.names <- "level";
+        componentNames <- "level";
         if(Ttype!="N"){
-            component.names <- c(component.names,"trend");
+            componentNames <- c(componentNames,"trend");
         }
         if(Stype!="N"){
-            component.names <- c(component.names,"seasonal");
+            componentNames <- c(componentNames,"seasonal");
         }
 
         if(!is.null(xregNames)){
             matvt <- cbind(matvt,matat[1:nrow(matvt),]);
-            colnames(matvt) <- c(component.names,xregNames);
+            colnames(matvt) <- c(componentNames,xregNames);
             if(updateX){
                 rownames(vecgX) <- xregNames;
                 dimnames(matFX) <- list(xregNames,xregNames);
             }
         }
         else{
-            colnames(matvt) <- c(component.names);
+            colnames(matvt) <- c(componentNames);
         }
 
 # Write down the initials. Done especially for Nikos and issue #10
@@ -1955,7 +1963,7 @@ CreatorES <- function(silent=FALSE,...){
             }
             esFormula <- paste0(esFormula," * e[t]");
         }
-        if(intermittent!="n"){
+        if(occurrence!="n"){
             esFormula <- paste0("o[t] * (",esFormula,")");
         }
         esFormula <- paste0("y[t] = ",esFormula);
@@ -2058,7 +2066,7 @@ CreatorES <- function(silent=FALSE,...){
 
 # Write down the formula of ETS
         esFormula <- "y[t] = combination of ";
-        if(intermittent!="n"){
+        if(occurrence!="n"){
             esFormula <- paste0(esFormula,"i");
         }
         esFormula <- paste0(esFormula,"ETS");
@@ -2070,28 +2078,9 @@ CreatorES <- function(silent=FALSE,...){
     }
 
 ##### Do final check and make some preparations for output #####
-
-    # Write down the probabilities from intermittent models
-    pt <- ts(c(as.vector(pt),as.vector(pForecast)),start=dataStart,frequency=dataFreq);
-    # Write down the number of parameters of imodel
-    if(all(intermittent!=c("n","provided")) & !imodelProvided){
-        parametersNumber[1,3] <- imodel$nParam;
-    }
-    # Make nice names for intermittent
-    if(intermittent=="f"){
-        intermittent <- "fixed";
-    }
-    else if(intermittent=="i"){
-        intermittent <- "interval";
-    }
-    else if(intermittent=="p"){
-        intermittent <- "probability";
-    }
-    else if(intermittent=="l"){
-        intermittent <- "logistic";
-    }
-    else if(intermittent=="n"){
-        intermittent <- "none";
+    # Write down the number of parameters of occurrence part of the model
+    if(all(occurrence!=c("n","p")) & !occurrenceModelProvided){
+        parametersNumber[1,3] <- nparam(occurrenceModel);
     }
 
     if(!is.null(xregNames)){
@@ -2106,10 +2095,10 @@ CreatorES <- function(silent=FALSE,...){
     if(holdout){
         yHoldout <- ts(data[(obsInsample+1):obsAll],start=yForecastStart,frequency=dataFreq);
         if(cumulative){
-            errormeasures <- Accuracy(sum(yHoldout),yForecast,h*y);
+            errormeasures <- measures(sum(yHoldout),yForecast,h*y);
         }
         else{
-            errormeasures <- Accuracy(yHoldout,yForecast,y);
+            errormeasures <- measures(yHoldout,yForecast,y);
         }
 
         if(cumulative){
@@ -2127,9 +2116,12 @@ CreatorES <- function(silent=FALSE,...){
     else{
         modelname <- "ETS";
     }
-    modelname <- paste0(modelname,"(",model,")");
-    if(all(intermittent!=c("n","none"))){
+    modelnameForGraph <- modelname <- paste0(modelname,"(",model,")");
+    if(all(occurrence!=c("n","none"))){
         modelname <- paste0("i",modelname);
+        if(!silentGraph){
+            modelnameForGraph <- paste0(modelname,"[",toupper(occurrence),"](",modelType(occurrenceModel),")");
+        }
     }
 
 ##### Print output #####
@@ -2155,11 +2147,11 @@ CreatorES <- function(silent=FALSE,...){
 
         if(intervals){
             graphmaker(actuals=data,forecast=yForecastNew,fitted=yFitted, lower=yLowerNew,upper=yUpperNew,
-                       level=level,legend=!silentLegend,main=modelname,cumulative=cumulative);
+                       level=level,legend=!silentLegend, main=modelnameForGraph, cumulative=cumulative);
         }
         else{
             graphmaker(actuals=data,forecast=yForecastNew,fitted=yFitted,
-                       legend=!silentLegend,main=modelname,cumulative=cumulative);
+                       legend=!silentLegend, main=modelnameForGraph, cumulative=cumulative);
         }
     }
 
@@ -2172,7 +2164,7 @@ CreatorES <- function(silent=FALSE,...){
                       nParam=parametersNumber,
                       fitted=yFitted,forecast=yForecast,lower=yLower,upper=yUpper,residuals=errors,
                       errors=errors.mat,s2=s2,intervals=intervalsType,level=level,cumulative=cumulative,
-                      actuals=data,holdout=yHoldout,imodel=imodel,
+                      actuals=data,holdout=yHoldout,occurrence=occurrenceModel,
                       xreg=xreg,updateX=updateX,initialX=initialX,persistenceX=persistenceX,transitionX=transitionX,
                       ICs=ICs,logLik=logLik,cf=cfObjective,cfType=cfType,FI=FI,accuracy=errormeasures);
         return(structure(model,class="smooth"));
@@ -2183,7 +2175,7 @@ CreatorES <- function(silent=FALSE,...){
                       fitted=yFitted,forecast=yForecast,
                       lower=yLower,upper=yUpper,residuals=errors,s2=s2,intervals=intervalsType,level=level,
                       cumulative=cumulative,
-                      actuals=data,holdout=yHoldout,imodel=imodel,
+                      actuals=data,holdout=yHoldout,occurrence=occurrenceModel,
                       xreg=xreg,updateX=updateX,
                       ICs=ICs,ICw=icWeights,cf=NULL,cfType=cfType,accuracy=errormeasures);
         return(structure(model,class="smooth"));

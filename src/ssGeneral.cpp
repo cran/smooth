@@ -1,31 +1,11 @@
 #include <RcppArmadillo.h>
 #include <iostream>
 #include <cmath>
+#include "ssGeneral.h"
 // [[Rcpp::depends(RcppArmadillo)]]
 
 using namespace Rcpp;
 
-/* # Function is needed to estimate the correct error for ETS when multisteps model selection with r(matvt) is sorted out. */
-arma::mat matrixPower(arma::mat const &A, int const &power){
-    arma::mat B(A.n_rows, A.n_rows, arma::fill::eye);
-
-    if(power!=0){
-        for(int i=0; i<power; ++i){
-            B = B * A;
-        }
-    }
-    return B;
-}
-
-// [[Rcpp::export]]
-RcppExport SEXP matrixPowerWrap(SEXP matA, SEXP power){
-    NumericMatrix matA_n(matA);
-    arma::mat matrixA(matA_n.begin(), matA_n.nrow(), matA_n.ncol(), false);
-
-    int pow = as<int>(power);
-
-    return wrap(matrixPower(matrixA, pow));
-}
 
 /* # Function allows to multiply polinomails */
 arma::vec polyMult(arma::vec const &poly1, arma::vec const &poly2){
@@ -44,22 +24,9 @@ arma::vec polyMult(arma::vec const &poly1, arma::vec const &poly2){
     return poly3;
 }
 
-/* # Function allows to multiply polinomails */
-// [[Rcpp::export]]
-RcppExport SEXP polyMultwrap(SEXP polyVec1, SEXP polyVec2){
-    NumericVector polyVec1_n(polyVec1);
-    arma::vec poly1(polyVec1_n.begin(), polyVec1_n.size(), false);
-
-    NumericVector polyVec2_n(polyVec2);
-    arma::vec poly2(polyVec2_n.begin(), polyVec2_n.size(), false);
-
-    return wrap(polyMult(poly1, poly2));
-}
-
 /* # Function returns value of CDF-based likelihood function for the whole series */
-double cdf(arma::vec const &vecYt, arma::vec const &vecYfit, arma::vec const &matErrors, char const &E){
+double cdf(arma::vec const &vecYt, arma::vec const &vecYfit, double const &errorSD, char const &E){
 
-    double errorSD = arma::as_scalar(sqrt(mean(pow(matErrors,2))));
     double CF = 0.0;
     double CFbuffer;
     int obs = vecYt.n_rows;
@@ -153,286 +120,6 @@ arma::mat errorvf(arma::mat yact, arma::mat yfit, char const &E){
         yfit.elem(find(yfit==0)).fill(1e-100);
         return (yact - yfit) / yfit;
     }
-}
-
-/* # Function returns value of w() -- y-fitted -- used in the measurement equation */
-double wvalue(arma::vec const &vecVt, arma::rowvec const &rowvecW, char const &E, char const &T, char const &S,
-              arma::rowvec const &rowvecXt, arma::vec const &vecAt){
-// vecVt is a vector here!
-    double yfit = 0;
-    arma::mat vecYfit;
-
-    switch(S){
-// ZZN
-    case 'N':
-        switch(T){
-        case 'N':
-        case 'A':
-            vecYfit = rowvecW * vecVt;
-        break;
-        case 'M':
-            vecYfit = exp(rowvecW * log(vecVt));
-        break;
-        }
-    break;
-// ZZA
-    case 'A':
-        switch(T){
-        case 'N':
-        case 'A':
-            vecYfit = rowvecW * vecVt;
-        break;
-        case 'M':
-            vecYfit = exp(rowvecW.cols(0,1) * log(vecVt.rows(0,1))) + vecVt(2);
-        break;
-        }
-    break;
-// ZZM
-    case 'M':
-        switch(T){
-        case 'N':
-        case 'M':
-            vecYfit = exp(rowvecW * log(vecVt));
-        break;
-        case 'A':
-            vecYfit = rowvecW.cols(0,1) * vecVt.rows(0,1) * vecVt(2);
-        break;
-        }
-    break;
-    }
-
-    switch(E){
-        case 'A':
-        case 'D':
-            yfit = as_scalar(vecYfit + rowvecXt * vecAt);
-        break;
-        case 'M':
-        case 'L':
-            yfit = as_scalar(vecYfit * exp(rowvecXt * vecAt));
-        break;
-    }
-
-    return yfit;
-}
-
-/* # Function returns value of r() -- additive or multiplicative error -- used in the error term of measurement equation.
-     This is mainly needed by sim.ets */
-double rvalue(arma::vec const &vecVt, arma::rowvec const &rowvecW, char const &E, char const &T, char const &S,
-              arma::rowvec const &rowvecXt, arma::vec const &vecAt){
-
-    switch(E){
-// MZZ
-    case 'M':
-        return wvalue(vecVt, rowvecW, E, T, S, rowvecXt, vecAt);
-    break;
-// AZZ
-    case 'A':
-    default:
-        return 1.0;
-    }
-}
-
-/* # Function returns value of f() -- new states without the update -- used in the transition equation */
-arma::vec fvalue(arma::vec const &matrixVt, arma::mat const &matrixF, char const T, char const S){
-    arma::vec matrixVtnew = matrixVt;
-
-    switch(S){
-// ZZN
-    case 'N':
-        switch(T){
-        case 'N':
-        case 'A':
-            matrixVtnew = matrixF * matrixVt;
-        break;
-        case 'M':
-            matrixVtnew = exp(matrixF * log(matrixVt));
-        break;
-        }
-    break;
-// ZZA
-    case 'A':
-        switch(T){
-        case 'N':
-        case 'A':
-            matrixVtnew = matrixF * matrixVt;
-        break;
-        case 'M':
-            matrixVtnew.rows(0,1) = exp(matrixF.submat(0,0,1,1) * log(matrixVt.rows(0,1)));
-            matrixVtnew(2) = matrixVt(2);
-        break;
-        }
-    break;
-// ZZM
-    case 'M':
-        switch(T){
-        case 'N':
-        case 'M':
-            matrixVtnew = exp(matrixF * log(matrixVt));
-        break;
-        case 'A':
-            matrixVtnew = matrixF * matrixVt;
-        break;
-        }
-    break;
-    }
-
-    return matrixVtnew;
-}
-
-/* # Function returns value of g() -- the update of states -- used in components estimation for the persistence */
-arma::vec gvalue(arma::vec const &matrixVt, arma::mat const &matrixF, arma::mat const &rowvecW, char const &E, char const &T, char const &S){
-    arma::vec g(matrixVt.n_rows, arma::fill::ones);
-
-// AZZ
-    switch(E){
-    case 'A':
-    case 'D':
-// ANZ
-        switch(T){
-        case 'N':
-            switch(S){
-            case 'M':
-                g(0) = 1 / matrixVt(1);
-                g(1) = 1 / matrixVt(0);
-            break;
-            }
-        break;
-// AAZ
-        case 'A':
-            switch(S){
-            case 'M':
-                g.rows(0,1) = g.rows(0,1) / matrixVt(2);
-                g(2) = 1 / as_scalar(rowvecW.cols(0,1) * matrixVt.rows(0,1));
-            break;
-            }
-        break;
-// AMZ
-        case 'M':
-            switch(S){
-            case 'N':
-            case 'A':
-                g(1) = g(1) / matrixVt(0);
-            break;
-            case 'M':
-                g(0) = g(0) / matrixVt(2);
-                g(1) = g(1) / (matrixVt(0) * matrixVt(2));
-                g(2) = g(2) / as_scalar(exp(rowvecW.cols(0,1) * log(matrixVt.rows(0,1))));
-            break;
-            }
-        break;
-        }
-    break;
-// MZZ
-    case 'M':
-    case 'L':
-// MNZ
-        switch(T){
-        case 'N':
-            switch(S){
-            case 'N':
-                g(0) = matrixVt(0);
-            break;
-            case 'A':
-                g.rows(0,1).fill(matrixVt(0) + matrixVt(1));
-            break;
-            case 'M':
-                g = matrixVt;
-            break;
-            }
-        break;
-// MAZ
-        case 'A':
-            switch(S){
-            case 'N':
-            case 'A':
-                g.fill(as_scalar(rowvecW * matrixVt));
-            break;
-            case 'M':
-                g.rows(0,1).fill(as_scalar(rowvecW.cols(0,1) * matrixVt.rows(0,1)));
-                g(2) = matrixVt(2);
-            break;
-            }
-        break;
-// MMZ
-        case 'M':
-            switch(S){
-            case 'N':
-                g(0) = as_scalar(exp(rowvecW * log(matrixVt)));
-                g(1) = pow(matrixVt(1),rowvecW(1));
-            break;
-            case 'A':
-                g.rows(0,2).fill(as_scalar(exp(rowvecW.cols(0,1) * log(matrixVt.rows(0,1))) + matrixVt(2)));
-                g(1) = g(0) / matrixVt(0);
-            break;
-            case 'M':
-                g = exp(matrixF * log(matrixVt));
-            break;
-            }
-        break;
-        }
-    break;
-    }
-
-    return g;
-}
-
-/* # Function is needed for the proper xreg update in additive / multiplicative models.*/
-// Make sure that the provided vecXt is already in logs or whatever!
-arma::vec gXvalue(arma::vec const &vecXt, arma::vec const &vecGX, arma::vec const &error, char const &E){
-    arma::vec bufferforat(vecGX.n_rows);
-
-    switch(E){
-    case 'A':
-    case 'D':
-        bufferforat = vecGX / vecXt * error;
-    break;
-    case 'M':
-    case 'L':
-        bufferforat = vecGX / vecXt * log(1 + error);
-    break;
-    }
-    bufferforat.elem(find_nonfinite(bufferforat)).fill(0);
-
-    return bufferforat;
-}
-
-/* # Function is needed for the renormalisation of seasonal components. It should be done seasonal-wise.*/
-arma::mat normaliser(arma::mat Vt, int &obsall, unsigned int &maxlag, char const &S, char const &T){
-
-    unsigned int nComponents = Vt.n_rows;
-    double meanseason = 0;
-
-    switch(S){
-    case 'A':
-        meanseason = mean(Vt.row(nComponents-1));
-        Vt.row(nComponents-1) = Vt.row(nComponents-1) - meanseason;
-        switch(T){
-        case 'N':
-        case 'A':
-            Vt.row(0) = Vt.row(0) + meanseason;
-        break;
-        case 'M':
-            Vt.row(0) = Vt.row(0) + meanseason / Vt.row(1);
-        break;
-        }
-    break;
-    case 'M':
-        meanseason = exp(mean(log(Vt.row(nComponents-1))));
-        Vt.row(nComponents-1) = Vt.row(nComponents-1) / meanseason;
-        switch(T){
-        case 'N':
-        case 'M':
-            Vt.row(0) = Vt.row(0) / meanseason;
-        break;
-        case 'A':
-            Vt.row(0) = Vt.row(0) * meanseason;
-            Vt.row(1) = Vt.row(1) * meanseason;
-        break;
-        }
-    break;
-    }
-
-    return(Vt);
 }
 
 /* # initparams - function that initialises the basic parameters of ETS */
@@ -579,6 +266,9 @@ RcppExport SEXP etsmatrices(SEXP matvt, SEXP vecg, SEXP phi, SEXP Cvalues, SEXP 
 
     NumericMatrix Cv(Cvalues);
     arma::rowvec C(Cv.begin(), Cv.ncol(), false);
+    // This is needed for rounded cases, when variance needs to be optimised as well.
+    int CLength = Cv.ncol();
+    double errorSD = 0.0;
 
     int ncomponents = as<int>(ncomponentsR);
 
@@ -676,6 +366,10 @@ RcppExport SEXP etsmatrices(SEXP matvt, SEXP vecg, SEXP phi, SEXP Cvalues, SEXP 
         }
     }
 
+    if(currentelement!=CLength){
+        errorSD = C(currentelement);
+    }
+
 /* # The default values of matrices are set for ZNN  models */
     switch(S){
     case 'N':
@@ -725,7 +419,7 @@ RcppExport SEXP etsmatrices(SEXP matvt, SEXP vecg, SEXP phi, SEXP Cvalues, SEXP 
 
     return wrap(List::create(Named("matF") = matrixF, Named("matw") = rowvecW, Named("vecg") = vecG,
                              Named("phi") = phivalue, Named("matvt") = matrixVt, Named("matat") = matrixAt,
-                             Named("matFX") = matrixFX, Named("vecgX") = vecGX));
+                             Named("matFX") = matrixFX, Named("vecgX") = vecGX, Named("errorSD") = errorSD));
 }
 
 /*
@@ -1070,7 +764,8 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
         lagrows = i * nComponents - lagsInternal + nComponents - 1;
 
 /* # Measurement equation and the error term */
-        vecYfit(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
+        // vecOt(i-maxlag) *
+        vecYfit(i-maxlag) = wvalue(matrixVt(lagrows), rowvecW, E, T, S,
                                                      matrixXt.row(i-maxlag), matrixAt.col(i-1));
 
         // This is a failsafe for cases of ridiculously high and ridiculously low values
@@ -1078,7 +773,13 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
             vecYfit(i-maxlag) = vecYfit(i-maxlag-1);
         }
 
-        vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
+        // If this is zero (intermittent), then set error to zero
+        if(vecOt(i-maxlag)==0){
+            vecErrors(i-maxlag) = 0;
+        }
+        else{
+            vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
+        }
 
 /* # Transition equation */
         matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S) +
@@ -1233,7 +934,8 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
             lagrows = i * nComponents - (lagsInternal + lagsModifier) + nComponents - 1;
 
 /* # Measurement equation and the error term */
-            vecYfit(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
+            // vecOt(i-maxlag) *
+            vecYfit(i-maxlag) = wvalue(matrixVt(lagrows), rowvecW, E, T, S,
                                                          matrixXt.row(i-maxlag), matrixAt.col(i-1));
 
             // This is a failsafe for cases of ridiculously high and ridiculously low values
@@ -1241,7 +943,13 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
                 vecYfit(i-maxlag) = vecYfit(i-maxlag-1);
             }
 
-            vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
+            // If this is zero (intermittent), then set error to zero
+            if(vecOt(i-maxlag)==0){
+                vecErrors(i-maxlag) = 0;
+            }
+            else{
+                vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
+            }
 
             // This is a failsafe for cases of ridiculously high and ridiculously low values
             if(!vecYfit.row(i-maxlag).is_finite()){
@@ -1324,15 +1032,22 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
             lagrows = i * nComponents + lagsInternal - lagsModifier + nComponents - 1;
 
 /* # Measurement equation and the error term */
-            vecYfit.row(i-maxlag) = vecOt(i-maxlag) * wvalue(matrixVt(lagrows), rowvecW, E, T, S,
+            // vecOt(i-maxlag) *
+            vecYfit.row(i-maxlag) = wvalue(matrixVt(lagrows), rowvecW, E, T, S,
                                                              matrixXt.row(i-maxlag), matrixAt.col(i+1));
 
             // This is for cases of ridiculously high and ridiculously low values
             if(vecYfit(i-maxlag) > 1e+100){
-                vecYfit.col(i-maxlag) = vecYfit(i-maxlag+1);
+                vecYfit(i-maxlag) = vecYfit(i-maxlag+1);
             }
 
-            vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
+            // If this is zero (intermittent), then set error to zero
+            if(vecOt(i-maxlag)==0){
+                vecErrors(i-maxlag) = 0;
+            }
+            else{
+                vecErrors(i-maxlag) = errorf(vecYt(i-maxlag), vecYfit(i-maxlag), E);
+            }
 
 /* # Transition equation */
             matrixVt.col(i) = fvalue(matrixVt(lagrows), matrixF, T, S) +
@@ -1639,7 +1354,8 @@ int CFtypeswitch (std::string const& CFtype) {
 double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &rowvecW, arma::vec const &vecYt, arma::vec const &vecG,
                  unsigned int const &hor, arma::uvec &lags, char const &E, char const &T, char const &S,
                  bool const &multi, std::string const &CFtype, double const &normalize, char const &fitterType,
-                 arma::mat const &matrixXt, arma::mat &matrixAt, arma::mat const &matrixFX, arma::vec const &vecGX, arma::vec const &vecOt){
+                 arma::mat const &matrixXt, arma::mat &matrixAt, arma::mat const &matrixFX, arma::vec const &vecGX, arma::vec const &vecOt,
+                 double const &errorSD){
 // # Make decomposition functions shut up!
     std::ostream nullstream(0);
     arma::set_cerr_stream(nullstream);
@@ -1660,7 +1376,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
     int CFSwitch = CFtypeswitch(CFtypeNew);
 
     arma::uvec nonzeroes = find(vecOt>0);
-    unsigned int obs = nonzeroes.n_rows;
+    unsigned int obs = vecYt.n_rows;
     double CFres = 0;
     int matobs = obs - hor;
 
@@ -1763,13 +1479,13 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         switch(CFSwitch){
         // Basic one-step aheads
         case 1:
-            CFres = arma::as_scalar(mean(pow(matErrors,2)));
+            CFres = arma::as_scalar(sum(pow(matErrors,2)) / double(obs));
         break;
         case 2:
-            CFres = arma::as_scalar(mean(abs(matErrors)));
+            CFres = arma::as_scalar(sum(abs(matErrors)) / double(obs));
         break;
         case 3:
-            CFres = arma::as_scalar(mean(sqrt(abs(matErrors))));
+            CFres = arma::as_scalar(sum(sqrt(abs(matErrors))) / (2*double(obs)));
         break;
         // MSE based multisteps:
         case 4:
@@ -1841,10 +1557,11 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         break;
         // Rounded
         case 21:
-            CFres = -cdf(vecYt.elem(nonzeroes), vecYfit.elem(nonzeroes), matErrors, E);
+            CFres = -cdf(vecYt.elem(nonzeroes), vecYfit.elem(nonzeroes), errorSD, E);
         break;
         // TSB
         case 22:
+            // 0.5 is needed for cases, when the variable is continuous in (0, 1)
             CFres = -sum(log(vecYfit.elem(find(vecYt>=0.5)))) - sum(log(1-vecYfit.elem(find(vecYt<0.5))));
         }
     break;
@@ -1854,64 +1571,52 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         switch(CFSwitch){
         // Basic one-step aheads
         case 1:
-            CFres = arma::as_scalar(exp(log(mean(pow(matErrors,2))) + (2 / double(obs)) * yactsum));
+            CFres = arma::as_scalar(sum(pow(matErrors,2)) / double(obs));
         break;
         case 2:
-            CFres = arma::as_scalar(exp(log(mean(abs(matErrors))) + (1 / double(obs)) * yactsum));
+            CFres = arma::as_scalar(sum(abs(matErrors)) / double(obs));
         break;
         case 3:
-            CFres = arma::as_scalar(exp(log(mean(sqrt(abs(matErrors)))) + (1 / (2*double(obs))) * yactsum));
+            CFres = arma::as_scalar(sum(sqrt(abs(matErrors))) / (2*double(obs)));
         break;
         // MSE based multisteps:
         case 4:
-            CFres = arma::as_scalar(exp(log(sum(pow(matErrors.col(hor-1),2)) / double(matobs))
-                                        + (2 / double(obs)) * yactsum));
+            CFres = arma::as_scalar(sum(pow(matErrors.col(hor-1),2)) / double(matobs));
         break;
         case 5:
-            CFres = arma::as_scalar(exp(log(sum(sum(pow(matErrors,2)) / double(matobs), 1))
-                        + (2 / double(obs)) * double(hor) * yactsum));
+            CFres = arma::as_scalar(sum(sum(pow(matErrors,2)) / double(matobs), 1));
         break;
         case 6:
-            CFres = arma::as_scalar(exp(sum(log(sum(pow(matErrors,2)) / double(matobs)), 1)
-                    + (2 / double(obs)) * double(hor) * yactsum));
+            CFres = arma::as_scalar(exp(sum(log(sum(pow(matErrors,2)) / double(matobs)), 1)));
         break;
         case 7:
-            CFres = arma::as_scalar(exp(log(sum(pow(sum(matErrors,1),2) / double(matobs)))
-                        + (2 / double(obs)) * yactsum));
+            CFres = arma::as_scalar(sum(pow(sum(matErrors,1),2) / double(matobs)));
         break;
         // MAE based multisteps:
         case 8:
-            CFres = arma::as_scalar(exp(log(sum(abs(matErrors.col(hor-1))) / double(matobs))
-                                        + (1 / double(obs)) * yactsum));
+            CFres = arma::as_scalar(sum(abs(matErrors.col(hor-1))) / double(matobs));
         break;
         case 9:
-            CFres = arma::as_scalar(exp(log(sum(sum(abs(matErrors)) / double(matobs), 1))
-                        + (1 / double(obs)) * double(hor) * yactsum));
+            CFres = arma::as_scalar(sum(sum(abs(matErrors)) / double(matobs), 1));
         break;
         case 10:
-            CFres = arma::as_scalar(exp(log(sum(log(sum(abs(matErrors)) / double(matobs)), 1))
-                    + (1 / double(obs)) * double(hor) * yactsum));
+            CFres = arma::as_scalar(sum(log(sum(abs(matErrors)) / double(matobs)), 1));
         break;
         case 11:
-            CFres = arma::as_scalar(exp(log(sum(abs(sum(matErrors,1)) / double(matobs)))
-                        + (1 / double(obs)) * yactsum));
+            CFres = arma::as_scalar(sum(abs(sum(matErrors,1)) / double(matobs)));
         break;
         // HAM based multisteps:
         case 12:
-            CFres = arma::as_scalar(exp(log(sum(sqrt(abs(matErrors.col(hor-1)))) / double(matobs))
-                                        + (1 / (2*double(obs))) * yactsum));
+            CFres = arma::as_scalar(sum(sqrt(abs(matErrors.col(hor-1)))) / double(matobs));
         break;
         case 13:
-            CFres = arma::as_scalar(exp(log(sum(sum(sqrt(abs(matErrors))) / double(matobs), 1))
-                        + (1 / (2*double(obs))) * double(hor) * yactsum));
+            CFres = arma::as_scalar(sum(sum(sqrt(abs(matErrors))) / double(matobs), 1));
         break;
         case 14:
-            CFres = arma::as_scalar(sum(log(sum(sqrt(abs(matErrors))) / double(matobs)), 1))
-                    + (1 / (2*double(obs))) * double(hor) * yactsum;
+            CFres = arma::as_scalar(sum(log(sum(sqrt(abs(matErrors))) / double(matobs)), 1));
         break;
         case 15:
-            CFres = arma::as_scalar(exp(log(sum(sqrt(abs(sum(matErrors,1))) / double(matobs)))
-                        + (1 / (2*double(obs))) * yactsum));
+            CFres = arma::as_scalar(sum(sqrt(abs(sum(matErrors,1))) / double(matobs)));
         break;
         // TFL
         case 16:
@@ -1921,17 +1626,16 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
             catch(const std::runtime_error&){
                 CFres = double(log(arma::det(arma::trans(matErrors) * matErrors / double(matobs))));
             }
-            CFres = CFres + (2 / double(matobs)) * double(hor) * yactsum;
+            // CFres = CFres + (2 / double(matobs)) * double(hor) * yactsum;
         break;
         // Analytical multisteps
         case 17:
             CFres = (as_scalar(mean(pow(matErrors,2))) * matrixSigma(hor-1,hor-1));
-            CFres = CFres + (2 / double(matobs)) * yactsum;
+            // CFres = CFres + (2 / double(matobs)) * yactsum;
         break;
         case 18:
-            CFres = arma::trace(as_scalar(mean(pow(matErrors,2))) * matrixSigma
-                                    );
-            CFres = CFres + (2 / double(matobs)) * double(hor) * yactsum;
+            CFres = arma::trace(as_scalar(mean(pow(matErrors,2))) * matrixSigma);
+            // CFres = CFres + (2 / double(matobs)) * double(hor) * yactsum;
         break;
         case 19:
         case 20:
@@ -1943,14 +1647,15 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
                 CFres = log(arma::det(as_scalar(mean(pow(matErrors / normalize,2))) * matrixSigma
                                           )) + hor*log(pow(normalize,2));
             }
-            CFres = CFres + (2 / double(matobs)) * double(hor) * yactsum;
+            // CFres = CFres + (2 / double(matobs)) * double(hor) * yactsum;
         break;
         // Rounded
         case 21:
-            CFres = -cdf(vecYt.elem(nonzeroes), vecYfit.elem(nonzeroes), matErrors, E);
+            CFres = -cdf(vecYt.elem(nonzeroes), vecYfit.elem(nonzeroes), errorSD, E);
         break;
         // TSB
         case 22:
+            // 0.5 is needed for cases, when the variable is continuous in (0, 1)
             CFres = -sum(log(vecYfit.elem(find(vecYt>=0.5)))) - sum(log(1-vecYfit.elem(find(vecYt<0.5))));
         }
     }
@@ -1962,7 +1667,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
 RcppExport SEXP optimizerwrap(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP vecg,
                               SEXP h, SEXP modellags, SEXP Etype, SEXP Ttype, SEXP Stype,
                               SEXP multisteps, SEXP CFt, SEXP normalizer, SEXP fittertype,
-                              SEXP matxt, SEXP matat, SEXP matFX, SEXP vecgX, SEXP ot) {
+                              SEXP matxt, SEXP matat, SEXP matFX, SEXP vecgX, SEXP ot, SEXP SDerror) {
     NumericMatrix matvt_n(matvt);
     arma::mat matrixVt(matvt_n.begin(), matvt_n.nrow(), matvt_n.ncol());
 
@@ -2010,10 +1715,12 @@ RcppExport SEXP optimizerwrap(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP ve
     NumericVector ot_n(ot);
     arma::vec vecOt(ot_n.begin(), ot_n.size(), false);
 
+    double errorSD = as<double>(SDerror);
+
     return wrap(optimizer(matrixVt, matrixF, rowvecW, vecYt, vecG,
                           hor, lags, E, T, S,
                           multi, CFtype, normalize, fitterType,
-                          matrixXt, matrixAt, matrixFX, vecGX, vecOt));
+                          matrixXt, matrixAt, matrixFX, vecGX, vecOt, errorSD));
 }
 
 /* # Function is used in cases when the persistence vector needs to be estimated.
@@ -2023,7 +1730,7 @@ RcppExport SEXP costfunc(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP vecg,
                               SEXP h, SEXP modellags, SEXP Etype, SEXP Ttype, SEXP Stype,
                               SEXP multisteps, SEXP CFt, SEXP normalizer, SEXP fittertype,
                               SEXP matxt, SEXP matat, SEXP matFX, SEXP vecgX, SEXP ot,
-                              SEXP bounds) {
+                              SEXP bounds, SEXP SDerror) {
 /* Function is needed to implement admissible constrains on smoothing parameters */
     NumericMatrix matvt_n(matvt);
     arma::mat matrixVt(matvt_n.begin(), matvt_n.nrow(), matvt_n.ncol());
@@ -2074,68 +1781,27 @@ RcppExport SEXP costfunc(SEXP matvt, SEXP matF, SEXP matw, SEXP yt, SEXP vecg,
 
     char boundtype = as<char>(bounds);
 
-// Values needed for eigenvalues calculation
-    arma::cx_vec eigval;
+    double errorSD = as<double>(SDerror);
 
-    if(boundtype=='u'){
-// alpha in (0,1)
-        if((vecG(0)>1) || (vecG(0)<0)){
-            // vecG.zeros();
-            // matrixVt.zeros();
-            return wrap(1E+300);
-        }
-        if(T!='N'){
-// beta in (0,alpha)
-            if((vecG(1)>vecG(0)) || (vecG(1)<0)){
-                // vecG.zeros();
-                // matrixVt.zeros();
-                return wrap(1E+300);
-            }
-            if(S!='N'){
-// gamma in (0,1-alpha)
-                if((vecG(2)>(1-vecG(0))) || (vecG(2)<0)){
-                    // vecG.zeros();
-                    // matrixVt.zeros();
-                    return wrap(1E+300);
-                }
-            }
-        }
-        if(S!='N'){
-// gamma in (0,1-alpha)
-            if((vecG(1)>(1-vecG(0))) || (vecG(1)<0)){
-                // vecG.zeros();
-                // matrixVt.zeros();
-                return wrap(1E+300);
-            }
-        }
-    }
-    else if((boundtype=='a') | (boundtype=='r')){
-        if(arma::eig_gen(eigval, matrixF - vecG * rowvecW)){
-            if(max(abs(eigval))> (1 + 1E-50)){
-                return wrap(max(abs(eigval))*1E+100);
-            }
-        }
-        else{
-            return wrap(1E+300);
-        }
+    // Test the bounds for the ETS elements
+    double boundsTestResult = boundsTester(boundtype, T, S, vecG, rowvecW, matrixF);
+    if(boundsTestResult!=0){
+        return wrap(boundsTestResult);
     }
 
     if(matrixAt(0,0)!=0){
+        // Test the bounds for the explanatory part
         arma::rowvec rowvecWX(matFX_n.nrow(), arma::fill::ones);
-        if(arma::eig_gen(eigval, matrixFX - vecGX * rowvecWX)){
-            if(max(abs(eigval))> (1 + 1E-50)){
-                return wrap(max(abs(eigval))*1E+100);
-            }
-        }
-        else{
-            return wrap(1E+300);
-        }
+        boundsTestResult = boundsTester('a', T, S, vecGX, rowvecWX, matrixFX);
+    }
+    if(boundsTestResult!=0){
+        return wrap(boundsTestResult);
     }
 
     return wrap(optimizer(matrixVt, matrixF, rowvecW, vecYt, vecG,
                           hor, lags, E, T, S,
                           multi, CFtype, normalize, fitterType,
-                          matrixXt, matrixAt, matrixFX, vecGX, vecOt));
+                          matrixXt, matrixAt, matrixFX, vecGX, vecOt, errorSD));
 }
 
 
@@ -2149,7 +1815,7 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
                               SEXP nexovars, SEXP matxt, SEXP matat, SEXP matFX, SEXP vecgX, SEXP ot,
                               SEXP estimAR, SEXP estimMA, SEXP requireConst, SEXP estimConst,
                               SEXP estimxreg, SEXP gowild, SEXP estimFX, SEXP estimgX, SEXP estiminitX,
-                              SEXP bounds, SEXP ssarimaOld, SEXP nonZeroARI, SEXP nonZeroMA) {
+                              SEXP bounds, SEXP ssarimaOld, SEXP nonZeroARI, SEXP nonZeroMA, SEXP SDerror) {
 
     IntegerVector ARorders_n(ARorders);
     arma::uvec arOrders = as<arma::uvec>(ARorders_n);
@@ -2225,27 +1891,11 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
     IntegerVector modellags_n(modellags);
     arma::uvec modelLags = as<arma::uvec>(modellags_n);
 
-    // IntegerMatrix nonZeroARI_n(nonZeroARI);
-    // arma::imat ARILagsSigned(nonZeroARI_n.begin(), nonZeroARI_n.nrow(), nonZeroARI_n.ncol());
-    // arma::umat ARILags = arma::conv_to<arma::umat>::from(ARILagsSigned);
-    //
-    // IntegerMatrix nonZeroMA_n(nonZeroMA);
-    // arma::imat MALagsSigned(nonZeroMA_n.begin(), nonZeroMA_n.nrow(), nonZeroMA_n.ncol());
-    // arma::umat MALags = arma::conv_to<arma::umat>::from(MALagsSigned);
-
     IntegerMatrix nonZeroARI_n(nonZeroARI);
     arma::umat ARILags = as<arma::umat>(nonZeroARI_n);
 
     IntegerMatrix nonZeroMA_n(nonZeroMA);
     arma::umat MALags = as<arma::umat>(nonZeroMA_n);
-
-    // IntegerMatrix nonZeroARI_n(nonZeroARI);
-    // arma::imat ARIStuff(nonZeroARI_n.begin(), nonZeroARI_n.nrow(), nonZeroARI_n.ncol(), false);
-    // arma::umat ARILags = arma::conv_to<arma::umat>::from(ARIStuff);
-    //
-    // IntegerMatrix nonZeroMA_n(nonZeroMA);
-    // arma::imat MAStuff(nonZeroMA_n.begin(), nonZeroMA_n.nrow(), nonZeroMA_n.ncol(), false);
-    // arma::umat MALags = arma::conv_to<arma::umat>::from(MAStuff);
 
 // Initialise ARIMA
     List polynomials = polysos(arOrders, maOrders, iOrders, lagsARIMA, nComponents,
@@ -2300,6 +1950,8 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
 
     char boundtype = as<char>(bounds);
 
+    double errorSD = as<double>(SDerror);
+
     if((nComponents>0) & ((boundtype=='a') | (boundtype=='r'))){
         arma::cx_vec eigval;
 
@@ -2345,105 +1997,9 @@ RcppExport SEXP costfuncARIMA(SEXP ARorders, SEXP MAorders, SEXP Iorders, SEXP A
     return wrap(optimizer(matrixVt, matrixF, rowvecW, vecYt, vecG,
                           hor, modelLags, E, T, S,
                           multi, CFtype, normalize, fitterType,
-                          matrixXt, matrixAt, matrixFX, vecGX, vecOt));
+                          matrixXt, matrixAt, matrixFX, vecGX, vecOt, errorSD));
 }
 
 /*
 # autoets - function estimates all the necessary ETS models and returns the one with the smallest chosen IC.
 */
-
-// ##### Script for simulate functions
-List simulator(arma::cube &arrayVt, arma::mat const &matrixerrors, arma::mat const &matrixot,
-                 arma::cube const &arrayF, arma::rowvec const &rowvecW, arma::mat const &matrixG,
-                 unsigned int const &obs, unsigned int const &nseries,
-                 char const &E, char const &T, char const &S, arma::uvec &lags) {
-
-    arma::mat matY(obs, nseries);
-    arma::rowvec rowvecXt(1, arma::fill::zeros);
-    arma::vec vecAt(1, arma::fill::zeros);
-
-    int lagslength = lags.n_rows;
-    unsigned int maxlag = max(lags);
-    int obsall = obs + maxlag;
-
-    lags = maxlag - lags;
-
-    for(int i=1; i<lagslength; i=i+1){
-        lags(i) = lags(i) + obsall * i;
-    }
-
-    arma::uvec lagrows(lagslength, arma::fill::zeros);
-    arma::mat matrixVt(obsall, lagslength, arma::fill::zeros);
-    arma::mat matrixF(arrayF.n_rows, arrayF.n_cols, arma::fill::zeros);
-
-    for(unsigned int i=0; i<nseries; i=i+1){
-        matrixVt = arrayVt.slice(i);
-        matrixF = arrayF.slice(i);
-        for (int j=maxlag; j<obsall; j=j+1) {
-
-            lagrows = lags - maxlag + j;
-/* # Measurement equation and the error term */
-            matY(j-maxlag,i) = matrixot(j-maxlag,i) * (wvalue(matrixVt(lagrows), rowvecW, E, T, S, rowvecXt, vecAt) +
-                                 rvalue(matrixVt(lagrows), rowvecW, E, T, S, rowvecXt, vecAt) * matrixerrors(j-maxlag,i));
-/* # Transition equation */
-            matrixVt.row(j) = arma::trans(fvalue(matrixVt(lagrows), matrixF, T, S) +
-                                          gvalue(matrixVt(lagrows), matrixF, rowvecW, E, T, S) % matrixG.col(i) * matrixerrors(j-maxlag,i));
-/* Failsafe for cases when unreasonable value for state vector was produced */
-            if(!matrixVt.row(j).is_finite()){
-                matrixVt.row(j) = trans(matrixVt(lagrows));
-            }
-            if((S=='M') & (matrixVt(j,matrixVt.n_cols-1) <= 0)){
-                matrixVt(j,matrixVt.n_cols-1) = arma::as_scalar(trans(matrixVt(lagrows.row(matrixVt.n_cols-1))));
-            }
-            if(T=='M'){
-                if((matrixVt(j,0) <= 0) | (matrixVt(j,1) <= 0)){
-                    matrixVt(j,0) = arma::as_scalar(trans(matrixVt(lagrows.row(0))));
-                    matrixVt(j,1) = arma::as_scalar(trans(matrixVt(lagrows.row(1))));
-                }
-            }
-        }
-        arrayVt.slice(i) = matrixVt;
-    }
-
-    return List::create(Named("arrvt") = arrayVt, Named("matyt") = matY);
-}
-
-/* # Wrapper for simulator */
-// [[Rcpp::export]]
-RcppExport SEXP simulatorwrap(SEXP arrvt, SEXP matErrors, SEXP matot, SEXP matF, SEXP matw, SEXP matg,
-                                SEXP Etype, SEXP Ttype, SEXP Stype, SEXP modellags) {
-
-// ### arrvt should contain array of obs x ncomponents x nseries elements.
-    NumericVector arrvt_n(arrvt);
-    IntegerVector arrvt_dim = arrvt_n.attr("dim");
-    arma::cube arrayVt(arrvt_n.begin(),arrvt_dim[0], arrvt_dim[1], arrvt_dim[2], false);
-
-    NumericMatrix matErrors_n(matErrors);
-    arma::mat matrixerrors(matErrors_n.begin(), matErrors_n.nrow(), matErrors_n.ncol(), false);
-
-    NumericMatrix matot_n(matot);
-    arma::mat matrixot(matot_n.begin(), matot_n.nrow(), matot_n.ncol(), false);
-
-    NumericVector arrF_n(matF);
-    IntegerVector arrF_dim = arrF_n.attr("dim");
-    arma::cube arrayF(arrF_n.begin(),arrF_dim[0], arrF_dim[1], arrF_dim[2], false);
-
-    NumericMatrix matw_n(matw);
-    arma::rowvec rowvecW(matw_n.begin(), matw_n.ncol(), false);
-
-// ### matg should contain persistence vectors in each column
-    NumericMatrix matg_n(matg);
-    arma::mat matrixG(matg_n.begin(), matg_n.nrow(), matg_n.ncol(), false);
-
-    unsigned int obs = matErrors_n.nrow();
-    unsigned int nseries = matErrors_n.ncol();
-    char E = as<char>(Etype);
-    char T = as<char>(Ttype);
-    char S = as<char>(Stype);
-
-    IntegerVector modellags_n(modellags);
-    arma::uvec lags = as<arma::uvec>(modellags_n);
-
-    return wrap(simulator(arrayVt, matrixerrors, matrixot, arrayF, rowvecW, matrixG,
-                            obs, nseries, E, T, S, lags));
-}

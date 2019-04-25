@@ -1,3 +1,48 @@
+smooth v2.5.0 (Release data: 2019-04-25)
+==============
+
+Changes:
+* New function - oes(). This will eventually substitute iss(). This aligns with the IJF paper by Svetunkov & Boylan (TBA). Only "fixed", "odds-ratio", "inverse-odds-ratio" and "probability" models are available at the moment. "general" is expected to arrive in several days...
+* es(), ces(), ssarima(), msarima() and gum() now use "occurrence" parameter instead of "interemittent" and respectively oes() function instead of iss().
+* New error measures: MIS, sMIS and RelMIS - based on the Interval Score of Gneiting and Raftery, 2017. This will be moved to greybox in the next version of smooth.
+* New function - oesg(), implementing the General Beta-Bernoulli exponential smoothing model for the occurrence part of the data. This makes occurrence="g" available for the oes(), es() and all the other functions.
+* The fitted values are now multiplied by the probability of occurrence in the case of intermittent model.
+* The new likelihood for iETS models, which takes the missing values into account via EM-algorithm.
+* The new estimate of the variance of the error for the iETS, based on the likelihood. It is obviously biased, but consistent and more efficient.
+* Corrected optimisation of the iETS with rounded values, maximising SD directly in the function.
+* The intermittent models are now returned in the "occurrence" rather than "imodel" parameter and should be provided in the functions via "occurrence".
+* imodel is renamed into oesmodel for the univariate models. This is done for the consistency purposes.
+* A vignette for oes() and the new intermittent model + references to the iETS and SSARIMA papers.
+* Use actuals() method from greybox instead of getResponse() from forecast.
+* cma() now relies on msarima() rather than on ssarima().
+
+Bugfixes:
+* Bugfix in oes with occurrence="d" and model="AZZ".
+* Semiparametric intervals were broken.
+* Wrong model name was produced on the graph of es().
+* Fixed a bug in backcasting fitter with "Mat::col(): index out of bounds".
+
+
+smooth v2.4.8 (Release data: 2019-03-10)
+==============
+
+Changes:
+* ves() now has an option of producing persistence="seasonal". Seasonal smoothing parameter will be common across the series in this case.
+* New function - pinball(), which returns the value of the loss (either quantile, or expectile, or any other one).
+* IMPORTANT!!! The variance of errors in the smooth functions is now calculated without the bias correction. This is because we claim that we use likelihood in the estimation. Expect the increase in prediction intervals!
+* The number of parameters is now correctly taken into account in the calculation of AIC, AICc, BIC and BICc of ves().
+* RelMSE is now substituted by RelRMSE in the accuracy calculation.
+
+Bugfixes:
+* sma and cma did not check the existance of model correctly. Now it is restricted with their environment only.
+* Check if the data is positive for the multiplicative types of auto.gum() and gum() functions.
+* auto.gum() sometimes failed, when IC values were the same.
+* Accuracy has been calculated incorrectly for ves() models.
+* gsi() now checks the provided weights for NAs.
+* gum() would not work correctly, when length(lags)>length(orders).
+* es() would kill R in cases of "MAN" model and small samples. Now it does not do that.
+
+
 smooth v2.4.7 (Release data: 2018-11-30)
 ==============
 

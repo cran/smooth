@@ -1,4 +1,4 @@
-utils::globalVariables(c("initialSeason","persistence","phi","otObs","iprobability"));
+utils::globalVariables(c("initialSeason","persistence","phi","otObs","iprobability","intermittent","intermittentModel","imodelProvided"));
 
 ##### *Checker of input of vector functions* #####
 vssInput <- function(smoothType=c("ves"),...){
@@ -303,7 +303,8 @@ vssInput <- function(smoothType=c("ves"),...){
     nParamMax <- 1;
 
     ##### Persistence matrix ####
-    # persistence type can be: "i" - independent, "d" - dependent, "g" - group.
+    # persistence type can be: "i" - independent, "d" - dependent, "g" - group,
+    # "s" - seasonal gamma is the same
     persistenceValue <- persistence;
     if(is.null(persistenceValue)){
         warning("persistence value is not selected. Switching to group.");
@@ -313,12 +314,18 @@ vssInput <- function(smoothType=c("ves"),...){
     else{
         if(is.character(persistenceValue)){
             persistenceValue <- substring(persistenceValue[1],1,1);
-            if(all(persistenceValue!=c("g","i","d"))){
+            if(all(persistenceValue!=c("g","i","d","s"))){
                 warning("You asked for a strange persistence value. We don't do that here. Switching to group",
                         call.=FALSE);
                 persistenceType <- "g";
             }
             else{
+                if(persistenceValue=="s" & Stype=="N"){
+                    warning(paste0("Non-seasonal model is selected, but you've asked for common ",
+                                   "seasonal smoothing parameter. Switching to persistence='individual'."),
+                            call.=FALSE);
+                    persistenceValue <- "i";
+                }
                 persistenceType <- persistenceValue;
             }
             persistenceValue <- NULL;
@@ -377,8 +384,9 @@ vssInput <- function(smoothType=c("ves"),...){
         }
     }
 
-    if(any(persistenceType==c("g","i"))){
-        # Whether individual or group, this thing reduces number of degrees of freedom in the same way.
+    if(any(persistenceType==c("g","i","s"))){
+        # Whether individual, seasonal or group, this thing reduces number of
+        # degrees of freedom in the same way.
         nParamMax <- nParamMax + nComponentsAll;
     }
     else if(persistenceType=="d"){
@@ -1077,25 +1085,26 @@ vssForecaster <- function(...){
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
 
     # Division by nSeries gives the df per series, which agrees with Lutkepohl (2005), p.75
-    nParamPerSeries <- nParam / nSeries;
+    # nParamPerSeries <- nParam / nSeries;
+    # df <- (otObs - nParamPerSeries);
+    # if(any(df<=0)){
+    #     warning(paste0("Number of degrees of freedom is negative. It looks like we have overfitted the data."),call.=FALSE);
+    #     df <- otObs;
+    # }
 
-    df <- (otObs - nParamPerSeries);
-    if(any(df<=0)){
-        warning(paste0("Number of degrees of freedom is negative. It looks like we have overfitted the data."),call.=FALSE);
-        df <- otObs;
-    }
-    # If error additive, estimate as normal. Otherwise - lognormal
+    df <- otObs
+
+    # Divide each element by each degree of freedom
     Sigma <- (errors %*% t(errors)) / df;
     rownames(Sigma) <- colnames(Sigma) <- dataNames;
 
-    if(any((otObs - nParamPerSeries)<=0)){
-        df <- 0;
-    }
-    else{
-        #### The number of degrees of freedom needs to be amended in cases of intermittent models ####
-        # Should it be a matrix?
+    # if(any((otObs - nParamPerSeries)<=0)){
+    #     df <- 0;
+    # }
+    # else{
+    # Take the minimum df for the purposes of intervals construction
         df <- min(df);
-    }
+    # }
 
     PI <- NA;
 

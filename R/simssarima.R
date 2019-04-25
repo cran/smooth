@@ -9,6 +9,7 @@
 #' @template ssKeywords
 #'
 #' @template ssGeneralRef
+#' @template ssARIMARef
 #'
 #' @param orders List of orders, containing vector variables \code{ar},
 #' \code{i} and \code{ma}. Example:
@@ -51,7 +52,7 @@
 #' matrix.
 #' \item \code{constant} - Value of constant term. If \code{nsim>1}, then this
 #' is a vector.
-#' \item \code{initial} - Initial values of SSARIM. If \code{nsim>1}, then this
+#' \item \code{initial} - Initial values of SSARIMA. If \code{nsim>1}, then this
 #' is a matrix.
 #' \item \code{data} - Time series vector (or matrix if \code{nsim>1}) of the
 #' generated series.
@@ -59,7 +60,7 @@
 #' are in columns, time is in rows.
 #' \item \code{residuals} - Error terms used in the simulation. Either vector or
 #' matrix, depending on \code{nsim}.
-#' \item \code{occurrences} - Values of occurrence variable. Once again, can be
+#' \item \code{occurrence} - Values of occurrence variable. Once again, can be
 #' either a vector or a matrix...
 #' \item \code{logLik} - Log-likelihood of the constructed model.
 #' }
@@ -440,7 +441,7 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
         model <- list(model=modelname,
                       AR=NULL, MA=NULL, constant=NA, initial=NULL,
                       data=matyt, states=NULL, residuals=materrors,
-                      occurrences=matot, likelihood=veclikelihood);
+                      occurrence=matot, likelihood=veclikelihood);
         return(structure(model,class="smooth.sim"));
     }
 
@@ -695,6 +696,6 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     model <- list(model=modelname,
                   AR=matARValue, MA=matMAValue, constant=vecConstantValue, initial=matInitialValue,
                   data=matyt, states=arrvt, residuals=materrors,
-                  occurrences=matot, logLik=veclikelihood);
+                  occurrence=matot, logLik=veclikelihood);
     return(structure(model,class="smooth.sim"));
 }

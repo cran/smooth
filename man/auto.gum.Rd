@@ -9,8 +9,8 @@ auto.gum(data, orderMax = 3, lagMax = frequency(data), type = c("A",
   "AIC", "BIC", "BICc"), cfType = c("MSE", "MAE", "HAM", "MSEh", "TMSE",
   "GTMSE", "MSCE"), h = 10, holdout = FALSE, cumulative = FALSE,
   intervals = c("none", "parametric", "semiparametric", "nonparametric"),
-  level = 0.95, intermittent = c("none", "auto", "fixed", "interval",
-  "probability", "sba", "logistic"), imodel = "MNN",
+  level = 0.95, occurrence = c("none", "auto", "fixed", "general",
+  "odds-ratio", "inverse-odds-ratio", "direct"), oesmodel = "MNN",
   bounds = c("restricted", "admissible", "none"), silent = c("all",
   "graph", "legend", "output", "none"), xreg = NULL, xregDo = c("use",
   "select"), initialX = NULL, updateX = FALSE, persistenceX = NULL,
@@ -38,7 +38,7 @@ produced using backcasting procedure.}
 
 \item{ic}{The information criterion used in the model selection procedure.}
 
-\item{cfType}{Type of Cost Function used in optimization. \code{cfType} can
+\item{cfType}{The type of Cost Function used in optimization. \code{cfType} can
 be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
 \code{HAM} (Half Absolute Moment), \code{TMSE} - Trace Mean Squared Error,
 \code{GTMSE} - Geometric Trace Mean Squared Error, \code{MSEh} - optimisation
@@ -86,20 +86,18 @@ quantile-wise (Lichtendahl et al., 2013).}
 
 \item{level}{Confidence level. Defines width of prediction interval.}
 
-\item{intermittent}{Defines type of intermittent model used. Can be: 1.
-\code{none}, meaning that the data should be considered as non-intermittent;
-2. \code{fixed}, taking into account constant Bernoulli distribution of
-demand occurrences; 3. \code{interval}, Interval-based model, underlying
-Croston, 1972 method; 4. \code{probability}, Probability-based model,
-underlying Teunter et al., 2011 method. 5. \code{auto} - automatic selection
-of intermittency type based on information criteria. The first letter can be
-used instead. 6. \code{"sba"} - Syntetos-Boylan Approximation for Croston's
-method (bias correction) discussed in Syntetos and Boylan, 2005. 7.
-\code{"logistic"} - the probability is estimated based on logistic regression
-model principles.}
+\item{occurrence}{The type of model used in probability estimation. Can be
+\code{"none"} - none,
+\code{"fixed"} - constant probability,
+\code{"general"} - the general Beta model with two parameters,
+\code{"odds-ratio"} - the Odds-ratio model with b=1 in Beta distribution,
+\code{"inverse-odds-ratio"} - the model with a=1 in Beta distribution,
+\code{"direct"} - the TSB-like (Teunter et al., 2011) probability update
+mechanism a+b=1,
+\code{"auto"} - the automatically selected type of occurrence model.}
 
-\item{imodel}{Type of ETS model used for the modelling of the time varying
-probability. Object of the class "iss" can be provided here, and its parameters
+\item{oesmodel}{The type of ETS model used for the modelling of the time varying
+probability. Object of the class "oes" can be provided here, and its parameters
 would be used in iETS model.}
 
 \item{bounds}{What type of bounds to use in the model estimation. The first
@@ -116,31 +114,31 @@ and \code{FALSE}. In this case \code{silent=TRUE} is equivalent to
 \code{silent="none"}. The parameter also accepts first letter of words ("n",
 "a", "g", "l", "o").}
 
-\item{xreg}{Vector (either numeric or time series) or matrix (or data.frame)
-of exogenous variables that should be included in the model. If matrix
-included than columns should contain variables and rows - observations. Note
-that \code{xreg} should have number of observations equal either to
+\item{xreg}{The vector (either numeric or time series) or the matrix (or
+data.frame) of exogenous variables that should be included in the model. If
+matrix included than columns should contain variables and rows - observations.
+Note that \code{xreg} should have number of observations equal either to
 in-sample or to the whole series. If the number of observations in
 \code{xreg} is equal to in-sample, then values for the holdout sample are
 produced using \link[smooth]{es} function.}
 
-\item{xregDo}{Variable defines what to do with the provided xreg:
+\item{xregDo}{The variable defines what to do with the provided xreg:
 \code{"use"} means that all of the data should be used, while
 \code{"select"} means that a selection using \code{ic} should be done.
 \code{"combine"} will be available at some point in future...}
 
-\item{initialX}{Vector of initial parameters for exogenous variables.
+\item{initialX}{The vector of initial parameters for exogenous variables.
 Ignored if \code{xreg} is NULL.}
 
 \item{updateX}{If \code{TRUE}, transition matrix for exogenous variables is
 estimated, introducing non-linear interactions between parameters.
 Prerequisite - non-NULL \code{xreg}.}
 
-\item{persistenceX}{Persistence vector \eqn{g_X}, containing smoothing
+\item{persistenceX}{The persistence vector \eqn{g_X}, containing smoothing
 parameters for exogenous variables. If \code{NULL}, then estimated.
 Prerequisite - non-NULL \code{xreg}.}
 
-\item{transitionX}{Transition matrix \eqn{F_x} for exogenous variables. Can
+\item{transitionX}{The transition matrix \eqn{F_x} for exogenous variables. Can
 be provided as a vector. Matrix will be formed using the default
 \code{matrix(transition,nc,nc)}, where \code{nc} is number of components in
 state vector. If \code{NULL}, then estimated. Prerequisite - non-NULL
