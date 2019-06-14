@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2019-04-25" />
+<meta name="date" content="2019-06-13" />
 
 <title>smooth: forecasting using state-space models</title>
 
@@ -217,7 +217,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2019-04-25</h4>
+<h4 class="date">2019-06-13</h4>
 
 
 
@@ -232,9 +232,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
 <li><a href="simulate.html">Simulate functions of the package</a>.</li>
 <li><code>smoothCombine()</code> - function that combines forecasts of the main univariate functions of smooth package.</li>
-<li><code>oes()</code> – function that estimates probability of occurrence of variable using one of the following model types: 1. Fixed probability; 2. Odds ratio probability; 3. Inverse odds ratio probability; 4. Direct probability; 5. General. It can also select the most appropriate model among these five. The model produced by <code>oes()</code> can then be used in any forecasting function as input variable for <code>occurrence</code> parameter. This is the new function introduced in smooth v2.5.0, substituting the old <code>iss()</code> function. There is also vector counterpart of this function called <code>viss()</code> which implements multivariate fixed and logistic probabilities.</li>
-<li><code>xregExpander()</code> – function that creates lags and leads of the provided exogenous variables (either vector or matrix) and forecasts the missing values. This thing returns the matrix.</li>
-<li><code>stepwise()</code> – the function that implements stepwise based on information criteria and partial correlations. Easier to use and works faster than <code>step()</code> from <code>stats</code> package.</li>
+<li><a href="oes.html">oes() - Occurrence part of iETS model</a> – function that estimates probability of occurrence of variable using one of the following model types: 1. Fixed probability; 2. Odds ratio probability; 3. Inverse odds ratio probability; 4. Direct probability; 5. General. It can also select the most appropriate model among these five. The model produced by <code>oes()</code> can then be used in any forecasting function as input variable for <code>occurrence</code> parameter. This is the new function introduced in smooth v2.5.0, substituting the old <code>iss()</code> function. There is also vector counterpart of this function called <code>viss()</code> which implements multivariate fixed and logistic probabilities.</li>
 </ol>
 <p>The functions (1) - (4) and (6) return object of class <code>smooth</code>, (5) returns the object of class <code>vsmooth</code>, (7) returns <code>smooth.sim</code> class and finally (8) returns <code>oes</code> or <code>viss</code> (depending on the function used). There are several methods for these classes in the package.</p>
 <div id="methods-for-the-class-smooth" class="section level2">
@@ -249,7 +247,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <li><code>plot(ourModel)</code> – plots states of constructed model. If number of states is higher than 10, then several graphs are produced.</li>
 <li><code>simulate(ourModel)</code> – produces data simulated from provided model;</li>
 <li><code>summary(forecast(ourModel))</code> – prints point and interval forecasts;</li>
-<li><code>plot(forecast(ourModel))</code> – produces graph with actuals, forecast, fitted and intervals using <code>graphmaker()</code> function.</li>
+<li><code>plot(forecast(ourModel))</code> – produces graph with actuals, forecast, fitted and prediction interval using <code>graphmaker()</code> function from <code>greybox</code> package.</li>
 <li><code>logLik(ourModel)</code> – returns log-likelihood of the model;</li>
 <li><code>nobs(ourModel)</code> – returns number of observations in-sample we had;</li>
 <li><code>nParam(ourModel)</code> – number of estimated parameters (originally from <code>greybox</code> package);</li>

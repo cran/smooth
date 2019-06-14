@@ -16,9 +16,9 @@ logLik.viss <- function(object,...){
 AICc.vsmooth <- function(object, ...){
     llikelihood <- logLik(object);
     llikelihood <- llikelihood[1:length(llikelihood)];
-    nSeries <- ncol(object$actuals);
+    nSeries <- ncol(actuals(object));
     # Remove covariances in the number of parameters
-    nParamAll <- nparam(object) / nSeries - switch(object$cfType,
+    nParamAll <- nparam(object) / nSeries - switch(object$loss,
                                                    "likelihood" = nSeries*(nSeries+1)/2,
                                                    "trace" = ,
                                                    "diagonal" = 1);
@@ -34,9 +34,9 @@ AICc.vsmooth <- function(object, ...){
 BICc.vsmooth <- function(object, ...){
     llikelihood <- logLik(object);
     llikelihood <- llikelihood[1:length(llikelihood)];
-    nSeries <- ncol(object$actuals);
+    nSeries <- ncol(actuals(object));
     # Remove covariances in the number of parameters
-    nParamAll <- nparam(object) / nSeries - switch(object$cfType,
+    nParamAll <- nparam(object) / nSeries - switch(object$loss,
                                                    "likelihood" = nSeries*(nSeries+1)/2,
                                                    "trace" = ,
                                                    "diagonal" = 1);
@@ -106,13 +106,13 @@ plot.viss <- function(x, ...){
         intermittent <- "None";
     }
 
-    actuals <- x$actuals;
+    y <- actuals(x);
     yForecast <- x$forecast;
     yFitted <- x$fitted;
-    dataDeltat <- deltat(actuals);
+    dataDeltat <- deltat(y);
     forecastStart <- start(yForecast);
     h <- nrow(yForecast);
-    nSeries <- ncol(actuals);
+    nSeries <- ncol(y);
     modelname <- paste0("iVES(",x$model,")")
 
     pages <- ceiling(nSeries / 5);
@@ -120,10 +120,10 @@ plot.viss <- function(x, ...){
     for(j in 1:pages){
         par(mfcol=c(min(5,floor(nSeries/j)),1));
         for(i in 1:nSeries){
-            plotRange <- range(min(actuals[,i],yForecast[,i],yFitted[,i]),
-                               max(actuals[,i],yForecast[,i],yFitted[,i]));
-            plot(actuals[,i],main=paste0(modelname,", series ", i),ylab="Y",
-                 ylim=plotRange, xlim=range(time(actuals[,i])[1],time(yForecast)[max(h,1)]),
+            plotRange <- range(min(y[,i],yForecast[,i],yFitted[,i]),
+                               max(y[,i],yForecast[,i],yFitted[,i]));
+            plot(y[,i],main=paste0(modelname,", series ", i),ylab="Y",
+                 ylim=plotRange, xlim=range(time(y[,i])[1],time(yForecast)[max(h,1)]),
                  type="l");
             lines(yFitted[,i],col="purple",lwd=2,lty=2);
             if(h>1){
@@ -211,16 +211,16 @@ print.viss <- function(x, ...){
 #' @export
 print.vsmooth <- function(x, ...){
     holdout <- any(!is.na(x$holdout));
-    intervals <- any(!is.na(x$PI));
+    interval <- any(!is.na(x$PI));
 
-    # if(all(holdout,intervals)){
-    #     insideintervals <- sum((x$holdout <= x$upper) & (x$holdout >= x$lower)) / length(x$forecast) * 100;
+    # if(all(holdout,interval)){
+    #     insideinterval <- sum((x$holdout <= x$upper) & (x$holdout >= x$lower)) / length(x$forecast) * 100;
     # }
     # else{
-    #     insideintervals <- NULL;
+    #     insideinterval <- NULL;
     # }
 
-    intervalsType <- x$intervals;
+    intervalType <- x$interval;
 
     cat(paste0("Time elapsed: ",round(as.numeric(x$timeElapsed,units="secs"),2)," seconds\n"));
     cat(paste0("Model estimated: ",x$model,"\n"));
@@ -249,10 +249,10 @@ print.vsmooth <- function(x, ...){
     }
     if(!is.null(x$nParam)){
         if(x$nParam[1,4]==1){
-            cat(paste0(x$nParam[1,4]," parameter was estimated for ", ncol(x$actuals) ," time series in the process\n"));
+            cat(paste0(x$nParam[1,4]," parameter was estimated for ", ncol(actuals(x)) ," time series in the process\n"));
         }
         else{
-            cat(paste0(x$nParam[1,4]," parameters were estimated for ", ncol(x$actuals) ," time series in the process\n"));
+            cat(paste0(x$nParam[1,4]," parameters were estimated for ", ncol(actuals(x)) ," time series in the process\n"));
         }
 
         if(x$nParam[2,4]>1){
@@ -263,9 +263,9 @@ print.vsmooth <- function(x, ...){
         }
     }
 
-    cat(paste0("Cost function type: ",x$cfType))
-    if(!is.null(x$cf)){
-        cat(paste0("; Cost function value: ",round(x$cf,3),"\n"));
+    cat(paste0("Loss function type: ",x$loss))
+    if(!is.null(x$lossValue)){
+        cat(paste0("; Loss function value: ",round(x$lossValue,3),"\n"));
     }
     else{
         cat("\n");
@@ -274,17 +274,17 @@ print.vsmooth <- function(x, ...){
     cat("\nInformation criteria:\n");
     print(x$ICs);
 
-    if(intervals){
-        if(x$intervals=="c"){
-            intervalsType <- "conditional";
+    if(interval){
+        if(x$interval=="c"){
+            intervalType <- "conditional";
         }
-        else if(x$intervals=="u"){
-            intervalsType <- "unconditional";
+        else if(x$interval=="u"){
+            intervalType <- "unconditional";
         }
-        else if(x$intervals=="i"){
-            intervalsType <- "independent";
+        else if(x$interval=="i"){
+            intervalType <- "independent";
         }
-        cat(paste0(x$level*100,"% ",intervalsType," prediction intervals were constructed\n"));
+        cat(paste0(x$level*100,"% ",intervalType," prediction interval were constructed\n"));
     }
 
 }
@@ -303,7 +303,7 @@ simulate.vsmooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     # Start a list of arguments
     args <- vector("list",0);
 
-    args$nSeries <- ncol(object$actuals);
+    args$nSeries <- ncol(actuals(object));
 
     if(!is.null(ellipsis$randomizer)){
         randomizer <- ellipsis$randomizer;
@@ -374,7 +374,7 @@ simulate.vsmooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     }
 
     args$randomizer <- randomizer;
-    args$frequency <- frequency(object$actuals);
+    args$frequency <- frequency(actuals(object));
     args$obs <- obs;
     args$nsim <- nsim;
     args$initial <- object$initial;

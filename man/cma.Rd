@@ -4,10 +4,10 @@
 \alias{cma}
 \title{Centered Moving Average}
 \usage{
-cma(data, order = NULL, silent = TRUE)
+cma(y, order = NULL, silent = TRUE, ...)
 }
 \arguments{
-\item{data}{Vector or ts object, containing data needed to be smoothed.}
+\item{y}{Vector or ts object, containing data needed to be smoothed.}
 
 \item{order}{Order of centered moving average. If \code{NULL}, then the
 function will try to select order of SMA based on information criteria.
@@ -15,6 +15,8 @@ See \link[smooth]{sma} for details.}
 
 \item{silent}{If \code{TRUE}, then plot is not produced. Otherwise, there
 is a plot...}
+
+\item{...}{Nothing. Needed only for the transition to the new name of variables.}
 }
 \value{
 Object of class "smooth" is returned. It contains the list of the
@@ -32,12 +34,12 @@ provided parameters will take this into account.
 \item \code{residuals} - the residuals of the SMA / AR model.
 \item \code{s2} - variance of the residuals (taking degrees of freedom into
 account) of the SMA / AR model.
-\item \code{actuals} - the original data.
+\item \code{y} - the original data.
 \item \code{ICs} - values of information criteria from the respective SMA or
 AR model. Includes AIC, AICc, BIC and BICc.
 \item \code{logLik} - log-likelihood of the SMA / AR model.
-\item \code{cf} - Cost function value (for the SMA / AR model).
-\item \code{cfType} - Type of cost function used in the estimation.
+\item \code{lossValue} - Cost function value (for the SMA / AR model).
+\item \code{loss} - Type of loss function used in the estimation.
 }
 }
 \description{
@@ -61,19 +63,19 @@ function!
 }
 \examples{
 
-# SMA of specific order
-ourModel <- sma(rnorm(118,100,3),order=12,h=18,holdout=TRUE,intervals="p")
+# CMA of specific order
+ourModel <- cma(rnorm(118,100,3),order=12)
 
-# SMA of arbitrary order
-ourModel <- sma(rnorm(118,100,3),h=18,holdout=TRUE,intervals="sp")
+# CMA of arbitrary order
+ourModel <- cma(rnorm(118,100,3))
 
 summary(ourModel)
-forecast(ourModel)
-plot(forecast(ourModel))
 
 }
 \references{
 \itemize{
+\item Svetunkov I. (2015 - Inf) "smooth" package for R - series of posts about the underlying
+models and how to use them: \url{https://forecasting.svetunkov.ru/en/tag/smooth/}.
 \item Svetunkov I. (2017). Statistical models underlying functions of 'smooth'
 package for R. Working Paper of Department of Management Science, Lancaster
 University 2017:1, 1-52.
@@ -86,8 +88,6 @@ University 2017:1, 1-52.
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}
 }
-\keyword{ARIMA}
-\keyword{SARIMA}
 \keyword{models}
 \keyword{nonlinear}
 \keyword{regression}

@@ -29,8 +29,8 @@ x <- cbind(rnorm(length(M3$N2457$x),50,3),rnorm(length(M3$N2457$x),100,7))
 ourModel <- auto.ssarima(M3$N2457$x, h=18, holdout=TRUE, xreg=x, updateX=TRUE)
 
 ## ----auto_ssarima_N2457_xreg_update--------------------------------------
-ssarima(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, xreg=x, updateX=TRUE, intervals=TRUE)
+ssarima(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, xreg=x, updateX=TRUE, interval=TRUE)
 
 ## ----auto_ssarima_N2457_combination--------------------------------------
-ssarima(M3$N2457$x, h=18, holdout=FALSE, intervals=TRUE, combine=TRUE)
+ssarima(M3$N2457$x, h=18, holdout=FALSE, interval=TRUE, combine=TRUE)
 

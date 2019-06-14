@@ -63,5 +63,5 @@ oETSAModel
 plot(oETSAModel)
 
 ## ----iETSGRoundedExample-------------------------------------------------
-es(rpois(100,0.3), "MNN", occurrence="g", oesmodel="MNN", h=10, holdout=TRUE, silent=FALSE, intervals=TRUE, rounded=TRUE)
+es(rpois(100,0.3), "MNN", occurrence="g", oesmodel="MNN", h=10, holdout=TRUE, silent=FALSE, interval=TRUE, rounded=TRUE)
 

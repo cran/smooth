@@ -4,21 +4,25 @@
 \alias{oes}
 \title{Occurrence ETS model}
 \usage{
-oes(data, model = "MNN", persistence = NULL, initial = "o",
+oes(y, model = "MNN", persistence = NULL, initial = "o",
   initialSeason = NULL, phi = NULL, occurrence = c("fixed",
   "general", "odds-ratio", "inverse-odds-ratio", "direct", "auto", "none"),
   ic = c("AICc", "AIC", "BIC", "BICc"), h = 10, holdout = FALSE,
-  intervals = c("none", "parametric", "semiparametric", "nonparametric"),
+  interval = c("none", "parametric", "semiparametric", "nonparametric"),
   level = 0.95, bounds = c("usual", "admissible", "none"),
   silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
   xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
   transitionX = NULL, persistenceX = NULL, ...)
 }
 \arguments{
-\item{data}{Either numeric vector or time series vector.}
+\item{y}{Either numeric vector or time series vector.}
 
 \item{model}{The type of ETS model used for the estimation. Normally this should
-be \code{"MNN"} or any other pure multiplicative model.}
+be \code{"MNN"} or any other pure multiplicative or additive model. The model
+selection is available here (although it's not fast), so you can use, for example,
+\code{"YYN"} and \code{"XXN"} for selecting between the pure multiplicative and
+pure additive models respectively. Using mixed models is possible, but not
+recommended.}
 
 \item{persistence}{Persistence vector \eqn{g}, containing smoothing
 parameters. If \code{NULL}, then estimated.}
@@ -52,25 +56,25 @@ parameters (initials and smoothing).}
 \item{holdout}{If \code{TRUE}, holdout sample of size \code{h} is taken from
 the end of the data.}
 
-\item{intervals}{The type of intervals to construct. This can be:
+\item{interval}{The type of interval to construct. This can be:
 
 \itemize{
 \item \code{none}, aka \code{n} - do not produce prediction
-intervals.
+interval.
 \item \code{parametric}, \code{p} - use state-space structure of ETS. In
 case of mixed models this is done using simulations, which may take longer
 time than for the pure additive and pure multiplicative models.
-\item \code{semiparametric}, \code{sp} - intervals based on covariance
+\item \code{semiparametric}, \code{sp} - interval based on covariance
 matrix of 1 to h steps ahead errors and assumption of normal / log-normal
 distribution (depending on error type).
-\item \code{nonparametric}, \code{np} - intervals based on values from a
+\item \code{nonparametric}, \code{np} - interval based on values from a
 quantile regression on error matrix (see Taylor and Bunn, 1999). The model
 used in this process is e[j] = a j^b, where j=1,..,h.
 }
 The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
-parametric intervals are constructed, while the latter is equivalent to
+parametric interval are constructed, while the latter is equivalent to
 \code{none}.
-If the forecasts of the models were combined, then the intervals are combined
+If the forecasts of the models were combined, then the interval are combined
 quantile-wise (Lichtendahl et al., 2013).}
 
 \item{level}{The confidence level. Defines width of prediction interval.}
@@ -126,17 +130,18 @@ values:
 
 \itemize{
 \item \code{model} - the type of the estimated ETS model;
+\item \code{timeElapsed} - the time elapsed for the construction of the model;
 \item \code{fitted} - the fitted values for the probability;
-\item \code{fittedBeta} - the fitted values of the underlying ETS model, where applicable
+\item \code{fittedModel} - the fitted values of the underlying ETS model, where applicable
 (only for occurrence=c("o","i","d"));
 \item \code{forecast} - the forecast of the probability for \code{h} observations ahead;
-\item \code{forecastBeta} - the forecast of the underlying ETS model, where applicable
+\item \code{forecastModel} - the forecast of the underlying ETS model, where applicable
 (only for occurrence=c("o","i","d"));
 \item \code{states} - the values of the state vector;
 \item \code{logLik} - the log-likelihood value of the model;
 \item \code{nParam} - the number of parameters in the model (the matrix is returned);
 \item \code{residuals} - the residuals of the model;
-\item \code{actuals} - actual values of occurrence (zeros and ones).
+\item \code{y} - actual values of occurrence (zeros and ones).
 \item \code{persistence} - the vector of smoothing parameters;
 \item \code{phi} - the value of the damped trend parameter;
 \item \code{initial} - initial values of the state vector;
@@ -156,8 +161,10 @@ probability update and model types.
 }
 \details{
 The function estimates probability of demand occurrence, using the selected
-ETS state space models. Although the function accepts all types of ETS models,
-only the pure multiplicative models make sense.
+ETS state space models.
+
+For the details about the model and its implementation, see the respective
+vignette: \code{vignette("oes","smooth")}
 }
 \examples{
 

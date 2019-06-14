@@ -415,7 +415,7 @@ nparam.iss <- function(object, ...){
 #'
 #' # Generate data, apply es() with the holdout parameter and calculate PLS
 #' x <- rnorm(100,0,1)
-#' ourModel <- es(x, h=10, holdout=TRUE, intervals=TRUE)
+#' ourModel <- es(x, h=10, holdout=TRUE, interval=TRUE)
 #' pls(ourModel, type="a")
 #' pls(ourModel, type="e")
 #' pls(ourModel, type="s", obs=100, nsim=100)
@@ -470,24 +470,24 @@ pls.smooth <- function(object, holdout=NULL, ...){
     h <- length(holdout);
 
     Etype <- errorType(object);
-    cfType <- object$cfType;
-    if(any(cfType==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
-        cfType <- "MAE";
+    loss <- object$loss;
+    if(any(loss==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
+        loss <- "MAE";
     }
-    else if(any(cfType==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
-        cfType <- "HAM";
+    else if(any(loss==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
+        loss <- "HAM";
     }
     else{
-        cfType <- "MSE";
+        loss <- "MSE";
     }
 
-    densityFunction <- function(cfType, ...){
-        if(cfType=="MAE"){
+    densityFunction <- function(loss, ...){
+        if(loss=="MAE"){
         # This is a simplification. The real multivariate Laplace is bizarre!
             scale <- sqrt(diag(covarMat)/2);
             plsValue <- sum(dlaplace(errors, 0, scale, log=TRUE));
         }
-        else if(cfType=="HAM"){
+        else if(loss=="HAM"){
         # This is a simplification. We don't have multivariate HAM yet.
             scale <- (diag(covarMat)/120)^0.25;
             plsValue <- sum(ds(errors, 0, scale, log=TRUE));
@@ -521,7 +521,7 @@ pls.smooth <- function(object, holdout=NULL, ...){
         # Non-intermittent data
         if(is.null(object$occurrence)){
             errors <- holdout - yForecast;
-            plsValue <- densityFunction(cfType, errors, covarMat);
+            plsValue <- densityFunction(loss, errors, covarMat);
         }
         # Intermittent data
         else{
@@ -529,7 +529,7 @@ pls.smooth <- function(object, holdout=NULL, ...){
             pForecast <- object$occurrence$forecast;
             errors <- holdout - yForecast / pForecast;
             if(all(ot)){
-                plsValue <- densityFunction(cfType, errors, covarMat) + sum(log(pForecast));
+                plsValue <- densityFunction(loss, errors, covarMat) + sum(log(pForecast));
             }
             else if(all(!ot)){
                 plsValue <- sum(log(1-pForecast));
@@ -537,7 +537,7 @@ pls.smooth <- function(object, holdout=NULL, ...){
             else{
                 errors[!ot] <- 0;
 
-                plsValue <- densityFunction(cfType, errors, covarMat);
+                plsValue <- densityFunction(loss, errors, covarMat);
                 plsValue <- plsValue + sum(log(pForecast[ot])) + sum(log(1-pForecast[!ot]));
             }
         }
@@ -547,7 +547,7 @@ pls.smooth <- function(object, holdout=NULL, ...){
         # Non-intermittent data
         if(is.null(object$occurrence)){
             errors <- log(holdout) - log(yForecast);
-            plsValue <- densityFunction(cfType, errors, covarMat) - sum(log(holdout));
+            plsValue <- densityFunction(loss, errors, covarMat) - sum(log(holdout));
         }
         # Intermittent data
         else{
@@ -555,7 +555,7 @@ pls.smooth <- function(object, holdout=NULL, ...){
             pForecast <- object$occurrence$forecast;
             errors <- log(holdout) - log(yForecast / pForecast);
             if(all(ot)){
-                plsValue <- (densityFunction(cfType, errors, covarMat) - sum(log(holdout)) +
+                plsValue <- (densityFunction(loss, errors, covarMat) - sum(log(holdout)) +
                              sum(log(pForecast)));
             }
             else if(all(!ot)){
@@ -564,7 +564,7 @@ pls.smooth <- function(object, holdout=NULL, ...){
             else{
                 errors[!ot] <- 0;
 
-                plsValue <- densityFunction(cfType, errors, covarMat) - sum(log(holdout[ot]));
+                plsValue <- densityFunction(loss, errors, covarMat) - sum(log(holdout[ot]));
                 plsValue <- plsValue + sum(log(pForecast[ot])) + sum(log(1-pForecast[!ot]));
             }
         }
@@ -586,17 +586,17 @@ pointLik.smooth <- function(object, ...){
     obs <- nobs(object);
     errors <- residuals(object);
     likValues <- vector("numeric",obs);
-    cfType <- object$cfType;
+    loss <- object$loss;
 
     if(errorType(object)=="M"){
         errors <- log(1+errors);
         likValues <- likValues - log(actuals(object));
     }
 
-    if(any(cfType==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
+    if(any(loss==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
         likValues <- likValues + dlaplace(errors, 0, mean(abs(errors)), TRUE);
     }
-    else if(any(cfType==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
+    else if(any(loss==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
         likValues <- likValues + ds(errors, 0, mean(sqrt(abs(errors))/2), TRUE);
     }
     else{
@@ -666,7 +666,6 @@ coef.smooth <- function(object, ...)
     return(parameters);
 }
 
-#' @importFrom greybox actuals
 
 #### Fitted, forecast and actual values ####
 #' @export
@@ -691,7 +690,7 @@ NULL
 #' @aliases forecast forecast.smooth
 #' @param object Time series model for which forecasts are required.
 #' @param h Forecast horizon
-#' @param intervals Type of intervals to construct. See \link[smooth]{es} for
+#' @param interval Type of interval to construct. See \link[smooth]{es} for
 #' details.
 #' @param level Confidence level. Defines width of prediction interval.
 #' @param ...  Other arguments accepted by either \link[smooth]{es},
@@ -702,13 +701,13 @@ NULL
 #' \item \code{model} - the estimated model (ES / CES / GUM / SSARIMA).
 #' \item \code{method} - the name of the estimated model (ES / CES / GUM / SSARIMA).
 #' \item \code{fitted} - fitted values of the model.
-#' \item \code{actuals} - actuals provided in the call of the model.
+#' \item \code{y} - actual values provided in the call of the model.
 #' \item \code{forecast} aka \code{mean} - point forecasts of the model
 #' (conditional mean).
-#' \item \code{lower} - lower bound of prediction intervals.
-#' \item \code{upper} - upper bound of prediction intervals.
+#' \item \code{lower} - lower bound of prediction interval.
+#' \item \code{upper} - upper bound of prediction interval.
 #' \item \code{level} - confidence level.
-#' \item \code{intervals} - binary variable (whether intervals were produced or not).
+#' \item \code{interval} - binary variable (whether interval were produced or not).
 #' \item \code{residuals} - the residuals of the original model.
 #' }
 #' @template ssAuthor
@@ -722,32 +721,32 @@ NULL
 #' ourModel <- ces(rnorm(100,0,1),h=10)
 #'
 #' forecast.smooth(ourModel,h=10)
-#' forecast.smooth(ourModel,h=10,intervals=TRUE)
-#' plot(forecast.smooth(ourModel,h=10,intervals=TRUE))
+#' forecast.smooth(ourModel,h=10,interval=TRUE)
+#' plot(forecast.smooth(ourModel,h=10,interval=TRUE))
 #'
 #' @export forecast.smooth
 #' @export
 forecast.smooth <- function(object, h=10,
-                            intervals=c("parametric","semiparametric","nonparametric","none"),
+                            interval=c("parametric","semiparametric","nonparametric","none"),
                             level=0.95, ...){
     smoothType <- smoothType(object);
-    intervals <- intervals[1];
+    interval <- interval[1];
     if(smoothType=="ETS"){
-        newModel <- es(object$actuals,model=object,h=h,intervals=intervals,level=level,silent="all",...);
+        newModel <- es(actuals(object),model=object,h=h,interval=interval,level=level,silent="all",...);
     }
     else if(smoothType=="CES"){
-        newModel <- ces(object$actuals,model=object,h=h,intervals=intervals,level=level,silent="all",...);
+        newModel <- ces(actuals(object),model=object,h=h,interval=interval,level=level,silent="all",...);
     }
     else if(smoothType=="GUM"){
-        newModel <- gum(object$actuals,model=object,type=errorType(object),h=h,intervals=intervals,level=level,silent="all",...);
+        newModel <- gum(actuals(object),model=object,type=errorType(object),h=h,interval=interval,level=level,silent="all",...);
     }
     else if(smoothType=="ARIMA"){
         if(any(unlist(gregexpr("combine",object$model))==-1)){
             if(is.msarima(object)){
-                newModel <- msarima(object$actuals,model=object,h=h,intervals=intervals,level=level,silent="all",...);
+                newModel <- msarima(actuals(object),model=object,h=h,interval=interval,level=level,silent="all",...);
             }
             else{
-                newModel <- ssarima(object$actuals,model=object,h=h,intervals=intervals,level=level,silent="all",...);
+                newModel <- ssarima(actuals(object),model=object,h=h,interval=interval,level=level,silent="all",...);
             }
         }
         else{
@@ -756,14 +755,14 @@ forecast.smooth <- function(object, h=10,
         }
     }
     else if(smoothType=="SMA"){
-        newModel <- sma(object$actuals,model=object,h=h,intervals=intervals,level=level,silent="all",...);
+        newModel <- sma(actuals(object),model=object,h=h,interval=interval,level=level,silent="all",...);
     }
     else{
         stop("Wrong object provided. This needs to be either 'ETS', or 'CES', or 'GUM', or 'SSARIMA', or 'SMA' model.",call.=FALSE);
     }
-    output <- list(model=object,method=object$model,fitted=newModel$fitted,actuals=newModel$actuals,
+    output <- list(model=object,method=object$model,fitted=newModel$fitted,y=actuals(newModel),
                    forecast=newModel$forecast,lower=newModel$lower,upper=newModel$upper,level=newModel$level,
-                   intervals=intervals,mean=newModel$forecast,x=object$actuals,residuals=object$residuals);
+                   interval=interval,mean=newModel$forecast,x=actuals(object),residuals=object$residuals);
 
     return(structure(output,class=c("smooth.forecast","forecast")));
 }
@@ -772,11 +771,15 @@ forecast.smooth <- function(object, h=10,
 #' @importFrom greybox actuals
 #' @export
 actuals.smooth <- function(object, ...){
-    return(window(object$actuals,start(object$actuals),end(object$fitted)));
+    return(window(object$y,start(object$y),end(object$fitted)));
 }
 #' @export
 actuals.smooth.forecast <- function(object, ...){
-    return(window(object$model$actuals,start(object$model$actuals),end(object$model$fitted)));
+    return(window(object$model$y,start(object$model$y),end(object$model$fitted)));
+}
+#' @export
+actuals.iss <- function(object, ...){
+    return(window(object$y,start(object$y),end(object$fitted)));
 }
 
 #### Function extracts lags of provided model ####
@@ -1007,14 +1010,7 @@ modelName.smooth <- function(object, ...){
 #### Function extracts type of model. For example "AAN" from ets ####
 #' @export
 modelType.default <- function(object, ...){
-    modelType <- NA;
-    if(is.null(object$model)){
-        if(any(gregexpr("ets",object$call)!=-1)){
-            model <- object$method;
-            modelType <- gsub(",","",substring(model,5,nchar(model)-1));
-        }
-    }
-    return(modelType);
+    return(NA);
 }
 
 #' @export
@@ -1058,6 +1054,11 @@ modelType.iss <- function(object, ...){
 #' @export
 modelType.oesg <- function(object, ...){
     return(modelType(object$modelA));
+}
+
+#' @export
+modelType.ets <- function(object, ...){
+    return(gsub(",","",substring(object$method,5,nchar(object$method)-1)));
 }
 
 #### Function extracts orders of provided model ####
@@ -1161,10 +1162,10 @@ plot.oes <- function(x, ...){
     ellipsis <- list(...);
 
     if(is.null(ellipsis$main)){
-        graphmaker(x$actuals,x$forecast,x$fitted,x$lower,x$upper,main=x$model,...);
+        graphmaker(actuals(x),x$forecast,x$fitted,x$lower,x$upper,main=x$model,...);
     }
     else{
-        graphmaker(x$actuals,x$forecast,x$fitted,x$lower,x$upper, ...);
+        graphmaker(actuals(x),x$forecast,x$fitted,x$lower,x$upper, ...);
     }
 }
 
@@ -1206,7 +1207,7 @@ plot.smooth <- function(x, ...){
         }
     }
     else if(smoothType=="CMA"){
-        ellipsis$actuals <- x$actuals;
+        ellipsis$actuals <- actuals(x);
         ellipsis$forecast <- x$forecast;
         ellipsis$fitted <- x$fitted;
         ellipsis$legend <- FALSE;
@@ -1253,7 +1254,7 @@ plot.smooth <- function(x, ...){
 
 #' @export
 plot.smoothC <- function(x, ...){
-    graphmaker(x$actuals, x$forecast, x$fitted, x$lower, x$upper, x$level,
+    graphmaker(actuals(x), x$forecast, x$fitted, x$lower, x$upper, x$level,
                main="Combined smooth forecasts");
 }
 
@@ -1293,11 +1294,11 @@ plot.smooth.sim <- function(x, ...){
 #' @method plot smooth.forecast
 #' @export
 plot.smooth.forecast <- function(x, ...){
-    if(any(x$intervals!=c("none","n"))){
-        graphmaker(x$actuals,x$forecast,x$fitted,x$lower,x$upper,x$level,main=x$method);
+    if(any(x$interval!=c("none","n"))){
+        graphmaker(actuals(x),x$forecast,x$fitted,x$lower,x$upper,x$level,main=x$method);
     }
     else{
-        graphmaker(x$actuals,x$forecast,x$fitted,main=x$method);
+        graphmaker(actuals(x),x$forecast,x$fitted,main=x$method);
     }
 }
 
@@ -1321,10 +1322,10 @@ plot.iss <- function(x, ...){
         intermittent <- "None";
     }
     if(is.null(ellipsis$main)){
-        graphmaker(x$actuals,x$forecast,x$fitted,main=paste0("iSS, ",intermittent), ...);
+        graphmaker(actuals(x),x$forecast,x$fitted,main=paste0("iSS, ",intermittent), ...);
     }
     else{
-        graphmaker(x$actuals,x$forecast,x$fitted, ...);
+        graphmaker(actuals(x),x$forecast,x$fitted, ...);
     }
 }
 
@@ -1336,34 +1337,34 @@ print.smooth <- function(x, ...){
     if(!is.list(x$model)){
         if(smoothType=="CMA"){
             holdout <- FALSE;
-            intervals <- FALSE;
+            interval <- FALSE;
             cumulative <- FALSE;
         }
         else{
             holdout <- any(!is.na(x$holdout));
-            intervals <- any(!is.na(x$lower));
+            interval <- any(!is.na(x$lower));
             cumulative <- x$cumulative;
         }
     }
     else{
         holdout <- any(!is.na(x$holdout));
-        intervals <- any(!is.na(x$lower));
+        interval <- any(!is.na(x$lower));
         cumulative <- x$cumulative;
     }
 
-    if(all(holdout,intervals)){
+    if(all(holdout,interval)){
         if(!cumulative){
-            insideintervals <- sum((x$holdout <= x$upper) & (x$holdout >= x$lower)) / length(x$forecast) * 100;
+            insideinterval <- sum((x$holdout <= x$upper) & (x$holdout >= x$lower)) / length(x$forecast) * 100;
         }
         else{
-            insideintervals <- NULL;
+            insideinterval <- NULL;
         }
     }
     else{
-        insideintervals <- NULL;
+        insideinterval <- NULL;
     }
 
-    intervalsType <- x$intervals;
+    intervalType <- x$interval;
 
     if(!is.null(x$model)){
         if(!is.list(x$model)){
@@ -1375,7 +1376,7 @@ print.smooth <- function(x, ...){
             else if(smoothType=="ETS"){
                 # If cumulative forecast and Etype=="M", report that this was "parameteric" interval
                 if(cumulative & substr(modelType(x),1,1)=="M"){
-                    intervalsType <- "p";
+                    intervalType <- "p";
                 }
             }
         }
@@ -1390,9 +1391,9 @@ print.smooth <- function(x, ...){
     ssOutput(x$timeElapsed, x$model, persistence=x$persistence, transition=x$transition, measurement=x$measurement,
              phi=x$phi, ARterms=x$AR, MAterms=x$MA, constant=x$constant, A=x$A, B=x$B,initialType=x$initialType,
              nParam=x$nParam, s2=x$s2, hadxreg=!is.null(x$xreg), wentwild=x$updateX,
-             cfType=x$cfType, cfObjective=x$cf, intervals=intervals, cumulative=cumulative,
-             intervalsType=intervalsType, level=x$level, ICs=x$ICs,
-             holdout=holdout, insideintervals=insideintervals, errormeasures=x$accuracy,
+             loss=x$loss, cfObjective=x$lossValue, interval=interval, cumulative=cumulative,
+             intervalType=intervalType, level=x$level, ICs=x$ICs,
+             holdout=holdout, insideinterval=insideinterval, errormeasures=x$accuracy,
              occurrence=occurrence);
 }
 
@@ -1504,7 +1505,7 @@ print.smooth.sim <- function(x, ...){
 
 #' @export
 print.smooth.forecast <- function(x, ...){
-    if(any(x$intervals!=c("none","n"))){
+    if(any(x$interval!=c("none","n"))){
         level <- x$level;
         if(level>1){
             level <- level/100;
@@ -1564,8 +1565,8 @@ print.oes <- function(x, ...){
     if(occurrence=="g"){
         occurrence <- "General";
     }
-    else if(occurrence=="p"){
-        occurrence <- "Probability-based";
+    else if(occurrence=="d"){
+        occurrence <- "Direct probability";
     }
     else if(occurrence=="f"){
         occurrence <- "Fixed probability";
@@ -1613,8 +1614,8 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     # Start a list of arguments
     args <- vector("list",0);
 
-    cfType <- object$cfType;
-    if(any(cfType==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
+    loss <- object$loss;
+    if(any(loss==c("MAE","MAEh","TMAE","GTMAE","MACE"))){
         randomizer <- "rlaplace";
         if(!is.null(ellipsis$mu)){
             args$mu <- ellipsis$mu;
@@ -1630,7 +1631,7 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
             args$scale <- mean(abs(residuals(object)));
         }
     }
-    else if(any(cfType==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
+    else if(any(loss==c("HAM","HAMh","THAM","GTHAM","CHAM"))){
         randomizer <- "rs";
         if(!is.null(ellipsis$mu)){
             args$mu <- ellipsis$mu;
@@ -1668,7 +1669,7 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
         }
     }
     args$randomizer <- randomizer;
-    args$frequency <- frequency(object$actuals);
+    args$frequency <- frequency(actuals(object));
     args$obs <- obs;
     args$nsim <- nsim;
     args$initial <- object$initial;

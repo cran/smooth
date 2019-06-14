@@ -13,7 +13,7 @@ gum(M3$N2457$x, h=18, holdout=TRUE)
 gum(M3$N2457$x, h=18, holdout=TRUE, orders=c(2,1), lags=c(1,12))
 
 ## ----Autogum_N2457_1[1]--------------------------------------------------
-auto.gum(M3[[2457]], intervals=TRUE, silent=FALSE)
+auto.gum(M3[[2457]], interval=TRUE, silent=FALSE)
 
 ## ----gum_N2457_predefined------------------------------------------------
 	transition <- matrix(c(1,0,0,1,1,0,0,0,1),3,3)

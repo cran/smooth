@@ -83,6 +83,10 @@ a vector or a matrix...
 Function generates data using GUM with Single Source of Error as a data
 generating process.
 }
+\details{
+For the information about the function, see the vignette:
+\code{vignette("simulate","smooth")}
+}
 \examples{
 
 # Create 120 observations from GUM(1[1]). Generate 100 time series of this kind.
@@ -98,6 +102,8 @@ simulate(ourModel,nsim=10)
 }
 \references{
 \itemize{
+\item Svetunkov I. (2015 - Inf) "smooth" package for R - series of posts about the underlying
+models and how to use them: \url{https://forecasting.svetunkov.ru/en/tag/smooth/}.
 \item Svetunkov I. (2017). Statistical models underlying functions of 'smooth'
 package for R. Working Paper of Department of Management Science, Lancaster
 University 2017:1, 1-52.

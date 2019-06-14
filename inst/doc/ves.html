@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2019-04-25" />
+<meta name="date" content="2019-06-13" />
 
 <title>ves() - Vector Exponential Smoothing</title>
 
@@ -303,7 +303,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 <h1 class="title toc-ignore">ves() - Vector Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2019-04-25</h4>
+<h4 class="date">2019-06-13</h4>
 
 
 
@@ -315,10 +315,10 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1">Y &lt;-<span class="st"> </span><span class="kw">cbind</span>(M3<span class="op">$</span>N2570<span class="op">$</span>x,M3<span class="op">$</span>N2571<span class="op">$</span>x);</a></code></pre></div>
 <p><code>ves()</code> function allows constructing Vector Exponential Smoothing <span class="citation">(aka “VISTS” discussed by Silva, Hyndman, and Snyder 2010)</span> in either pure additive or pure multiplicative form. The function has several elements that can either be individual or grouped. The former means that all the time series use the same value. For example, <code>persistence=&quot;g&quot;</code> means that the smoothing parameters for all the series are the same. A simple call for <code>ves()</code> results in estimation of VES(A,N,N) with grouped smoothing parameters, transition matrix and individual initials:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb3-1" data-line-number="1"><span class="kw">ves</span>(Y, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.04 seconds
+<pre><code>## Time elapsed: 0.07 seconds
 ## Model estimated: VES(ANN)
 ## 6 parameters were estimated for 2 time series in the process
-## Cost function type: likelihood; Cost function value: 13.717
+## Loss function type: likelihood; Loss function value: 13.717
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
@@ -340,7 +340,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb8-1" data-line-number="1">ourModel &lt;-<span class="st"> </span><span class="kw">ves</span>(Y, <span class="st">&quot;MMdM&quot;</span>, <span class="dt">phi=</span><span class="st">&quot;i&quot;</span>, <span class="dt">persistence=</span><span class="st">&quot;i&quot;</span>, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</a></code></pre></div>
 <p>Number of estimated parameters in the model can be extracted via <code>nParam()</code> method. However, when it comes to the calculation of the number of degrees of freedom in the model, this value is divided by the number of series <span class="citation">(Lütkepohl 2005)</span>. So both <code>ourModel$Sigma</code> and all the information criteria rely on the <span class="math inline">\(df = T - k_m\)</span>, where <span class="math inline">\(T\)</span> is the number of observations and <span class="math inline">\(k_m = \frac{k}{m}\)</span> is the number of parameters <span class="math inline">\(k\)</span> per series (<span class="math inline">\(m\)</span> is the number of series).</p>
 <p>AICc and BICc for the vector models are calculated as proposed in <span class="citation">(Bedrick and Tsai 1994)</span> and <span class="citation">(Tremblay and Wallach 2004)</span>.</p>
-<p>Currently we don’t do model selection, don’t have exogenous variables and don’t produce conditional prediction intervals. But at least it works and allows you to play around with it :).</p>
+<p>Currently we don’t do model selection, don’t have exogenous variables and don’t produce conditional prediction interval. But at least it works and allows you to play around with it :).</p>
 <div id="references" class="section level3 unnumbered">
 <h3>References</h3>
 <div id="refs" class="references">

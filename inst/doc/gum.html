@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2019-04-25" />
+<meta name="date" content="2019-06-13" />
 
 <title>gum() - Generalised Univariate Model</title>
 
@@ -303,7 +303,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 <h1 class="title toc-ignore">gum() - Generalised Univariate Model</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2019-04-25</h4>
+<h4 class="date">2019-06-13</h4>
 
 
 
@@ -316,7 +316,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <p>Generalised Exponential Smoothing is a next step from CES. It is a state-space model in which all the matrices and vectors are estimated. It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GUM<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our example with monthly data N2457, we will have GUM<span class="math inline">\((1^1,1^{12})\)</span>:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.45 seconds
+<pre><code>## Time elapsed: 1.13 seconds
 ## Model estimated: GUM(1[1],1[12])
 ## Persistence vector g:
 ##       [,1]  [,2]
@@ -329,7 +329,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## Initial values were optimised.
 ## 22 parameters were estimated in the process
 ## Residuals standard deviation: 1318.608
-## Cost function type: MSE; Cost function value: 1738726.863
+## Loss function type: MSE; Loss function value: 1738726.863
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
@@ -339,7 +339,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## MASE: 2.782; sMAE: 113.5%; sMSE: 221.7%; RelMAE: 1.188; RelRMSE: 1.306</code></pre>
 <p>But some different orders and lags can be specified. For example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb4-1" data-line-number="1"><span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>))</a></code></pre></div>
-<pre><code>## Time elapsed: 0.36 seconds
+<pre><code>## Time elapsed: 0.89 seconds
 ## Model estimated: GUM(2[1],1[12])
 ## Persistence vector g:
 ##       [,1]  [,2]   [,3]
@@ -353,7 +353,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## Initial values were optimised.
 ## 30 parameters were estimated in the process
 ## Residuals standard deviation: 1269.81
-## Cost function type: MSE; Cost function value: 1612418.429
+## Loss function type: MSE; Loss function value: 1612418.429
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
@@ -362,12 +362,12 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## MPE: 24%; sCE: -1779.5%; Bias: 87.4%; MAPE: 37.9%
 ## MASE: 2.764; sMAE: 112.8%; sMSE: 214.9%; RelMAE: 1.181; RelRMSE: 1.286</code></pre>
 <p>Function <code>auto.gum()</code> is now implemented in <code>smooth</code>, but it works slowly as it needs to check a large number of models:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb6-1" data-line-number="1"><span class="kw">auto.gum</span>(M3[[<span class="dv">2457</span>]], <span class="dt">intervals=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</a></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb6-1" data-line-number="1"><span class="kw">auto.gum</span>(M3[[<span class="dv">2457</span>]], <span class="dt">interval=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</a></code></pre></div>
 <pre><code>## Starting preliminary loop:            1 out of 122 out of 123 out of 124 out of 125 out of 126 out of 127 out of 128 out of 129 out of 1210 out of 1211 out of 1212 out of 12. Done.
 ## Searching for appropriate lags:  —\|/—\|/—\|/We found them!
 ## Searching for appropriate orders:  —\|/—\|/—Orders found.
 ## Reestimating the model. Done!</code></pre>
-<pre><code>## Time elapsed: 27.51 seconds
+<pre><code>## Time elapsed: 69.38 seconds
 ## Model estimated: GUM(1[1],1[4])
 ## Persistence vector g:
 ##       [,1]  [,2]
@@ -380,12 +380,12 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## Initial values were produced using backcasting.
 ## 9 parameters were estimated in the process
 ## Residuals standard deviation: 1826.168
-## Cost function type: MSE; Cost function value: 3334888.499
+## Loss function type: MSE; Loss function value: 3334888.499
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
 ## 2071.650 2073.364 2096.354 2100.422 
-## 95% parametric prediction intervals were constructed
+## 95% parametric prediction interval were constructed
 ## 44% of values are in the prediction interval
 ## Forecast errors:
 ## MPE: -175.7%; sCE: 2148.6%; Bias: -89.7%; MAPE: 181.5%
@@ -395,7 +395,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" data-line-number="1">    transition &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>),<span class="dv">3</span>,<span class="dv">3</span>)</a>
 <a class="sourceLine" id="cb9-2" data-line-number="2">    measurement &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>)</a>
 <a class="sourceLine" id="cb9-3" data-line-number="3">    <span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>), <span class="dt">transition=</span>transition, <span class="dt">measurement=</span>measurement)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.27 seconds
+<pre><code>## Time elapsed: 0.63 seconds
 ## Model estimated: GUM(2[1],1[12])
 ## Persistence vector g:
 ##       [,1]  [,2]   [,3]
@@ -410,7 +410,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## 18 parameters were estimated in the process
 ## 12 parameters were provided
 ## Residuals standard deviation: 1339.166
-## Cost function type: MSE; Cost function value: 1793364.893
+## Loss function type: MSE; Loss function value: 1793364.893
 ## 
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 

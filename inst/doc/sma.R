@@ -10,5 +10,5 @@ require(Mcomp)
 sma(M3$N2457$x, h=18, silent=FALSE)
 
 ## ----sma_N2568-----------------------------------------------------------
-sma(M3$N2568$x, h=18)
+sma(M3$N2568$x, h=18, interval=TRUE)
 

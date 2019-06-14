@@ -4,14 +4,14 @@
 \alias{viss}
 \title{Vector Intermittent State Space}
 \usage{
-viss(data, intermittent = c("logistic", "none", "fixed"),
-  ic = c("AICc", "AIC", "BIC", "BICc"), h = 10, holdout = FALSE,
+viss(y, intermittent = c("logistic", "none", "fixed"), ic = c("AICc",
+  "AIC", "BIC", "BICc"), h = 10, holdout = FALSE,
   probability = c("dependent", "independent"), model = "ANN",
   persistence = NULL, transition = NULL, phi = NULL,
-  initial = NULL, initialSeason = NULL, xreg = NULL)
+  initial = NULL, initialSeason = NULL, xreg = NULL, ...)
 }
 \arguments{
-\item{data}{The matrix with data, where series are in columns and
+\item{y}{The matrix with data, where series are in columns and
 observations are in rows.}
 
 \item{intermittent}{Type of method used in probability estimation. Can be
@@ -53,6 +53,8 @@ If \code{NULL}, then it is estimated. See \link[smooth]{ves} for the details.}
 
 \item{xreg}{Vector of matrix of exogenous variables, explaining some parts
 of occurrence variable (probability).}
+
+\item{...}{Other parameters. This is not needed for now.}
 }
 \value{
 The object of class "iss" is returned. It contains following list of
@@ -67,7 +69,7 @@ values:
 \item \code{logLik} - likelihood value for the model
 \item \code{nParam} - number of parameters used in the model;
 \item \code{residuals} - residuals of the model;
-\item \code{actuals} - actual values of probabilities (zeros and ones).
+\item \code{y} - actual values of probabilities (zeros and ones).
 \item \code{persistence} - the vector of smoothing parameters;
 \item \code{initial} - initial values of the state vector;
 \item \code{initialSeason} - the matrix of initials seasonal states;

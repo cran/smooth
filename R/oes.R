@@ -6,8 +6,10 @@ utils::globalVariables(c("modelDo","initialValue","modelLagsMax"));
 #' probability update and model types.
 #'
 #' The function estimates probability of demand occurrence, using the selected
-#' ETS state space models. Although the function accepts all types of ETS models,
-#' only the pure multiplicative models make sense.
+#' ETS state space models.
+#'
+#' For the details about the model and its implementation, see the respective
+#' vignette: \code{vignette("oes","smooth")}
 #'
 #' @template ssIntermittentRef
 #' @template ssInitialParam
@@ -15,9 +17,13 @@ utils::globalVariables(c("modelDo","initialValue","modelLagsMax"));
 #' @template ssAuthor
 #' @template ssKeywords
 #'
-#' @param data Either numeric vector or time series vector.
+#' @param y Either numeric vector or time series vector.
 #' @param model The type of ETS model used for the estimation. Normally this should
-#' be \code{"MNN"} or any other pure multiplicative model.
+#' be \code{"MNN"} or any other pure multiplicative or additive model. The model
+#' selection is available here (although it's not fast), so you can use, for example,
+#' \code{"YYN"} and \code{"XXN"} for selecting between the pure multiplicative and
+#' pure additive models respectively. Using mixed models is possible, but not
+#' recommended.
 #' @param occurrence The type of model used in probability estimation. Can be
 #' \code{"none"} - none,
 #' \code{"fixed"} - constant probability,
@@ -34,25 +40,25 @@ utils::globalVariables(c("modelDo","initialValue","modelLagsMax"));
 #' @param h The forecast horizon.
 #' @param holdout If \code{TRUE}, holdout sample of size \code{h} is taken from
 #' the end of the data.
-#' @param intervals The type of intervals to construct. This can be:
+#' @param interval The type of interval to construct. This can be:
 #'
 #' \itemize{
 #' \item \code{none}, aka \code{n} - do not produce prediction
-#' intervals.
+#' interval.
 #' \item \code{parametric}, \code{p} - use state-space structure of ETS. In
 #' case of mixed models this is done using simulations, which may take longer
 #' time than for the pure additive and pure multiplicative models.
-#' \item \code{semiparametric}, \code{sp} - intervals based on covariance
+#' \item \code{semiparametric}, \code{sp} - interval based on covariance
 #' matrix of 1 to h steps ahead errors and assumption of normal / log-normal
 #' distribution (depending on error type).
-#' \item \code{nonparametric}, \code{np} - intervals based on values from a
+#' \item \code{nonparametric}, \code{np} - interval based on values from a
 #' quantile regression on error matrix (see Taylor and Bunn, 1999). The model
 #' used in this process is e[j] = a j^b, where j=1,..,h.
 #' }
 #' The parameter also accepts \code{TRUE} and \code{FALSE}. The former means that
-#' parametric intervals are constructed, while the latter is equivalent to
+#' parametric interval are constructed, while the latter is equivalent to
 #' \code{none}.
-#' If the forecasts of the models were combined, then the intervals are combined
+#' If the forecasts of the models were combined, then the interval are combined
 #' quantile-wise (Lichtendahl et al., 2013).
 #' @param level The confidence level. Defines width of prediction interval.
 #' @param bounds What type of bounds to use in the model estimation. The first
@@ -98,17 +104,18 @@ utils::globalVariables(c("modelDo","initialValue","modelLagsMax"));
 #'
 #' \itemize{
 #' \item \code{model} - the type of the estimated ETS model;
+#' \item \code{timeElapsed} - the time elapsed for the construction of the model;
 #' \item \code{fitted} - the fitted values for the probability;
-#' \item \code{fittedBeta} - the fitted values of the underlying ETS model, where applicable
+#' \item \code{fittedModel} - the fitted values of the underlying ETS model, where applicable
 #' (only for occurrence=c("o","i","d"));
 #' \item \code{forecast} - the forecast of the probability for \code{h} observations ahead;
-#' \item \code{forecastBeta} - the forecast of the underlying ETS model, where applicable
+#' \item \code{forecastModel} - the forecast of the underlying ETS model, where applicable
 #' (only for occurrence=c("o","i","d"));
 #' \item \code{states} - the values of the state vector;
 #' \item \code{logLik} - the log-likelihood value of the model;
 #' \item \code{nParam} - the number of parameters in the model (the matrix is returned);
 #' \item \code{residuals} - the residuals of the model;
-#' \item \code{actuals} - actual values of occurrence (zeros and ones).
+#' \item \code{y} - actual values of occurrence (zeros and ones).
 #' \item \code{persistence} - the vector of smoothing parameters;
 #' \item \code{phi} - the value of the damped trend parameter;
 #' \item \code{initial} - initial values of the state vector;
@@ -132,16 +139,23 @@ utils::globalVariables(c("modelDo","initialValue","modelLagsMax"));
 #' oes(y, occurrence="f")
 #'
 #' @export
-oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=NULL, phi=NULL,
+oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NULL, phi=NULL,
                 occurrence=c("fixed","general","odds-ratio","inverse-odds-ratio","direct","auto","none"),
                 ic=c("AICc","AIC","BIC","BICc"), h=10, holdout=FALSE,
-                intervals=c("none","parametric","semiparametric","nonparametric"), level=0.95,
+                interval=c("none","parametric","semiparametric","nonparametric"), level=0.95,
                 bounds=c("usual","admissible","none"),
                 silent=c("all","graph","legend","output","none"),
                 xreg=NULL, xregDo=c("use","select"), initialX=NULL,
                 updateX=FALSE, transitionX=NULL, persistenceX=NULL,
                 ...){
     # Function returns the occurrence part of the intermittent state space model
+
+# Start measuring the time of calculations
+    startTime <- Sys.time();
+
+    ##### Check if data was used instead of y. Remove by 2.6.0 #####
+    y <- depricator(y, list(...), "data");
+    interval <- depricator(interval, list(...), "intervals");
 
     # Options for the fitter and forecaster:
     # O: M / A odds-ratio - "odds-ratio"
@@ -158,8 +172,8 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
 
     # If the model is oes or oesg, use it
     if(is.oesg(model)){
-        return(oesg(data, modelA=model$modelA, modelB=model$modelB, h=h, holdout=holdout,
-                    intervals=intervals, level=level, bounds=bounds,
+        return(oesg(y, modelA=model$modelA, modelB=model$modelB, h=h, holdout=holdout,
+                    interval=interval, level=level, bounds=bounds,
                     silent=silent, ...));
     }
     else if(is.oes(model)){
@@ -178,17 +192,9 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
 
     ##### Preparations #####
     occurrence <- substring(occurrence[1],1,1);
-    if(occurrence=="g"){
-        return(oesg(data, modelA=model, modelB=model, persistenceA=persistence, persistenceB=persistence, phiA=phi, phiB=phi,
-                    initialA=initial, initialB=initial, initialSeasonA=initialSeason, initialSeasonB=initialSeason,
-                    ic=ic, h=h, holdout=holdout, intervals=intervals, level=level, bounds=bounds,
-                    silent=silent, xregA=xreg, xregB=xreg, xregDoA=xregDo, xregDoB=xregDo, updateXA=updateX, updateXB=updateX,
-                    persistenceXA=persistenceX, persistenceXB=persistenceX, transitionXA=transitionX, transitionXB=transitionX,
-                    initialXA=initialX, initialXB=initialX, ...));
-    }
 
-    if(is.smooth.sim(data)){
-        data <- data$data;
+    if(is.smooth.sim(y)){
+        y <- y$data;
     }
 
     # Add all the variables in ellipsis to current environment
@@ -222,7 +228,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
     }
 
     #### These are needed in order for ssInput to go forward
-    cfType <- "MSE";
+    loss <- "MSE";
     oesmodel <- NULL;
 
     ##### Set environment for ssInput and make all the checks #####
@@ -230,8 +236,8 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
     ssInput("oes",ParentEnvironment=environment());
 
     ### Produce vectors with zeroes and ones, fixed probability and the number of ones.
-    ot <- (y!=0)*1;
-    otAll <- (data!=0)*1;
+    ot <- (yInSample!=0)*1;
+    otAll <- (y!=0)*1;
     iprob <- mean(ot);
     obsOnes <- sum(ot);
 
@@ -242,9 +248,9 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
     }
 
     ##### Prepare exogenous variables #####
-    xregdata <- ssXreg(data=otAll, Etype="A", xreg=xreg, updateX=updateX, ot=rep(1,obsInsample),
+    xregdata <- ssXreg(y=otAll, Etype="A", xreg=xreg, updateX=updateX, ot=rep(1,obsInSample),
                        persistenceX=persistenceX, transitionX=transitionX, initialX=initialX,
-                       obsInsample=obsInsample, obsAll=obsAll, obsStates=obsStates,
+                       obsInSample=obsInSample, obsAll=obsAll, obsStates=obsStates,
                        maxlag=1, h=h, xregDo=xregDo, silent=silentText,
                        allowMultiplicative=FALSE);
 
@@ -258,15 +264,12 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
     xreg <- xregdata$xreg;
     initialXEstimate <- xreg$initialXEstimate;
 
-    # The start time for the forecasts
-    yForecastStart <- time(data)[obsInsample]+deltat(data);
-
-    #### The functions for the O, I, and P models ####
+        #### The functions for the O, I, and P models ####
     if(any(occurrence==c("o","i","d"))){
         ##### Initialiser of oes #####
         # This creates the states, transition, persistence and measurement matrices
         oesInitialiser <- function(Etype, Ttype, Stype, damped, phiEstimate, occurrence,
-                                   dataFreq, obsInsample, obsAll, obsStates, ot,
+                                   dataFreq, obsInSample, obsAll, obsStates, ot,
                                    persistenceEstimate, persistence, initialType, initialValue,
                                    initialSeasonEstimate, initialSeason){
             # Define the lags of the model, number of components and max lag
@@ -300,7 +303,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
 
             # Persistence vector. The initials are set here!
             if(persistenceEstimate){
-                vecg <- matrix(0.01, nComponentsAll, 1);
+                vecg <- matrix(0.05, nComponentsAll, 1);
             }
             else{
                 vecg <- matrix(persistence, nComponentsAll, 1);
@@ -343,7 +346,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
             # Define the seasonals
             if(modelIsSeasonal){
                 if(initialSeasonEstimate){
-                    XValues <- matrix(rep(diag(modelLagsMax),ceiling(obsInsample/modelLagsMax)),modelLagsMax)[,1:obsInsample];
+                    XValues <- matrix(rep(diag(modelLagsMax),ceiling(obsInSample/modelLagsMax)),modelLagsMax)[,1:obsInSample];
                     # The seasonal values should be between -1 and 1
                     initialSeasonValue <- solve(XValues %*% t(XValues)) %*% XValues %*% (ot - mean(ot));
                     # But make sure that it lies there
@@ -476,7 +479,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
                     else{
                         if(Ttype=="A"){
                             # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
-                            A <- c(A,mean(ot[1:min(dataFreq,obsInsample)]),1E-5);
+                            A <- c(A,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
                             ALower <- c(ALower,-Inf);
                             AUpper <- c(AUpper,Inf);
                         }
@@ -534,7 +537,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
                     else{
                         if(Ttype=="A"){
                             # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
-                            A <- c(A,mean(ot[1:min(dataFreq,obsInsample)]),1E-5);
+                            A <- c(A,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
                             ALower <- c(ALower,-Inf);
                             AUpper <- c(AUpper,Inf);
                         }
@@ -592,7 +595,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
                     else{
                         if(Ttype=="A"){
                             # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
-                            A <- c(A,mean(ot[1:min(dataFreq,obsInsample)]),1E-5);
+                            A <- c(A,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
                             ALower <- c(ALower,-Inf);
                             AUpper <- c(AUpper,Inf);
                         }
@@ -656,7 +659,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
             return(list(A=A,ALower=ALower,AUpper=AUpper));
         }
 
-##### Cost Function for oes #####
+        ##### Cost Function for oes #####
         CF <- function(A, modelLags, Etype, Ttype, Stype, occurrence, damped,
                        nComponentsAll, nComponentsNonSeasonal, nExovars, modelLagsMax,
                        persistenceEstimate, initialType, phiEstimate, modelIsSeasonal, initialSeasonEstimate,
@@ -683,36 +686,47 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
         }
     }
 
-    ##### Fixed probability #####
-    if(occurrence=="f"){
-        model <- "MNN";
-        if(initialType!="o"){
-            pt <- ts(matrix(rep(initial,obsInsample),obsInsample,1), start=dataStart, frequency=dataFreq);
+    ##### Estimate the model #####
+    if(modelDo=="estimate"){
+        ##### General model - from oesg() #####
+        if(occurrence=="g"){
+            return(oesg(y, modelA=model, modelB=model, persistenceA=persistence, persistenceB=persistence, phiA=phi, phiB=phi,
+                        initialA=initial, initialB=initial, initialSeasonA=initialSeason, initialSeasonB=initialSeason,
+                        ic=ic, h=h, holdout=holdout, interval=interval, level=level, bounds=bounds,
+                        silent=silent, xregA=xreg, xregB=xreg, xregDoA=xregDo, xregDoB=xregDo, updateXA=updateX, updateXB=updateX,
+                        persistenceXA=persistenceX, persistenceXB=persistenceX, transitionXA=transitionX, transitionXB=transitionX,
+                        initialXA=initialX, initialXB=initialX, ...));
         }
-        else{
-            initial <- iprob;
-            pt <- ts(matrix(rep(initial,obsInsample),obsInsample,1), start=dataStart, frequency=dataFreq);
+        ##### Fixed probability #####
+        else if(occurrence=="f"){
+            model <- "MNN";
+            if(initialType!="o"){
+                pt <- ts(matrix(rep(initial,obsInSample),obsInSample,1), start=dataStart, frequency=dataFreq);
+            }
+            else{
+                initial <- iprob;
+                pt <- ts(matrix(rep(initial,obsInSample),obsInSample,1), start=dataStart, frequency=dataFreq);
+            }
+            names(initial) <- "level";
+            pForecast <- ts(rep(pt[1],h), start=yForecastStart, frequency=dataFreq);
+            errors <- ts(ot-iprob, start=dataStart, frequency=dataFreq);
+
+            parametersNumber[1,c(1,4)] <- 1;
+
+            output <- list(fitted=pt, forecast=pForecast, states=pt,
+                           nParam=parametersNumber, residuals=errors, y=otAll,
+                           persistence=matrix(0,1,1,dimnames=list("level",NULL)),
+                           initial=initial, initialSeason=NULL);
         }
-        names(initial) <- "level";
-        pForecast <- ts(rep(pt[1],h), start=yForecastStart, frequency=dataFreq);
-        errors <- ts(ot-iprob, start=dataStart, frequency=dataFreq);
-
-        parametersNumber[1,c(1,4)] <- 1;
-
-        output <- list(fitted=pt, forecast=pForecast, states=pt,
-                       nParam=parametersNumber, residuals=errors, actuals=otAll,
-                       persistence=matrix(0,1,1,dimnames=list("level",NULL)),
-                       initial=initial, initialSeason=NULL);
-    }
-    ##### Odds-ratio, inverse and direct models #####
-    else if(any(occurrence==c("o","i","d"))){
-        if(modelDo=="estimate"){
+        ##### Odds-ratio, inverse and direct models #####
+        else if(any(occurrence==c("o","i","d"))){
             # Initialise the model
             basicparams <- oesInitialiser(Etype, Ttype, Stype, damped, phiEstimate, occurrence,
-                                          dataFreq, obsInsample, obsAll, obsStates, ot,
+                                          dataFreq, obsInSample, obsAll, obsStates, ot,
                                           persistenceEstimate, persistence, initialType, initialValue,
                                           initialSeasonEstimate, initialSeason);
             list2env(basicparams, environment());
+            # nComponentsAll, nComponentsNonSeasonal, modelLagsMax, modelLags, matvt, vecg, matF, matw
 
             if(damped){
                 model <- paste0(Etype,Ttype,"d",Stype);
@@ -743,7 +757,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
                               ot=ot, bounds=bounds);
                 A <- res$solution;
 
-            # Parameters estimated. The variance is not estimated, so not needed
+                # Parameters estimated. The variance is not estimated, so not needed
                 parametersNumber[1,1] <- length(A);
 
                 # Write down phi if it was estimated
@@ -784,7 +798,7 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
             # Produce forecasts
             if(h>0){
                 # yForecast is the underlying forecast, while pForecast is the probability forecast
-                pForecast <- yForecast <- as.vector(forecasterwrap(t(matvt[,(obsInsample+1):(obsInsample+modelLagsMax),drop=FALSE]),
+                pForecast <- yForecast <- as.vector(forecasterwrap(t(matvt[,(obsInSample+1):(obsInSample+modelLagsMax),drop=FALSE]),
                                                                    elements$matF, elements$matw, h, Etype, Ttype, Stype, modelLags,
                                                                    matxt[(obsAll-h+1):(obsAll),,drop=FALSE],
                                                                    t(matat[,(obsAll-h+1):(obsAll),drop=FALSE]), elements$matFX));
@@ -818,74 +832,332 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
 
             parametersNumber[1,4] <- sum(parametersNumber[1,1:3]);
             parametersNumber[2,4] <- sum(parametersNumber[2,1:3]);
+
+            # Merge states of vt and at if the xreg was provided
+            if(!is.null(xreg)){
+                matvt <- rbind(matvt,matat);
+                xreg <- matxt;
+            }
+
+            if(modelIsSeasonal){
+                initialSeason <- matvt[nComponentsAll,1:modelLagsMax];
+            }
+            else{
+                initialSeason <- NULL;
+            }
+
+            #### Form the output ####
+            output <- list(fitted=pFitted, forecast=pForecast,
+                           states=ts(t(matvt), start=(time(y)[1] - deltat(y)*modelLagsMax),
+                                     frequency=dataFreq),
+                           nParam=parametersNumber, residuals=errors, y=otAll,
+                           persistence=vecg, phi=phi, initial=matvt[1:nComponentsNonSeasonal,1],
+                           initialSeason=initialSeason, fittedModel=yFitted, forecastModel=yForecast,
+                           initialX=matat[,1], xreg=xreg, updateX=updateX, transitionX=matFX, persistenceX=vecgX);
         }
+        #### Automatic model selection ####
+        else if(occurrence=="a"){
+            IC <- switch(ic,
+                         "AIC"=AIC,
+                         "AICc"=AICc,
+                         "BIC"=BIC,
+                         "BICc"=BICc);
+
+            occurrencePool <- c("f","o","i","d","g");
+            occurrencePoolLength <- length(occurrencePool);
+            occurrenceModels <- vector("list",occurrencePoolLength);
+            for(i in 1:occurrencePoolLength){
+                occurrenceModels[[i]] <- oes(y=y,model=model,occurrence=occurrencePool[i],
+                                             ic=ic, h=h, holdout=holdout,
+                                             interval=interval, level=level,
+                                             bounds=bounds,
+                                             silent=TRUE,
+                                             xreg=xreg, xregDo=xregDo, updateX=updateX, ...);
+            }
+            ICBest <- which.min(sapply(occurrenceModels, IC))[1]
+            occurrence <- occurrencePool[ICBest];
+
+            if(!silentGraph){
+                graphmaker(actuals=otAll,forecast=occurrenceModels[[ICBest]]$forecast,fitted=occurrenceModels[[ICBest]]$fitted,
+                           legend=!silentLegend,main=paste0(occurrenceModels[[ICBest]]$model,"_",toupper(occurrence)));
+            }
+            return(occurrenceModels[[ICBest]]);
+        }
+        #### None ####
         else{
-            stop("The model selection and combinations are not implemented in oes just yet", call.=FALSE);
+            pt <- ts(ot,start=dataStart,frequency=dataFreq);
+            pForecast <- ts(rep(ot[obsInSample],h), start=yForecastStart, frequency=dataFreq);
+            errors <- ts(rep(0,obsInSample), start=dataStart, frequency=dataFreq);
+            parametersNumber[] <- 0;
+            output <- list(fitted=pt, forecast=pForecast, states=pt,
+                           nParam=parametersNumber, residuals=errors, y=pt,
+                           persistence=NULL, initial=NULL, initialSeason=NULL);
         }
-
-        # Merge states of vt and at if the xreg was provided
-        if(!is.null(xreg)){
-            matvt <- rbind(matvt,matat);
-            xreg <- matxt;
+    }
+    else if(modelDo=="select"){
+        if(!is.null(modelsPool)){
+            modelsNumber <- length(modelsPool);
+            # List for the estimated models in the pool
+            results <- as.list(c(1:modelsNumber));
+            j <- 0;
         }
-
-        if(modelIsSeasonal){
-            initialSeason <- matvt[nComponentsAll,1:modelLagsMax];
-        }
+        ##### Use branch-and-bound from es() to form the initial pool #####
         else{
-            initialSeason <- NULL;
+            # Define the pool of models in case of "ZZZ" or "CCC" to select from
+            poolErrors <- c("A","M");
+            poolTrends <- c("N","A","Ad","M","Md");
+            poolSeasonals <- c("N","A","M");
+
+            if(all(Etype!=c("Z","C"))){
+                poolErrors <- Etype;
+            }
+
+            # List for the estimated models in the pool
+            results <- list(NA);
+
+            ### Use brains in order to define models to estimate ###
+            if(modelDo=="select" &
+               (any(c(Ttype,Stype)=="X") | any(c(Ttype,Stype)=="Y") | any(c(Ttype,Stype)=="Z"))){
+
+                # Define information criterion function to use
+                IC <- switch(ic,
+                             "AIC"=AIC,
+                             "AICc"=AICc,
+                             "BIC"=BIC,
+                             "BICc"=BICc);
+
+                if(!silentText){
+                    cat("Forming the pool of models based on... ");
+                }
+
+                # poolErrorsSmall is needed for the priliminary selection
+                if(Etype!="Z"){
+                    poolErrors <- poolErrorsSmall <- Etype;
+                }
+                else{
+                    poolErrorsSmall <- "A";
+                }
+
+                # Define the trends to check
+                if(Ttype!="Z"){
+                    if(Ttype=="X"){
+                        poolTrendSmall <- c("N","A");
+                        poolTrends <- c("N","A","Ad");
+                        trendCheck <- TRUE;
+                    }
+                    else if(Ttype=="Y"){
+                        poolTrendSmall <- c("N","M");
+                        poolTrends <- c("N","M","Md");
+                        trendCheck <- TRUE;
+                    }
+                    else{
+                        if(damped){
+                            poolTrendSmall <- paste0(Ttype,"d");
+                            poolTrends <- poolTrendSmall;
+                        }
+                        else{
+                            poolTrendSmall <- Ttype;
+                            poolTrends <- Ttype;
+                        }
+                        trendCheck <- FALSE;
+                    }
+                }
+                else{
+                    poolTrendSmall <- c("N","A");
+                    trendCheck <- TRUE;
+                }
+
+                # Define seasonality to check
+                if(Stype!="Z"){
+                    if(Stype=="X"){
+                        poolSeasonalSmall <- c("N","A");
+                        poolSeasonals <- c("N","A");
+                        seasonalCheck <- TRUE;
+                    }
+                    else if(Stype=="Y"){
+                        poolSeasonalSmall <- c("N","M");
+                        poolSeasonals <- c("N","M");
+                        seasonalCheck <- TRUE;
+                    }
+                    else{
+                        poolSeasonalSmall <- Stype;
+                        poolSeasonals <- Stype;
+                        seasonalCheck <- FALSE;
+                    }
+                }
+                else{
+                    poolSeasonalSmall <- c("N","A","M");
+                    seasonalCheck <- TRUE;
+                }
+
+                # If ZZZ, then the vector is: "ANN" "ANA" "ANM" "AAN" "AAA" "AAM"
+                poolSmall <- paste0(rep(poolErrorsSmall,length(poolTrendSmall)*length(poolSeasonalSmall)),
+                                    rep(poolTrendSmall,each=length(poolSeasonalSmall)),
+                                    rep(poolSeasonalSmall,length(poolTrendSmall)));
+                modelTested <- NULL;
+                modelCurrent <- "";
+
+                # Counter + checks for the components
+                j <- 1;
+                i <- 0;
+                check <- TRUE;
+                besti <- bestj <- 1;
+
+                #### Branch and bound starts here ####
+                while(check){
+                    i <- i + 1;
+                    modelCurrent[] <- poolSmall[j];
+                    if(!silentText){
+                        cat(paste0(modelCurrent,", "));
+                    }
+
+                    results[[i]] <- oes(y, model=modelCurrent, occurrence=occurrence, h=h, holdout=FALSE,
+                                        bounds=bounds, silent=TRUE, xreg=xreg, xregDo=xregDo);
+
+                    modelTested <- c(modelTested,modelCurrent);
+
+                    if(j>1){
+                        # If the first is better than the second, then choose first
+                        if(IC(results[[besti]]) <= IC(results[[i]])){
+                            # If Ttype is the same, then we checked seasonality
+                            if(substring(modelCurrent,2,2) == substring(poolSmall[bestj],2,2)){
+                                poolSeasonals <- substr(modelType(results[[besti]]),
+                                                        nchar(modelType(results[[besti]])),
+                                                        nchar(modelType(results[[besti]])));
+                                seasonalCheck <- FALSE;
+                                j <- which(poolSmall!=poolSmall[bestj] &
+                                               substring(poolSmall,nchar(poolSmall),nchar(poolSmall))==poolSeasonals);
+                            }
+                            # Otherwise we checked trend
+                            else{
+                                poolTrends <- substr(modelType(results[[besti]]),2,2);
+                                trendCheck <- FALSE;
+                            }
+                        }
+                        else{
+                            if(substring(modelCurrent,2,2) == substring(poolSmall[besti],2,2)){
+                                poolSeasonals <- poolSeasonals[poolSeasonals!=substr(modelType(results[[besti]]),
+                                                                                     nchar(modelType(results[[besti]])),
+                                                                                     nchar(modelType(results[[besti]])))];
+                                if(length(poolSeasonals)>1){
+                                    # Select another seasonal model, that is not from the previous iteration and not the current one
+                                    bestj <- j;
+                                    besti <- i;
+                                    j <- 3;
+                                }
+                                else{
+                                    bestj <- j;
+                                    besti <- i;
+                                    j <- which(substring(poolSmall,nchar(poolSmall),nchar(poolSmall))==poolSeasonals &
+                                                   substring(poolSmall,2,2)!=substring(modelCurrent,2,2));
+                                    seasonalCheck <- FALSE;
+                                }
+                            }
+                            else{
+                                poolTrends <- poolTrends[poolTrends!=substr(modelType(results[[besti]]),2,2)];
+                                besti <- i;
+                                bestj <- j;
+                                trendCheck <- FALSE;
+                            }
+                        }
+
+                        if(all(!c(trendCheck,seasonalCheck))){
+                            check <- FALSE;
+                        }
+                    }
+                    else{
+                        j <- 2;
+                    }
+                }
+
+                modelsPool <- paste0(rep(poolErrors,each=length(poolTrends)*length(poolSeasonals)),
+                                     poolTrends,
+                                     rep(poolSeasonals,each=length(poolTrends)));
+
+                modelsPool <- unique(c(modelTested,modelsPool));
+                modelsNumber <- length(modelsPool);
+                j <- length(modelTested);
+            }
+            else{
+                # Make the corrections in the pool for combinations
+                if(all(Ttype!=c("Z","C"))){
+                    if(Ttype=="Y"){
+                        poolTrends <- c("N","M","Md");
+                    }
+                    else if(Ttype=="X"){
+                        poolTrends <- c("N","A","Ad");
+                    }
+                    else{
+                        if(damped){
+                            poolTrends <- paste0(Ttype,"d");
+                        }
+                        else{
+                            poolTrends <- Ttype;
+                        }
+                    }
+                }
+                if(all(Stype!=c("Z","C"))){
+                    if(Stype=="Y"){
+                        poolTrends <- c("N","M");
+                    }
+                    else if(Stype=="X"){
+                        poolTrends <- c("N","A");
+                    }
+                    else{
+                        poolSeasonals <- Stype;
+                    }
+                }
+
+                modelsNumber <- (length(poolErrors)*length(poolTrends)*length(poolSeasonals));
+                modelsPool <- paste0(rep(poolErrors,each=length(poolTrends)*length(poolSeasonals)),
+                                     poolTrends,
+                                     rep(poolSeasonals,each=length(poolTrends)));
+                j <- 0;
+            }
         }
 
-        #### Form the output ####
-        output <- list(fitted=pFitted, forecast=pForecast, states=ts(t(matvt), start=(time(data)[1] - deltat(data)*modelLagsMax),
-                                                                     frequency=dataFreq),
-                       nParam=parametersNumber, residuals=errors, actuals=otAll,
-                       persistence=vecg, phi=phi, initial=matvt[1:nComponentsNonSeasonal,1],
-                       initialSeason=initialSeason, fittedBeta=yFitted, forecastBeta=yForecast,
-                       initialX=matat[,1], xreg=xreg, updateX=updateX, transitionX=matFX, persistenceX=vecgX);
+        ##### Check models in the smaller pool #####
+        if(!silentText){
+            cat("Estimation progress:    ");
+        }
+        while(j < modelsNumber){
+            j <- j + 1;
+            if(!silentText){
+                if(j==1){
+                    cat("\b");
+                }
+                cat(paste0(rep("\b",nchar(round((j-1)/modelsNumber,2)*100)+1),collapse=""));
+                cat(paste0(round(j/modelsNumber,2)*100,"%"));
+            }
+
+            modelCurrent <- modelsPool[j];
+
+            results[[j]] <- oes(y, model=modelCurrent, occurrence=occurrence, h=h, holdout=FALSE,
+                                bounds=bounds, silent=TRUE, xreg=xreg, xregDo=xregDo);
+        }
+
+        if(!silentText){
+            cat("... Done! \n");
+        }
+
+        # Write down the ICs of all the tested models
+        icSelection <- sapply(results, IC);
+        names(icSelection) <- modelsPool;
+        icSelection[is.nan(icSelection)] <- 1E100;
+        icBest <- which.min(icSelection);
+
+        output <- results[[icBest]];
+        output$ICs <- icSelection;
+        occurrence[] <- output$occurrence;
+        model[] <- modelsPool[icBest];
     }
-#### Automatic model selection ####
-    else if(occurrence=="a"){
-        IC <- switch(ic,
-                     "AIC"=AIC,
-                     "AICc"=AICc,
-                     "BIC"=BIC,
-                     "BICc"=BICc);
-
-        occurrencePool <- c("f","o","i","d","g");
-        occurrencePoolLength <- length(occurrencePool);
-        occurrenceModels <- vector("list",occurrencePoolLength);
-        for(i in 1:occurrencePoolLength){
-            occurrenceModels[[i]] <- oes(data=data,model=model,occurrence=occurrencePool[i],
-                                         ic=ic, h=h, holdout=holdout,
-                                         intervals=intervals, level=level,
-                                         bounds=bounds,
-                                         silent=TRUE,
-                                         xreg=xreg, xregDo=xregDo, updateX=updateX, ...);
-        }
-        ICBest <- which.min(sapply(occurrenceModels, IC))[1]
-        occurrence <- occurrencePool[ICBest];
-
-        if(!silentGraph){
-            graphmaker(actuals=otAll,forecast=occurrenceModels[[ICBest]]$forecast,fitted=occurrenceModels[[ICBest]]$fitted,
-                       legend=!silentLegend,main=paste0(occurrenceModels[[ICBest]]$model,"_",toupper(occurrence)));
-        }
-        return(occurrenceModels[[ICBest]]);
-    }
-#### None ####
     else{
-        pt <- ts(ot,start=dataStart,frequency=dataFreq);
-        pForecast <- ts(rep(ot[obsInsample],h), start=yForecastStart, frequency=dataFreq);
-        errors <- ts(rep(0,obsInsample), start=dataStart, frequency=dataFreq);
-        parametersNumber[] <- 0;
-        output <- list(fitted=pt, forecast=pForecast, states=pt,
-                       nParam=parametersNumber, residuals=errors, actuals=pt,
-                       persistence=NULL, initial=NULL, initialSeason=NULL);
+        stop("The model combination is not implemented in oes just yet", call.=FALSE);
     }
 
     # If there was a holdout, measure the accuracy
     if(holdout){
-        yHoldout <- ts(otAll[(obsInsample+1):obsAll],start=yForecastStart,frequency=dataFreq);
+        yHoldout <- ts(otAll[(obsInSample+1):obsAll],start=yForecastStart,frequency=dataFreq);
         output$accuracy <- measures(yHoldout,pForecast,ot);
     }
     else{
@@ -901,20 +1173,18 @@ oes <- function(data, model="MNN", persistence=NULL, initial="o", initialSeason=
         modelname <- "oETS";
     }
     output$occurrence <- occurrence;
-    output$model <- paste0(modelname,"[",toupper(occurrence),"]");
-    if(any(occurrence==c("o","i","d","g"))){
-        output$model <- paste0(output$model,"(",model,")");
-    }
+    output$model <- paste0(modelname,"[",toupper(occurrence),"]","(",model,")");
+    output$timeElapsed <- Sys.time()-startTime;
 
     ##### Make a plot #####
     if(!silentGraph){
-        # if(intervals){
+        # if(interval){
         #     graphmaker(actuals=otAll, forecast=yForecastNew, fitted=pFitted, lower=yLowerNew, upper=yUpperNew,
         #                level=level,legend=!silentLegend,main=output$model);
         # }
         # else{
-            graphmaker(actuals=otAll,forecast=output$forecast,fitted=output$fitted,
-                       legend=!silentLegend,main=paste0(output$model));
+        graphmaker(actuals=otAll,forecast=output$forecast,fitted=output$fitted,
+                   legend=!silentLegend,main=paste0(output$model));
         # }
     }
 

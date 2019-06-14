@@ -10,17 +10,20 @@ require(Mcomp)
 ## ----es_N2457------------------------------------------------------------
 es(M3$N2457$x, h=18, holdout=TRUE, silent=FALSE)
 
-## ----es_N2457_with_intervals---------------------------------------------
-es(M3$N2457$x, h=18, holdout=TRUE, intervals=TRUE, silent=FALSE)
+## ----es_N2457_with_interval----------------------------------------------
+es(M3$N2457$x, h=18, holdout=TRUE, interval=TRUE, silent=FALSE)
 
 ## ----es_N2457_save_model-------------------------------------------------
 ourModel <- es(M3$N2457$x, h=18, holdout=TRUE, silent="all")
 
 ## ----es_N2457_reuse_model------------------------------------------------
-es(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, intervals="np", level=0.93)
+es(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, interval="np", level=0.93)
 
 ## ----es_N2457_modelType--------------------------------------------------
 modelType(ourModel)
+
+## ----es_N2457_actuals----------------------------------------------------
+actuals(ourModel)
 
 ## ----es_N2457_reuse_model_parts------------------------------------------
 es(M3$N2457$x, model=modelType(ourModel), h=18, holdout=FALSE, initial=ourModel$initial, silent="graph")
@@ -30,7 +33,7 @@ es(M3$N2457$x, model=modelType(ourModel), h=18, holdout=FALSE, persistence=ourMo
 es(M3$N2457$x, model=modelType(ourModel), h=18, holdout=FALSE, initial=1500, silent="graph")
 
 ## ----es_N2457_aMSTFE-----------------------------------------------------
-es(M3$N2457$x, h=18, holdout=TRUE, cfType="aTMSE", bounds="a", ic="BIC", intervals=TRUE)
+es(M3$N2457$x, h=18, holdout=TRUE, loss="aTMSE", bounds="a", ic="BIC", interval=TRUE)
 
 ## ----es_N2457_combine----------------------------------------------------
 es(M3$N2457$x, model="CCN", h=18, holdout=TRUE, silent="graph")
@@ -66,5 +69,5 @@ forecast(etsModel,h=18,level=0.95)
 forecast(esModel,h=18,level=0.95)
 
 ## ----es_N2457_M3---------------------------------------------------------
-es(M3$N2457, intervals=TRUE, silent=FALSE)
+es(M3$N2457, interval=TRUE, silent=FALSE)
 
