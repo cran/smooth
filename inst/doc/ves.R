@@ -21,3 +21,6 @@ ourModel$persistence
 ## ----ves_MMdM------------------------------------------------------------
 ourModel <- ves(Y, "MMdM", phi="i", persistence="i", h=18, holdout=TRUE)
 
+## ----ves_MMdM_CCAC-------------------------------------------------------
+ourModel <- ves(Y, "MMdM", persistence="c", seasonal="c", h=18, holdout=TRUE, silent=F)
+

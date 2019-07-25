@@ -1,3 +1,26 @@
+smooth v2.5.2 (Release data: 2019-07-24)
+==============
+
+Changes:
+* The GSI is now merged with VES with several advanced parameters. The seasonal models now have the subnames, according to the taxonomy of Chen et al. (TBA). gsi() function is no longer available.
+* seasonal and weights parameters in sim.ves() - they allow generating the data from VES[CCC] model.
+* Corrected the dependence on forecast package.
+* summary of smooth functions is a bit closer to the one from greybox now.
+* Renamed the external parameter "modelLags" into "lagsModel" for consistency purposes.
+* Parametric prediction intevals in oes(). The oesg() is more complicated and would need more work.
+* Implemented forecast() method for the oes and oesg classes.
+* Tuned the outputs of the smooth functions (so that they look closer to the greybox ones).
+* Return of initial="backcasting" as the default option for ces() and auto.ces().
+
+Bugfixes:
+* Bugfix in the combination of models in es(), when the data was non-seasonal.
+* Also, the duplicates in the modelsPool are now removed.
+* Bugfix on oes() and oesg() in case of explanatory variables (parameters stability was checked incorrectly).
+* Bugfix in oes() in case of model selection and holdout=TRUE.
+* The number of parameters of ETS was wrong, when backcasting was used.
+* Corrected the names of the columns for errors and fitted values of ves().
+
+
 smooth v2.5.1 (Release data: 2019-06-13)
 ==============
 

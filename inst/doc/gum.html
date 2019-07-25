@@ -7,12 +7,13 @@
 <meta charset="utf-8" />
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2019-06-13" />
+<meta name="date" content="2019-07-24" />
 
 <title>gum() - Generalised Univariate Model</title>
 
@@ -96,7 +97,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
       if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
       var style = rule.style.cssText;
       // check if color or background-color is set
-      if (rule.style.color === '' || rule.style.backgroundColor === '') continue;
+      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
       // replace div.sourceCode by a pre.sourceCode rule
       sheets[i].deleteRule(j);
       sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
@@ -303,7 +304,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 <h1 class="title toc-ignore">gum() - Generalised Univariate Model</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2019-06-13</h4>
+<h4 class="date">2019-07-24</h4>
 
 
 
@@ -316,48 +317,54 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <p>Generalised Exponential Smoothing is a next step from CES. It is a state-space model in which all the matrices and vectors are estimated. It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GUM<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our example with monthly data N2457, we will have GUM<span class="math inline">\((1^1,1^{12})\)</span>:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 1.13 seconds
+<pre><code>## Time elapsed: 0.37 seconds
 ## Model estimated: GUM(1[1],1[12])
 ## Persistence vector g:
-##       [,1]  [,2]
-## [1,] 0.273 0.005
+##        [,1]   [,2]
+## [1,] 0.2728 0.0048
 ## Transition matrix F: 
-##      [,1]  [,2]
-## [1,] 0.88 0.728
-## [2,] 0.04 0.882
-## Measurement vector w: 0.386, 0.079
+##        [,1]   [,2]
+## [1,] 0.8802 0.7284
+## [2,] 0.0396 0.8817
+## Measurement vector w: 0.3864, 0.0788
 ## Initial values were optimised.
-## 22 parameters were estimated in the process
-## Residuals standard deviation: 1318.608
-## Loss function type: MSE; Loss function value: 1738726.863
 ## 
+## Loss function type: MSE; Loss function value: 1738726.8633
+## Error standard deviation: 1318.608
+## Sample size: 97
+## Number of estimated parameters: 22
+## Number of degrees of freedom: 75
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
 ## 1713.034 1726.710 1769.678 1800.959 
+## 
 ## Forecast errors:
 ## MPE: 22.5%; sCE: -1760.7%; Bias: 86.2%; MAPE: 38.1%
 ## MASE: 2.782; sMAE: 113.5%; sMSE: 221.7%; RelMAE: 1.188; RelRMSE: 1.306</code></pre>
 <p>But some different orders and lags can be specified. For example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb4-1" data-line-number="1"><span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>))</a></code></pre></div>
-<pre><code>## Time elapsed: 0.89 seconds
+<pre><code>## Time elapsed: 0.3 seconds
 ## Model estimated: GUM(2[1],1[12])
 ## Persistence vector g:
-##       [,1]  [,2]   [,3]
-## [1,] 0.141 0.092 -0.075
+##        [,1]   [,2]    [,3]
+## [1,] 0.1406 0.0922 -0.0748
 ## Transition matrix F: 
-##       [,1]  [,2]  [,3]
-## [1,] 0.571 0.234 0.095
-## [2,] 0.253 0.683 0.064
-## [3,] 0.118 0.109 0.958
-## Measurement vector w: 0.745, 0.989, 0.992
+##        [,1]   [,2]   [,3]
+## [1,] 0.5709 0.2337 0.0948
+## [2,] 0.2530 0.6834 0.0637
+## [3,] 0.1179 0.1087 0.9585
+## Measurement vector w: 0.7454, 0.9889, 0.9921
 ## Initial values were optimised.
-## 30 parameters were estimated in the process
-## Residuals standard deviation: 1269.81
-## Loss function type: MSE; Loss function value: 1612418.429
 ## 
+## Loss function type: MSE; Loss function value: 1612418.4291
+## Error standard deviation: 1269.81
+## Sample size: 97
+## Number of estimated parameters: 30
+## Number of degrees of freedom: 67
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
 ## 1721.719 1749.901 1798.960 1863.422 
+## 
 ## Forecast errors:
 ## MPE: 24%; sCE: -1779.5%; Bias: 87.4%; MAPE: 37.9%
 ## MASE: 2.764; sMAE: 112.8%; sMSE: 214.9%; RelMAE: 1.181; RelRMSE: 1.286</code></pre>
@@ -367,25 +374,28 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## Searching for appropriate lags:  —\|/—\|/—\|/We found them!
 ## Searching for appropriate orders:  —\|/—\|/—Orders found.
 ## Reestimating the model. Done!</code></pre>
-<pre><code>## Time elapsed: 69.38 seconds
+<pre><code>## Time elapsed: 23.28 seconds
 ## Model estimated: GUM(1[1],1[4])
 ## Persistence vector g:
-##       [,1]  [,2]
-## [1,] 0.448 0.294
+##        [,1]   [,2]
+## [1,] 0.4481 0.2939
 ## Transition matrix F: 
-##       [,1] [,2]
-## [1,] 0.417 0.42
-## [2,] 0.075 1.00
-## Measurement vector w: 0.998, 1
+##        [,1]   [,2]
+## [1,] 0.4174 0.4201
+## [2,] 0.0745 1.0000
+## Measurement vector w: 0.9982, 1
 ## Initial values were produced using backcasting.
-## 9 parameters were estimated in the process
-## Residuals standard deviation: 1826.168
-## Loss function type: MSE; Loss function value: 3334888.499
 ## 
+## Loss function type: MSE; Loss function value: 3334888.4992
+## Error standard deviation: 1826.168
+## Sample size: 115
+## Number of estimated parameters: 9
+## Number of degrees of freedom: 106
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
 ## 2071.650 2073.364 2096.354 2100.422 
-## 95% parametric prediction interval were constructed
+## 
+## 95% parametric prediction interval was constructed
 ## 44% of values are in the prediction interval
 ## Forecast errors:
 ## MPE: -175.7%; sCE: 2148.6%; Bias: -89.7%; MAPE: 181.5%
@@ -395,11 +405,11 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" data-line-number="1">    transition &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>),<span class="dv">3</span>,<span class="dv">3</span>)</a>
 <a class="sourceLine" id="cb9-2" data-line-number="2">    measurement &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>)</a>
 <a class="sourceLine" id="cb9-3" data-line-number="3">    <span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>), <span class="dt">transition=</span>transition, <span class="dt">measurement=</span>measurement)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.63 seconds
+<pre><code>## Time elapsed: 0.25 seconds
 ## Model estimated: GUM(2[1],1[12])
 ## Persistence vector g:
-##       [,1]  [,2]   [,3]
-## [1,] 0.147 0.003 -0.025
+##        [,1]   [,2]    [,3]
+## [1,] 0.1469 0.0031 -0.0248
 ## Transition matrix F: 
 ##      [,1] [,2] [,3]
 ## [1,]    1    1    0
@@ -407,19 +417,25 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## [3,]    0    0    1
 ## Measurement vector w: 1, 1, 1
 ## Initial values were optimised.
-## 18 parameters were estimated in the process
-## 12 parameters were provided
-## Residuals standard deviation: 1339.166
-## Loss function type: MSE; Loss function value: 1793364.893
 ## 
+## Loss function type: MSE; Loss function value: 1793364.8934
+## Error standard deviation: 1339.166
+## Sample size: 97
+## Number of estimated parameters: 18
+## Number of provided parameters: 12
+## Number of degrees of freedom: 79
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
 ## 1708.036 1716.805 1754.380 1774.439 
+## 
 ## Forecast errors:
 ## MPE: 17.6%; sCE: -1554.8%; Bias: 78.8%; MAPE: 35.7%
 ## MASE: 2.58; sMAE: 105.3%; sMSE: 199.8%; RelMAE: 1.102; RelRMSE: 1.24</code></pre>
 <p>The resulting model will be equivalent to ETS(A,A,A). However due to different initialisation of optimisers and different method of number of parameters calculation, <code>gum()</code> above and <code>es(y, &quot;AAA&quot;, h=h, holdout=TRUE)</code> will lead to different models.</p>
 
+
+
+<!-- code folding -->
 
 
 <!-- dynamically load mathjax for compatibility with self-contained -->

@@ -576,7 +576,12 @@ pls.smooth <- function(object, holdout=NULL, ...){
 #' @importFrom stats sigma
 #' @export
 sigma.smooth <- function(object, ...){
-    return(sqrt(object$s2));
+    if(!is.null(object$s2)){
+        return(sqrt(object$s2));
+    }
+    else{
+        return(NULL);
+    }
 }
 
 #### pointLik for smooth ####
@@ -724,6 +729,7 @@ NULL
 #' forecast.smooth(ourModel,h=10,interval=TRUE)
 #' plot(forecast.smooth(ourModel,h=10,interval=TRUE))
 #'
+#' @rdname forecast.smooth
 #' @export forecast.smooth
 #' @export
 forecast.smooth <- function(object, h=10,
@@ -762,6 +768,27 @@ forecast.smooth <- function(object, h=10,
     }
     output <- list(model=object,method=object$model,fitted=newModel$fitted,y=actuals(newModel),
                    forecast=newModel$forecast,lower=newModel$lower,upper=newModel$upper,level=newModel$level,
+                   interval=interval,mean=newModel$forecast,x=actuals(object),residuals=object$residuals);
+
+    return(structure(output,class=c("smooth.forecast","forecast")));
+}
+
+#' @rdname forecast.smooth
+#' @export
+forecast.oes <- function(object, h=10,
+                         interval=c("parametric","semiparametric","nonparametric","none"),
+                         level=0.95, ...){
+    if(is.oesg(object)){
+        newModel <- oesg(actuals(object),modelA=object$modelA,modelB=object$modelB,
+                         h=h,interval=interval,level=level,silent="all",...);
+    }
+    else{
+        newModel <- oes(actuals(object),model=object,
+                        h=h,interval=interval,level=level,silent="all",...);
+    }
+
+    output <- list(model=object,method=object$model,fitted=newModel$fitted,y=actuals(newModel),
+                   forecast=newModel$forecast,lower=newModel$lower,upper=newModel$upper,level=level,
                    interval=interval,mean=newModel$forecast,x=actuals(object),residuals=object$residuals);
 
     return(structure(output,class=c("smooth.forecast","forecast")));
@@ -931,7 +958,7 @@ errorType.iss <- function(object, ...){
     return(substr(modelType(object),1,1));
 }
 
-##### Function returns the modellags from the model - internal function #####
+##### Function returns the modelLags from the model - internal function #####
 modelLags.default <- function(object, ...){
     modelLags <- NA;
     if(is.msarima(object)){
@@ -1332,6 +1359,13 @@ plot.iss <- function(x, ...){
 #### Prints of smooth ####
 #' @export
 print.smooth <- function(x, ...){
+    ellipsis <- list(...);
+    if(!any(names(ellipsis)=="digits")){
+        digits <- 4;
+    }
+    else{
+        digits <- ellipsis$digits;
+    }
     smoothType <- smoothType(x);
 
     if(!is.list(x$model)){
@@ -1394,11 +1428,19 @@ print.smooth <- function(x, ...){
              loss=x$loss, cfObjective=x$lossValue, interval=interval, cumulative=cumulative,
              intervalType=intervalType, level=x$level, ICs=x$ICs,
              holdout=holdout, insideinterval=insideinterval, errormeasures=x$accuracy,
-             occurrence=occurrence);
+             occurrence=occurrence, obs=nobs(x), digits=digits);
 }
 
 #' @export
 print.smooth.sim <- function(x, ...){
+    ellipsis <- list(...);
+    if(!any(names(ellipsis)=="digits")){
+        digits <- 4;
+    }
+    else{
+        digits <- ellipsis$digits;
+    }
+
     smoothType <- smoothType(x);
     if(is.null(dim(x$data))){
         nsim <- 1
@@ -1415,14 +1457,14 @@ print.smooth.sim <- function(x, ...){
             cat(paste0("Persistence vector: \n"));
             xPersistence <- as.vector(x$persistence);
             names(xPersistence) <- rownames(x$persistence);
-            print(round(xPersistence,3));
+            print(round(xPersistence,digits));
             if(x$phi!=1){
                 cat(paste0("Phi: ",x$phi,"\n"));
             }
             if(any(x$occurrence!=1)){
                 cat(paste0("The data is produced based on an occurrence model.\n"));
             }
-            cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
+            cat(paste0("True likelihood: ",round(x$logLik,digits),"\n"));
         }
         else if(smoothType=="ARIMA"){
             ar.orders <- orders(x)$ar;
@@ -1474,31 +1516,31 @@ print.smooth.sim <- function(x, ...){
 
             if(!is.null(x$AR)){
                 cat(paste0("AR parameters: \n"));
-                print(round(ARterms,3));
+                print(round(ARterms,digits));
             }
             if(!is.null(x$MA)){
                 cat(paste0("MA parameters: \n"));
-                print(round(MAterms,3));
+                print(round(MAterms,digits));
             }
             if(!is.na(x$constant)){
-                cat(paste0("Constant value: ",round(x$constant,3),"\n"));
+                cat(paste0("Constant value: ",round(x$constant,digits),"\n"));
             }
-            cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
+            cat(paste0("True likelihood: ",round(x$logLik,digits),"\n"));
         }
         else if(smoothType=="CES"){
-            cat(paste0("Smoothing parameter A: ",round(x$A,3),"\n"));
+            cat(paste0("Smoothing parameter A: ",round(x$A,digits),"\n"));
             if(!is.null(x$B)){
                 if(is.complex(x$B)){
-                    cat(paste0("Smoothing parameter B: ",round(x$B,3),"\n"));
+                    cat(paste0("Smoothing parameter B: ",round(x$B,digits),"\n"));
                 }
                 else{
-                    cat(paste0("Smoothing parameter b: ",round(x$B,3),"\n"));
+                    cat(paste0("Smoothing parameter b: ",round(x$B,digits),"\n"));
                 }
             }
-            cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
+            cat(paste0("True likelihood: ",round(x$logLik,digits),"\n"));
         }
         else if(smoothType=="SMA"){
-            cat(paste0("True likelihood: ",round(x$logLik,3),"\n"));
+            cat(paste0("True likelihood: ",round(x$logLik,digits),"\n"));
         }
     }
 }
@@ -1561,6 +1603,14 @@ print.iss <- function(x, ...){
 
 #' @export
 print.oes <- function(x, ...){
+    ellipsis <- list(...);
+    if(!any(names(ellipsis)=="digits")){
+        digits <- 4;
+    }
+    else{
+        digits <- ellipsis$digits;
+    }
+
     occurrence <- x$occurrence
     if(occurrence=="g"){
         occurrence <- "General";
@@ -1580,7 +1630,7 @@ print.oes <- function(x, ...){
     else{
         occurrence <- "None";
     }
-    ICs <- round(c(AIC(x),AICc(x),BIC(x),BICc(x)),4);
+    ICs <- round(c(AIC(x),AICc(x),BIC(x),BICc(x)),digits);
     names(ICs) <- c("AIC","AICc","BIC","BICc");
     cat(paste0("Occurrence state space model estimated: ",occurrence,"\n"));
     if(!is.null(x$model)){
@@ -1588,13 +1638,19 @@ print.oes <- function(x, ...){
     }
     if(!is.null(x$persistence)){
         cat("Smoothing parameters:\n");
-        print(round(x$persistence[,1],3));
+        print(round(x$persistence[,1],digits));
     }
     if(!is.null(x$initial)){
         cat("Vector of initials:\n");
-        print(round(x$initial,3));
+        print(round(x$initial,digits));
     }
-    cat("Information criteria: \n");
+    if(!is.null(sigma(x))){
+        cat("\nError standard deviation: "); cat(round(sigma(x),digits));
+    }
+    cat("\nSample size: "); cat(nobs(x));
+    cat("\nNumber of estimated parameters: "); cat(nparam(x));
+    cat("\nNumber of degrees of freedom: "); cat(nobs(x)-nparam(x));
+    cat("\nInformation criteria: \n");
     print(ICs);
 }
 
