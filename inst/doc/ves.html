@@ -13,7 +13,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2019-07-24" />
+<meta name="date" content="2019-08-19" />
 
 <title>ves() - Vector Exponential Smoothing</title>
 
@@ -304,7 +304,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 <h1 class="title toc-ignore">ves() - Vector Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2019-07-24</h4>
+<h4 class="date">2019-08-19</h4>
 
 
 
@@ -316,7 +316,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1">Y &lt;-<span class="st"> </span><span class="kw">cbind</span>(M3<span class="op">$</span>N2570<span class="op">$</span>x,M3<span class="op">$</span>N2571<span class="op">$</span>x);</a></code></pre></div>
 <p><code>ves()</code> function allows constructing Vector Exponential Smoothing <span class="citation">(aka “VISTS” discussed by Silva, Hyndman, and Snyder 2010)</span> in either pure additive or pure multiplicative form. The function has several elements that can either be individual or grouped. The former means that all the time series use the same value. For example, <code>persistence=&quot;g&quot;</code> means that the smoothing parameters for all the series are the same. A simple call for <code>ves()</code> results in estimation of VES(A,N,N) with grouped smoothing parameters, transition matrix and individual initials:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb3-1" data-line-number="1"><span class="kw">ves</span>(Y, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">silent=</span><span class="ot">FALSE</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.0417 seconds
+<pre><code>## Time elapsed: 0.0509 seconds
 ## Model estimated: VES(ANN)
 ## 
 ## Loss function type: likelihood; Loss function value: 13.7174

@@ -1,3 +1,23 @@
+smooth v2.5.3 (Release data: 2019-08-19)
+==============
+
+Changes:
+* es() now treats the parameters that reach the boundary values (within the 1e-3 distance) as provided and substitutes them by the bounds (i.e. 0 or 1). This should influence the model selection procedure.
+* Also if phi==1, we switch to the non-damped version of the model.
+* Warn users if the response variables in ves are perfectly correlated.
+* Minor changes in the formulae in oes() vignette.
+* Allow ves() to work on very small samples, if the model is restrictive. This is based on the number of parameters to estimate per series now.
+* sigma() method for the data simulated by smooth functions.
+* Don't check the provided occurrence if it contains 1 only.
+* RelMAE is now called rMAE and RelRMSE is now rRMSE in the greybox package v0.5.3.
+
+Bugdixes:
+* sim.es() would complain in some cases of nsim>1 and the default values of parameters.
+* es() did not work appropriately with the provided persistence parameter in the non-default bounds.
+* A bugfix for cma(), which did not have silentText parameter.
+* A bugfix in the calculation of the likelihoods based on GTMSE and aGTMSE losses.
+
+
 smooth v2.5.2 (Release data: 2019-07-24)
 ==============
 

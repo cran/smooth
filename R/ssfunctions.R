@@ -874,7 +874,7 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
         if(is.numeric(occurrence)){
             # If it is data, then it should either correspond to the whole sample (in-sample + holdout)
             # or be equal to forecating horizon.
-            if(all(length(c(occurrence))!=c(h,obsAll))){
+            if(any(occurrence!=1) && all(length(c(occurrence))!=c(h,obsAll))){
                 warning(paste0("Length of the provided future occurrences is ",length(c(occurrence)),
                                " while length of forecasting horizon is ",h,".\n",
                                "Where should we plug in the future occurences anyway?\n",
@@ -887,6 +887,16 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
                 pFitted <- matrix(mean(ot),obsInSample,1);
                 pForecast <- matrix(1,h,1);
                 nParamOccurrence <- 1;
+            }
+            else if(all(occurrence==1)){
+                obsNonzero <- obsInSample;
+                obsZero <- 0;
+                pFitted <- ot <- rep(1,obsInSample);
+                yot <- yInSample;
+                pForecast <- matrix(1,h,1);
+                nParamOccurrence <- 0;
+                occurrence <- "n";
+                occurrenceModelProvided <- FALSE;
             }
             else{
                 if(any(occurrence<0,occurrence>1)){
@@ -1036,6 +1046,7 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
                                 persistence <- as.vector(persistence);
                                 persistenceEstimate <- FALSE;
                                 parametersNumber[2,1] <- parametersNumber[2,1] + length(persistence);
+                                bounds <- "n";
                             }
                         }
                     }
@@ -3135,14 +3146,14 @@ likelihoodFunction <- function(C){
             yotSumLog <- yotSumLog * h;
         }
 
-        if(any(loss==c("MAE","MAEh","MACE"))){
+        if(any(loss==c("MAE","MAEh","MACE","TMAE","GTMAE"))){
             return(- (obsInSample*(log(2) + 1 + log(CF(C))) + obsZero) - yotSumLog);
         }
-        else if(any(loss==c("HAM","HAMh","CHAM"))){
+        else if(any(loss==c("HAM","HAMh","CHAM","THAM","GTHAM"))){
             #### This is a temporary fix for the oes models... Needs to be done properly!!! ####
             return(- 2*(obsInSample*(log(2) + 1 + log(CF(C))) + obsZero) - yotSumLog);
         }
-        else if(any(loss==c("TFL","aTFL"))){
+        else if(any(loss==c("TFL","aTFL","aGTMSE"))){
             return(- 0.5 *(obsInSample*(h*log(2*pi) + 1 + CF(C)) + obsZero) - yotSumLog);
         }
         else if(any(loss==c("LogisticD","LogisticL","TSB","Rounded"))){
@@ -3450,13 +3461,13 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
             cat(paste(paste0("MASE: ",round(errormeasures["MASE"],3)),
                       paste0("sMAE: ",round(errormeasures["sMAE"],3)*100,"%"),
                       paste0("sMSE: ",round(errormeasures["sMSE"],3)*100,"%"),
-                      paste0("RelMAE: ",round(errormeasures["RelMAE"],3)),
-                      paste0("RelRMSE: ",round(errormeasures["RelRMSE"],3),"\n"),sep="; "));
+                      paste0("rMAE: ",round(errormeasures["rMAE"],3)),
+                      paste0("rRMSE: ",round(errormeasures["rRMSE"],3),"\n"),sep="; "));
         }
         else{
             cat(paste(paste0("Bias: ",round(errormeasures["cbias"],3)*100,"%"),
                       paste0("sMSE: ",round(errormeasures["sMSE"],3)*100,"%"),
-                      paste0("RelRMSE: ",round(errormeasures["RelRMSE"],3)),
+                      paste0("rRMSE: ",round(errormeasures["rRMSE"],3)),
                       paste0("sPIS: ",round(errormeasures["sPIS"],3)*100,"%"),
                       paste0("sCE: ",round(errormeasures["sCE"],3)*100,"%\n"),sep="; "));
         }
