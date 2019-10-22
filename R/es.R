@@ -43,6 +43,7 @@ utils::globalVariables(c("vecg","nComponents","lagsModel","phiEstimate","yInSamp
 #'
 #' @template ssBasicParam
 #' @template ssAdvancedParam
+#' @template ssIntervals
 #' @template ssPersistenceParam
 #' @template ssAuthor
 #' @template ssKeywords
@@ -255,7 +256,7 @@ es <- function(y, model="ZZZ", persistence=NULL, phi=NULL,
                initial=c("optimal","backcasting"), initialSeason=NULL, ic=c("AICc","AIC","BIC","BICc"),
                loss=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                h=10, holdout=FALSE, cumulative=FALSE,
-               interval=c("none","parametric","semiparametric","nonparametric"), level=0.95,
+               interval=c("none","parametric","likelihood","semiparametric","nonparametric"), level=0.95,
                occurrence=c("none","auto","fixed","general","odds-ratio","inverse-odds-ratio","direct"),
                oesmodel="MNN",
                bounds=c("usual","admissible","none"),
@@ -724,6 +725,8 @@ EstimatorES <- function(...){
     }
 
     # Parameters are chosen to speed up the optimisation process and have decent accuracy
+    # res <- optimx::hjn(C, CF, CLower, CUpper);
+    # C[] <- res$par;
     res <- nloptr(C, CF, lb=CLower, ub=CUpper,
                   opts=list("algorithm"="NLOPT_LN_BOBYQA", "xtol_rel"=xtol_rel, "maxeval"=maxeval, print_level=0));
     C[] <- res$solution;
@@ -732,19 +735,19 @@ EstimatorES <- function(...){
     if(any(res$objective==c(1e+100,1e+300))){
         # Reset the smoothing parameters
         j <- 1;
-        C[j] <- max(0.1,CLower[j]);
+        C[j] <- max(0,CLower[j]);
         if(Ttype!="N"){
             j <- j+1;
-            C[j] <- max(0.05,CLower[j]);
+            C[j] <- max(0,CLower[j]);
             if(Stype!="N"){
                 j <- j+1;
-                C[j] <- max(0.1,CLower[j]);
+                C[j] <- max(0,CLower[j]);
             }
         }
         else{
             if(Stype!="N"){
                 j <- j+1;
-                C[j] <- max(0.05,CLower[j]);
+                C[j] <- max(0,CLower[j]);
             }
         }
 
@@ -767,7 +770,7 @@ EstimatorES <- function(...){
         C[] <- res$solution;
     }
     # Change C if it is out of the bounds
-    if(any((C>=CUpper),(C<=CLower))){
+    if(any((C>CUpper),(C<CLower))){
         CUpper[C>=CUpper & C<0] <- C[C>=CUpper & C<0] * 0.999 + 0.001;
         CUpper[C>=CUpper & C>=0] <- C[C>=CUpper & C>=0] * 1.001 + 0.001;
         CLower[C<=CLower & C<0] <- C[C<=CLower & C<0] * 1.001 - 0.001;
@@ -802,6 +805,15 @@ EstimatorES <- function(...){
     }
     # Parameters estimated + variance
     nParam <- length(C) + 1*(!rounded);
+
+    # Write down Fisher Information if needed
+    if(FI){
+        boundOriginal <- bounds;
+        bounds[] <- "n";
+        environment(likelihoodFunction) <- environment();
+        FI <- -numDeriv::hessian(likelihoodFunction,C);
+        bounds <- boundOriginal;
+    }
 
     # Check if smoothing parameters and phi reached the boundary conditions
     if(bounds=="u"){
@@ -1043,7 +1055,7 @@ PoolPreparerES <- function(...){
 
                 listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                                      cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=NULL,
-                                     nParam=res$nParam,logLik=res$logLik,xreg=xreg,
+                                     nParam=res$nParam,logLik=res$logLik,xreg=xreg,FI=res$FI,
                                      xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
 
                 if(xregDo!="u"){
@@ -1201,7 +1213,7 @@ PoolEstimatorES <- function(silent=FALSE,...){
 
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                              cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=NULL,
-                             nParam=res$nParam,logLik=res$logLik,xreg=xreg,
+                             nParam=res$nParam,logLik=res$logLik,xreg=xreg, FI=res$FI,
                              xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
         if(xregDo!="u"){
             listToReturn <- XregSelector(listToReturn=listToReturn);
@@ -1260,7 +1272,7 @@ CreatorES <- function(silent=FALSE,...){
         res <- EstimatorES(ParentEnvironment=environment());
         listToReturn <- list(Etype=Etype,Ttype=Ttype,Stype=Stype,damped=damped,phi=phi,
                              cfObjective=res$objective,C=res$C,ICs=res$ICs,icBest=res$ICs,
-                             nParam=res$nParam,FI=FI,logLik=res$logLik,xreg=xreg,
+                             nParam=res$nParam,FI=res$FI,logLik=res$logLik,xreg=xreg,
                              xregNames=xregNames,matFX=matFX,vecgX=vecgX,nExovars=nExovars);
 
         if(xregDo!="u"){
@@ -1676,7 +1688,7 @@ CreatorES <- function(silent=FALSE,...){
         }
         else{
             if(!any(loss==c("MSE","MAE","HAM","MSEh","MAEh","HAMh","MSCE","MACE","CHAM",
-                              "TFL","aTFL","Rounded","TSB","LogisticD","LogisticL"))){
+                              "GPL","aGPL","Rounded","TSB","LogisticD","LogisticL"))){
                 if(modelDo=="combine"){
                     warning(paste0("'",loss,"' is used as loss function instead of 'MSE'.",
                                    "The produced combination weights may be wrong."),call.=FALSE);
@@ -1908,12 +1920,6 @@ CreatorES <- function(silent=FALSE,...){
         }
         else{
             model <- paste0(Etype,Ttype,Stype);
-        }
-
-# Write down Fisher Information if needed
-        if(FI){
-            environment(likelihoodFunction) <- environment();
-            FI <- -numDeriv::hessian(likelihoodFunction,C);
         }
 
         ssFitter(ParentEnvironment=environment());
