@@ -101,8 +101,8 @@ utils::globalVariables(c("vecg","nComponents","lagsModel","phiEstimate","yInSamp
 #' ellipsis as well. In this case they will be used for optimisation. \code{C}
 #' sets the initial values before the optimisation, \code{CLower} and
 #' \code{CUpper} define lower and upper bounds for the search inside of the
-#' specified \code{bounds}. These values should have exactly the length equal
-#' to the number of parameters to estimate.
+#' specified \code{bounds}. These values should have length equal to the number
+#' of parameters to estimate.
 #' You can also pass two parameters to the optimiser: 1. \code{maxeval} - maximum
 #' number of evaluations to carry on; 2. \code{xtol_rel} - the precision of the
 #' optimiser. The default values used in es() are \code{maxeval=500} and
@@ -246,6 +246,8 @@ utils::globalVariables(c("vecg","nComponents","lagsModel","phiEstimate","yInSamp
 #' es(x,"MNN",occurrence="fixed")
 #' # Best type of occurrence model based on iETS(Z,Z,N)
 #' ourModel <- es(x,"ZZN",occurrence="auto")
+#' par(mfcol=c(2,2))
+#' plot(ourModel)
 #'
 #' summary(ourModel)
 #' forecast(ourModel)
@@ -419,7 +421,7 @@ CF <- function(C){
 
 ##### C values for estimation #####
 # Function constructs default bounds where C values should lie
-CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,lagsModelMax,nComponents,matat){
+CValues <- function(bounds,Etype,Ttype,Stype,vecg,matvt,phi,lagsModelMax,nComponents,matat){
     C <- NA;
     CLower <- NA;
     CUpper <- NA;
@@ -493,7 +495,12 @@ CValues <- function(bounds,Ttype,Stype,vecg,matvt,phi,lagsModelMax,nComponents,m
     else if(bounds=="a"){
         if(persistenceEstimate){
             C <- c(C,vecg);
-            CLower <- c(CLower,rep(-5,length(vecg)));
+            if(Etype=="A"){
+                CLower <- c(CLower,rep(-5,length(vecg)));
+            }
+            else{
+                CLower <- c(CLower,rep(0,length(vecg)));
+            }
             CUpper <- c(CUpper,rep(5,length(vecg)));
             if(Ttype!="N"){
                 CNames <- c(CNames, c("alpha","beta","gamma")[1:nComponents]);
@@ -689,7 +696,7 @@ EstimatorES <- function(...){
     environment(CF) <- environment();
     BasicMakerES(ParentEnvironment=environment());
 
-    Cs <- CValues(bounds,Ttype,Stype,vecg,matvt,phi,lagsModelMax,nComponents,matat);
+    Cs <- CValues(bounds,Etype,Ttype,Stype,vecg,matvt,phi,lagsModelMax,nComponents,matat);
     if(is.null(providedC)){
         C <- Cs$C;
     }

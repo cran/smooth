@@ -9,13 +9,12 @@ smoothCombine(y, models = NULL, initial = c("optimal", "backcasting"),
   "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
   cumulative = FALSE, interval = c("none", "parametric", "likelihood",
   "semiparametric", "nonparametric"), level = 0.95, bins = 200,
-  intervalCombine = c("quantile", "probability"),
-  occurrence = c("none", "auto", "fixed", "general", "odds-ratio",
-  "inverse-odds-ratio", "probability"), oesmodel = "MNN",
-  bounds = c("admissible", "none"), silent = c("all", "graph",
-  "legend", "output", "none"), xreg = NULL, xregDo = c("use",
-  "select"), initialX = NULL, updateX = FALSE, persistenceX = NULL,
-  transitionX = NULL, ...)
+  intervalCombine = c("quantile", "probability"), occurrence = c("none",
+  "auto", "fixed", "general", "odds-ratio", "inverse-odds-ratio",
+  "probability"), oesmodel = "MNN", bounds = c("admissible", "none"),
+  silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
+  xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
+  persistenceX = NULL, transitionX = NULL, ...)
 }
 \arguments{
 \item{y}{Vector or ts object, containing data needed to be forecasted.}

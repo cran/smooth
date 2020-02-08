@@ -9,13 +9,12 @@ es(y, model = "ZZZ", persistence = NULL, phi = NULL,
   ic = c("AICc", "AIC", "BIC", "BICc"), loss = c("MSE", "MAE", "HAM",
   "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
   cumulative = FALSE, interval = c("none", "parametric", "likelihood",
-  "semiparametric", "nonparametric"), level = 0.95,
-  occurrence = c("none", "auto", "fixed", "general", "odds-ratio",
-  "inverse-odds-ratio", "direct"), oesmodel = "MNN",
-  bounds = c("usual", "admissible", "none"), silent = c("all", "graph",
-  "legend", "output", "none"), xreg = NULL, xregDo = c("use",
-  "select"), initialX = NULL, updateX = FALSE, persistenceX = NULL,
-  transitionX = NULL, ...)
+  "semiparametric", "nonparametric"), level = 0.95, occurrence = c("none",
+  "auto", "fixed", "general", "odds-ratio", "inverse-odds-ratio", "direct"),
+  oesmodel = "MNN", bounds = c("usual", "admissible", "none"),
+  silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
+  xregDo = c("use", "select"), initialX = NULL, updateX = FALSE,
+  persistenceX = NULL, transitionX = NULL, ...)
 }
 \arguments{
 \item{y}{Vector or ts object, containing data needed to be forecasted.}
@@ -188,8 +187,8 @@ Parameters \code{C}, \code{CLower} and \code{CUpper} can be passed via
 ellipsis as well. In this case they will be used for optimisation. \code{C}
 sets the initial values before the optimisation, \code{CLower} and
 \code{CUpper} define lower and upper bounds for the search inside of the
-specified \code{bounds}. These values should have exactly the length equal
-to the number of parameters to estimate.
+specified \code{bounds}. These values should have length equal to the number
+of parameters to estimate.
 You can also pass two parameters to the optimiser: 1. \code{maxeval} - maximum
 number of evaluations to carry on; 2. \code{xtol_rel} - the precision of the
 optimiser. The default values used in es() are \code{maxeval=500} and
@@ -367,6 +366,8 @@ es(x,"MNN",occurrence="i")
 es(x,"MNN",occurrence="fixed")
 # Best type of occurrence model based on iETS(Z,Z,N)
 ourModel <- es(x,"ZZN",occurrence="auto")
+par(mfcol=c(2,2))
+plot(ourModel)
 
 summary(ourModel)
 forecast(ourModel)

@@ -298,7 +298,7 @@ covar.smooth <- function(object, type=c("analytical","empirical","simulated"), .
             ot <- (residuals(object)!=0)*1;
         }
         else{
-            ot <- rep(1,length(residuals(object)));
+            ot <- rep(1,nobs(object));
         }
         h <- length(object$forecast);
         lagsModel <- modelLags(object);
@@ -599,7 +599,6 @@ pointLik.smooth <- function(object, ...){
     loss <- object$loss;
 
     if(errorType(object)=="M"){
-        errors <- log(1+errors);
         likValues <- likValues - log(actuals(object));
     }
 
@@ -682,6 +681,10 @@ coef.smooth <- function(object, ...)
 fitted.smooth <- function(object, ...){
     return(object$fitted);
 }
+#' @export
+fitted.smooth.forecast <- function(object, ...){
+    return(fitted(object$model));
+}
 
 #' @importFrom forecast forecast
 #' @export forecast
@@ -710,15 +713,12 @@ NULL
 #' \itemize{
 #' \item \code{model} - the estimated model (ES / CES / GUM / SSARIMA).
 #' \item \code{method} - the name of the estimated model (ES / CES / GUM / SSARIMA).
-#' \item \code{fitted} - fitted values of the model.
-#' \item \code{y} - actual values provided in the call of the model.
 #' \item \code{forecast} aka \code{mean} - point forecasts of the model
 #' (conditional mean).
 #' \item \code{lower} - lower bound of prediction interval.
 #' \item \code{upper} - upper bound of prediction interval.
 #' \item \code{level} - confidence level.
 #' \item \code{interval} - binary variable (whether interval were produced or not).
-#' \item \code{residuals} - the residuals of the original model.
 #' }
 #' @template ssAuthor
 #' @seealso \code{\link[forecast]{ets}, \link[forecast]{forecast}}
@@ -771,9 +771,9 @@ forecast.smooth <- function(object, h=10,
     else{
         stop("Wrong object provided. This needs to be either 'ETS', or 'CES', or 'GUM', or 'SSARIMA', or 'SMA' model.",call.=FALSE);
     }
-    output <- list(model=object,method=object$model,fitted=newModel$fitted,y=actuals(newModel),
+    output <- list(model=object,method=object$model,
                    forecast=newModel$forecast,lower=newModel$lower,upper=newModel$upper,level=newModel$level,
-                   interval=interval,mean=newModel$forecast,x=actuals(object),residuals=object$residuals);
+                   interval=interval,mean=newModel$forecast);
 
     return(structure(output,class=c("smooth.forecast","forecast")));
 }
@@ -792,9 +792,9 @@ forecast.oes <- function(object, h=10,
                         h=h,interval=interval,level=level,silent="all",...);
     }
 
-    output <- list(model=object,method=object$model,fitted=newModel$fitted,y=actuals(newModel),
+    output <- list(model=object,method=object$model,
                    forecast=newModel$forecast,lower=newModel$lower,upper=newModel$upper,level=level,
-                   interval=interval,mean=newModel$forecast,x=actuals(object),residuals=object$residuals);
+                   interval=interval,mean=newModel$forecast);
 
     return(structure(output,class=c("smooth.forecast","forecast")));
 }
@@ -807,11 +807,11 @@ actuals.smooth <- function(object, ...){
 }
 #' @export
 actuals.smooth.forecast <- function(object, ...){
-    return(window(object$model$y,start(object$model$y),end(object$model$fitted)));
+    return(window(actuals(object$model),start(actuals(object$model)),end(fitted(object$model))));
 }
 #' @export
 actuals.iss <- function(object, ...){
-    return(window(object$y,start(object$y),end(object$fitted)));
+    return(window(actuals(object),start(actuals(object)),end(fitted(object))));
 }
 
 #### Function extracts lags of provided model ####
@@ -1188,100 +1188,443 @@ orders.Arima <- function(object, ...){
 }
 
 #### Plots of smooth objects ####
-#' @importFrom graphics plot
+#' Plots for the fit and states
+#'
+#' The function produces plot actuals, fitted values and forecasts and states of the model
+#'
+#' The list of produced plots includes:
+#' \enumerate{
+#' \item Fitted over time. Plots actuals (black line), fitted values (purple line), point forecast
+#' (blue line) and prediction interval (grey lines). Can be used in order to make sure that the model
+#' did not miss any important events over time;
+#' \item Standardised residuals vs Fitted. Plots the points and the confidence bounds
+#' (red lines) for the specified confidence \code{level}. Useful for the analysis of outliers;
+#' \item Studentised residuals vs Fitted. This is similar to the previous plot, but with the
+#' residuals divided by the scales with the leave-one-out approach. Should be more sensitive
+#' to outliers;
+#' \item Absolute residuals vs Fitted. Useful for the analysis of heteroscedasticity;
+#' \item Squared residuals vs Fitted - similar to (3), but with squared values;
+#' \item Q-Q plot with the specified distribution. Can be used in order to see if the
+#' residuals follow the assumed distribution. The type of distribution depends on the one used
+#' in the estimation (see \code{distribution} parameter in \link[greybox]{alm});
+#' \item ACF of the residuals. Are the residuals autocorrelated? See \link[stats]{acf} for
+#' details;
+#' \item PACF of the residuals. No, really, are they autocorrelated? See \link[stats]{pacf}
+#' for details;
+#' \item Plot of the states of the model. It is not recommended to produce this plot together with
+#' the others, because there might be several states, which would cause the creation of a different
+#' canvas. In case of "msdecompose", this will produce the decomposition of the series into states
+#' on a different canvas.
+#' }
+#' Which of the plots to produce, is specified via the \code{which} parameter.
+#'
+#' @param x Time series model for which forecasts are required.
+#' @param which Which of the plots to produce. The possible options (see details for explanations):
+#' \enumerate{
+#' \item Fitted over time;
+#' \item Standardised residuals vs Fitted;
+#' \item Studentised residuals vs Fitted;
+#' \item Absolute residuals vs Fitted;
+#' \item Squared residuals vs Fitted;
+#' \item Q-Q plot with the specified distribution;
+#' \item ACF of the residuals;
+#' \item PACF of the residuals;
+#' \item Plot of states of the model.
+#' }
+#' @param level Confidence level. Defines width of confidence interval. Used in plots (2), (6) and
+#' (7).
+#' @param legend If \code{TRUE}, then the legend is produced on plots (1), (2) and (3).
+#' @param ask Logical; if \code{TRUE}, the user is asked to press Enter before each plot.
+#' @param lowess Logical; if \code{TRUE}, LOWESS lines are drawn on scatterplots, see \link[stats]{lowess}.
+#' @param ... The parameters passed to the plot functions. Recommended to use with separate plots.
+#' @return The function produces the number of plots, specified in the parameter \code{which}.
+#'
+#' @template ssAuthor
+#' @seealso \link[greybox]{plot.greybox}
+#' @keywords ts univar
+#' @examples
+#'
+#' ourModel <- es(c(rnorm(50,100,10),rnorm(50,120,10)), "ANN", h=10)
+#' par(mfcol=c(3,3))
+#' plot(ourModel, c(1:9))
+#'
+#' @importFrom stats ppoints qqnorm qqplot qqline acf pacf lowess sd na.pass
+#' @importFrom grDevices dev.interactive devAskNewPage
+#' @importFrom graphics plot text
+#' @rdname plot.smooth
 #' @export
-plot.oes <- function(x, ...){
+plot.smooth <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
+                        ask=prod(par("mfcol")) < length(which) && dev.interactive(),
+                        lowess=TRUE, ...){
     ellipsis <- list(...);
 
-    if(is.null(ellipsis$main)){
-        graphmaker(actuals(x),x$forecast,x$fitted,x$lower,x$upper,main=x$model,...);
+    # Define, whether to wait for the hit of "Enter"
+    if(ask){
+        oask <- devAskNewPage(TRUE);
+        on.exit(devAskNewPage(oask));
     }
-    else{
-        graphmaker(actuals(x),x$forecast,x$fitted,x$lower,x$upper, ...);
-    }
-}
 
-#' @export
-plot.smooth <- function(x, ...){
-    ellipsis <- list(...);
-    parDefault <- par(no.readonly = TRUE);
-    smoothType <- smoothType(x);
-    if(smoothType=="ETS"){
-        if(any(unlist(gregexpr("C",x$model))==-1)){
-            if(ncol(x$states)>10){
-                message("Too many states. Plotting them one by one on several graphs.");
-                if(is.null(ellipsis$main)){
-                    ellipsisMain <- NULL;
+    # 1. Basic plot over time
+    plot1 <- function(x, ...){
+        if(any(x$interval==c("none","n"))){
+            graphmaker(actuals(x), x$forecast, fitted(x), main=x$model, legend=legend, parReset=FALSE, ...);
+        }
+        else{
+            graphmaker(actuals(x), x$forecast, fitted(x), x$lower, x$upper, x$level, main=x$model, legend=legend, parReset=FALSE, ...);
+        }
+    }
+
+    # 2 and 3: Standardised  / studentised residuals vs Fitted
+    plot2 <- function(x, type="rstandard", ...){
+        ellipsis <- list(...);
+
+        ellipsis$x <- as.vector(fitted(x));
+        if(type=="rstandard"){
+            ellipsis$y <- as.vector(rstandard(x));
+            yName <- "Standardised";
+        }
+        else{
+            ellipsis$y <- as.vector(rstudent(x));
+            yName <- "Studentised";
+        }
+
+        if(is.oes(x$occurrence)){
+            ellipsis$x <- ellipsis$x[actuals(x$occurrence)!=0];
+            ellipsis$y <- ellipsis$y[actuals(x$occurrence)!=0];
+        }
+
+        # Remove NAs
+        if(any(is.na(ellipsis$x))){
+            ellipsis$x <- ellipsis$x[!is.na(ellipsis$x)];
+            ellipsis$y <- ellipsis$y[!is.na(ellipsis$y)];
+        }
+
+        if(!any(names(ellipsis)=="main")){
+            ellipsis$main <- paste0(yName," Residuals vs Fitted");
+        }
+
+        if(!any(names(ellipsis)=="xlab")){
+            ellipsis$xlab <- "Fitted";
+        }
+        if(!any(names(ellipsis)=="ylab")){
+            ellipsis$ylab <- paste0(yName," Residuals");
+        }
+
+        if(legend){
+            if(ellipsis$x[length(ellipsis$x)]>mean(ellipsis$x)){
+                legendPosition <- "bottomright";
+            }
+            else{
+                legendPosition <- "topright";
+            }
+        }
+
+        zValues <- switch(x$loss,
+                          "MAE"=qlaplace(c((1-level)/2, (1+level)/2), 0, 1),
+                          "HAM"=qs(c((1-level)/2, (1+level)/2), 0, 1),
+                          qnorm(c((1-level)/2, (1+level)/2), 0, 1));
+        outliers <- which(ellipsis$y >zValues[2] | ellipsis$y <zValues[1]);
+        # cat(paste0(round(length(outliers)/length(ellipsis$y),3)*100,"% of values are outside the bounds\n"));
+
+        if(!any(names(ellipsis)=="ylim")){
+            ellipsis$ylim <- range(c(ellipsis$y,zValues), na.rm=TRUE);
+            if(legend){
+                if(legendPosition=="bottomright"){
+                    ellipsis$ylim[1] <- ellipsis$ylim[1] - 0.2*diff(ellipsis$ylim);
                 }
                 else{
-                    ellipsisMain <- ellipsis$main;
+                    ellipsis$ylim[2] <- ellipsis$ylim[2] + 0.2*diff(ellipsis$ylim);
                 }
-                nPlots <- ceiling(ncol(x$states)/10);
-                for(i in 1:nPlots){
-                    if(is.null(ellipsisMain)){
-                        ellipsis$main <- paste0("States of ",x$model,", part ",i);
+            }
+        }
+
+        xRange <- range(ellipsis$x, na.rm=TRUE);
+        xRange[1] <- xRange[1] - sd(ellipsis$x, na.rm=TRUE);
+        xRange[2] <- xRange[2] + sd(ellipsis$x, na.rm=TRUE);
+
+        do.call(plot,ellipsis);
+        abline(h=0, col="grey", lty=2);
+        polygon(c(xRange,rev(xRange)),c(zValues[1],zValues[1],zValues[2],zValues[2]),
+                col="lightgrey", border=NA, density=10);
+        abline(h=zValues, col="red", lty=2);
+        if(length(outliers)>0){
+            points(ellipsis$x[outliers], ellipsis$y[outliers], pch=16);
+            text(ellipsis$x[outliers], ellipsis$y[outliers], labels=outliers, pos=4);
+        }
+        if(lowess){
+            lines(lowess(ellipsis$x, ellipsis$y), col="red");
+        }
+
+        if(legend){
+            if(lowess){
+                legend(legendPosition,
+                       legend=c(paste0(round(level,3)*100,"% bounds"),"outside the bounds","LOWESS line"),
+                       col=c("red", "black","red"), lwd=c(1,NA,1), lty=c(2,1,1), pch=c(NA,16,NA));
+            }
+            else{
+                legend(legendPosition,
+                       legend=c(paste0(round(level,3)*100,"% bounds"),"outside the bounds"),
+                       col=c("red", "black"), lwd=c(1,NA), lty=c(2,1), pch=c(NA,16));
+            }
+        }
+    }
+
+    # 4 and 5. Fitted vs |Residuals| or Fitted vs Residuals^2
+    plot3 <- function(x, type="abs", ...){
+        ellipsis <- list(...);
+
+        ellipsis$x <- as.vector(fitted(x));
+        if(type=="abs"){
+            ellipsis$y <- abs(as.vector(residuals(x)));
+        }
+        else{
+            ellipsis$y <- as.vector(residuals(x))^2;
+        }
+
+        if(is.oes(x$occurrence)){
+            ellipsis$x <- ellipsis$x[ellipsis$y!=0];
+            ellipsis$y <- ellipsis$y[ellipsis$y!=0];
+        }
+        # Remove NAs
+        if(any(is.na(ellipsis$x))){
+            ellipsis$x <- ellipsis$x[!is.na(ellipsis$x)];
+            ellipsis$y <- ellipsis$y[!is.na(ellipsis$y)];
+        }
+
+        if(!any(names(ellipsis)=="main")){
+            if(type=="abs"){
+                ellipsis$main <- "|Residuals| vs Fitted";
+            }
+            else{
+                ellipsis$main <- "Residuals^2 vs Fitted";
+            }
+        }
+
+        if(!any(names(ellipsis)=="xlab")){
+            ellipsis$xlab <- "Fitted";
+        }
+        if(!any(names(ellipsis)=="ylab")){
+            if(type=="abs"){
+                ellipsis$ylab <- "|Residuals|";
+            }
+            else{
+                ellipsis$ylab <- "Residuals^2";
+            }
+        }
+
+        do.call(plot,ellipsis);
+        abline(h=0, col="grey", lty=2);
+        if(lowess){
+            lines(lowess(ellipsis$x, ellipsis$y), col="red");
+        }
+    }
+
+    # 6. Q-Q with the specified distribution
+    plot4 <- function(x, ...){
+        ellipsis <- list(...);
+
+        ellipsis$y <- residuals(x);
+        if(is.oes(x$occurrence)){
+            ellipsis$y <- ellipsis$y[actuals(x$occurrence)!=0];
+        }
+
+        if(!any(names(ellipsis)=="xlab")){
+            ellipsis$xlab <- "Theoretical Quantile";
+        }
+        if(!any(names(ellipsis)=="ylab")){
+            ellipsis$ylab <- "Actual Quantile";
+        }
+
+        if(any(x$loss==c("MAEh","TMAE","GTMAE","MACE"))){
+            if(!any(names(ellipsis)=="main")){
+                ellipsis$main <- "QQ-plot of Laplace distribution";
+            }
+            ellipsis$x <- qlaplace(ppoints(500), mu=0, scale=x$scale);
+
+            do.call(qqplot, ellipsis);
+            qqline(ellipsis$y, distribution=function(p) qlaplace(p, mu=0, scale=x$scale));
+        }
+        else if(any(x$loss==c("HAMh","THAM","GTHAM","CHAM"))){
+            if(!any(names(ellipsis)=="main")){
+                ellipsis$main <- "QQ-plot of S distribution";
+            }
+            ellipsis$x <- qs(ppoints(500), mu=0, scale=x$scale);
+
+            do.call(qqplot, ellipsis);
+            qqline(ellipsis$y, distribution=function(p) qs(p, mu=0, scale=x$scale));
+        }
+        else{
+            if(!any(names(ellipsis)=="main")){
+                ellipsis$main <- "QQ plot of normal distribution";
+            }
+
+            do.call(qqnorm, ellipsis);
+            qqline(ellipsis$y);
+        }
+    }
+
+    # 7 and 8. ACF and PACF
+    plot5 <- function(x, type="acf", ...){
+        ellipsis <- list(...);
+
+        if(!any(names(ellipsis)=="main")){
+            if(type=="acf"){
+                ellipsis$main <- "Autocorrelation Function";
+            }
+            else{
+                ellipsis$main <- "Partial Autocorrelation Function";
+            }
+        }
+
+        if(!any(names(ellipsis)=="xlab")){
+            ellipsis$xlab <- "Lags";
+        }
+        if(!any(names(ellipsis)=="ylab")){
+            if(type=="acf"){
+                ellipsis$ylab <- "ACF";
+            }
+            else{
+                ellipsis$ylab <- "PACF";
+            }
+        }
+
+        if(!any(names(ellipsis)=="ylim")){
+            ellipsis$ylim <- c(-1,1);
+        }
+
+        if(type=="acf"){
+            theValues <- acf(residuals(x), plot=FALSE, na.action=na.pass);
+        }
+        else{
+            theValues <- pacf(residuals(x), plot=FALSE, na.action=na.pass);
+        }
+        ellipsis$x <- theValues$acf[-1];
+
+        ellipsis$type <- "h"
+
+        do.call(plot,ellipsis);
+        abline(h=0, col="black", lty=1);
+        abline(h=qnorm(c((1-level)/2, (1+level)/2),0,sqrt(1/nobs(x))), col="red", lty=2);
+    }
+
+    # 9. Plot of states
+    plot6 <- function(x, ...){
+        parDefault <- par(no.readonly = TRUE);
+        smoothType <- smoothType(x);
+        if(smoothType=="ETS"){
+            if(any(unlist(gregexpr("C",x$model))==-1)){
+                if(ncol(x$states)>10){
+                    message("Too many states. Plotting them one by one on several graphs.");
+                    if(is.null(ellipsis$main)){
+                        ellipsisMain <- NULL;
                     }
-                    ellipsis$x <- x$states[,(1+(i-1)*10):min(i*10,ncol(x$states))];
+                    else{
+                        ellipsisMain <- ellipsis$main;
+                    }
+                    nPlots <- ceiling(ncol(x$states)/10);
+                    for(i in 1:nPlots){
+                        if(is.null(ellipsisMain)){
+                            ellipsis$main <- paste0("States of ",x$model,", part ",i);
+                        }
+                        ellipsis$x <- x$states[,(1+(i-1)*10):min(i*10,ncol(x$states))];
+                        do.call(plot, ellipsis);
+                    }
+                }
+                else{
+                    if(is.null(ellipsis$main)){
+                        ellipsis$main <- paste0("States of ",x$model);
+                    }
+                    ellipsis$x <- x$states;
                     do.call(plot, ellipsis);
                 }
             }
             else{
-                if(is.null(ellipsis$main)){
-                    ellipsis$main <- paste0("States of ",x$model);
-                }
-                ellipsis$x <- x$states;
-                do.call(plot, ellipsis);
+                # If we did combinations, we cannot return anything
+                message("Combination of models was done. Sorry, but there is nothing to plot.");
             }
         }
-        else{
-            # If we did combinations, we cannot return anything
-            message("Combination of models was done. Sorry, but there is nothing to plot.");
-        }
-    }
-    else if(smoothType=="CMA"){
-        ellipsis$actuals <- actuals(x);
-        ellipsis$forecast <- x$forecast;
-        ellipsis$fitted <- x$fitted;
-        ellipsis$legend <- FALSE;
-        ellipsis$vline <- FALSE;
-        if(is.null(ellipsis$main)){
-            ellipsis$main <- x$model;
-        }
-        do.call(graphmaker, ellipsis);
-    }
-    else{
-        if(any(unlist(gregexpr("combine",x$model))!=-1)){
-            # If we did combinations, we cannot do anything
-            message("Combination of models was done. Sorry, but there is nothing to plot.");
+        else if(smoothType=="CMA"){
+            ellipsis$actuals <- actuals(x);
+            ellipsis$forecast <- x$forecast;
+            ellipsis$fitted <- x$fitted;
+            ellipsis$legend <- FALSE;
+            ellipsis$vline <- FALSE;
+            if(is.null(ellipsis$main)){
+                ellipsis$main <- x$model;
+            }
+            do.call(graphmaker, ellipsis);
         }
         else{
-            if(ncol(x$states)>10){
-                message("Too many states. Plotting them one by one on several graphs.");
-                if(is.null(ellipsis$main)){
-                    ellipsisMain <- NULL;
+            if(any(unlist(gregexpr("combine",x$model))!=-1)){
+                # If we did combinations, we cannot do anything
+                message("Combination of models was done. Sorry, but there is nothing to plot.");
+            }
+            else{
+                if(ncol(x$states)>10){
+                    message("Too many states. Plotting them one by one on several graphs.");
+                    if(is.null(ellipsis$main)){
+                        ellipsisMain <- NULL;
+                    }
+                    else{
+                        ellipsisMain <- ellipsis$main;
+                    }
+                    nPlots <- ceiling(ncol(x$states)/10);
+                    for(i in 1:nPlots){
+                        if(is.null(ellipsisMain)){
+                            ellipsis$main <- paste0("States of ",x$model,", part ",i);
+                        }
+                        ellipsis$x <- x$states[,(1+(i-1)*10):min(i*10,ncol(x$states))];
+                        do.call(plot, ellipsis);
+                    }
                 }
                 else{
-                    ellipsisMain <- ellipsis$main;
-                }
-                nPlots <- ceiling(ncol(x$states)/10);
-                for(i in 1:nPlots){
-                    if(is.null(ellipsisMain)){
-                        ellipsis$main <- paste0("States of ",x$model,", part ",i);
+                    if(is.null(ellipsis$main)){
+                        ellipsis$main <- paste0("States of ",x$model);
                     }
-                    ellipsis$x <- x$states[,(1+(i-1)*10):min(i*10,ncol(x$states))];
+                    ellipsis$x <- x$states;
                     do.call(plot, ellipsis);
                 }
             }
-            else{
-                if(is.null(ellipsis$main)){
-                    ellipsis$main <- paste0("States of ",x$model);
-                }
-                ellipsis$x <- x$states;
-                do.call(plot, ellipsis);
-            }
         }
+        par(parDefault);
     }
-    par(parDefault);
+
+    # Do plots
+    if(any(which==1)){
+        plot1(x, ...);
+    }
+
+    if(any(which==2)){
+        plot2(x, ...);
+    }
+
+    if(any(which==3)){
+        plot2(x, "rstudent", ...);
+    }
+
+    if(any(which==4)){
+        plot3(x, ...);
+    }
+
+    if(any(which==5)){
+        plot3(x, type="squared", ...);
+    }
+
+    if(any(which==6)){
+        plot4(x, ...);
+    }
+
+    if(any(which==7)){
+        plot5(x, type="acf", ...);
+    }
+
+    if(any(which==8)){
+        plot5(x, type="pacf", ...);
+    }
+
+    if(any(which==9)){
+        plot6(x, ...);
+    }
 }
 
 #' @export
@@ -1327,38 +1670,17 @@ plot.smooth.sim <- function(x, ...){
 #' @export
 plot.smooth.forecast <- function(x, ...){
     if(any(x$interval!=c("none","n"))){
-        graphmaker(actuals(x),x$forecast,x$fitted,x$lower,x$upper,x$level,main=x$method);
+        graphmaker(actuals(x$model),x$mean,fitted(x$model),x$lower,x$upper,x$level,main=x$method,...);
     }
     else{
-        graphmaker(actuals(x),x$forecast,x$fitted,main=x$method);
+        graphmaker(actuals(x$model),x$mean,fitted(x$model),main=x$method,...);
     }
 }
 
 #' @export
-plot.iss <- function(x, ...){
-    ellipsis <- list(...);
-    intermittent <- x$intermittent
-    if(intermittent=="i"){
-        intermittent <- "Interval-based";
-    }
-    else if(intermittent=="p"){
-        intermittent <- "Probability-based";
-    }
-    else if(intermittent=="f"){
-        intermittent <- "Fixed probability";
-    }
-    else if(intermittent=="l"){
-        intermittent <- "Logistic probability";
-    }
-    else{
-        intermittent <- "None";
-    }
-    if(is.null(ellipsis$main)){
-        graphmaker(actuals(x),x$forecast,x$fitted,main=paste0("iSS, ",intermittent), ...);
-    }
-    else{
-        graphmaker(actuals(x),x$forecast,x$fitted, ...);
-    }
+plot.oesg <- function(x, ...){
+    # This is needed, because OESG models have two pairs of residuals.
+    plot.smooth(x, which=1, ...);
 }
 
 #### Prints of smooth ####
@@ -1659,6 +1981,65 @@ print.oes <- function(x, ...){
     print(ICs);
 }
 
+#### Residuals for provided object ####
+#' @export
+residuals.smooth <- function(object, ...){
+    if(errorType(object)=="A"){
+        return(object$residuals);
+    }
+    else{
+        return(log(1+object$residuals));
+    }
+}
+
+#' @importFrom stats rstandard
+#' @export
+rstandard.smooth <- function(model, ...){
+    obs <- nobs(model);
+    df <- obs - nparam(model);
+
+    # If this is an occurrence model, then only modify the non-zero obs
+    if(is.oes(model$occurrence)){
+        residsToGo <- which(actuals(model$occurrence)!=0);
+    }
+    else{
+        residsToGo <- c(1:obs);
+    }
+
+    errors <- residuals(model);
+    return((errors - mean(errors[residsToGo], na.rm=TRUE)) / sqrt(sigma(model)^2 * obs / df));
+}
+
+#' @importFrom stats rstudent
+#' @export
+rstudent.smooth <- function(model, ...){
+    obs <- nobs(model);
+    df <- obs - nparam(model) - 1;
+    rstudentised <- errors <- residuals(model);
+    errors[] <- errors - mean(errors, na.rm=TRUE);
+    # If this is an occurrence model, then only modify the non-zero obs
+    if(is.oes(model$occurrence)){
+        residsToGo <- which(actuals(model$occurrence)!=0);
+    }
+    else{
+        residsToGo <- c(1:obs);
+    }
+    # Prepare the residuals
+    if(errorType(model)=="M"){
+        for(i in residsToGo){
+            rstudentised[i] <- errors[i] / sqrt(sum(errors[-i]^2, na.rm=TRUE) / df);
+        }
+    }
+    else{
+        for(i in residsToGo){
+            rstudentised[i] <- errors[i] / sqrt(sum(errors[-i]^2, na.rm=TRUE) / df);
+        }
+    }
+    return(rstudentised);
+}
+
+
+
 #### Simulate data using provided object ####
 #' @importFrom utils tail
 #' @export
@@ -1745,8 +2126,10 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     if(smoothType=="ETS"){
         model <- modelType(object);
         if(any(unlist(gregexpr("C",model))==-1)){
-            args <- c(args,list(model=model, phi=object$phi, persistence=object$persistence,
-                                initialSeason=object$initialSeason));
+            args$model <- model;
+            args$phi <- object$phi;
+            args$persistence <- object$persistence;
+            args$initialSeason <- object$initialSeason;
 
             simulatedData <- do.call("sim.es",args);
         }
@@ -1757,8 +2140,11 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     }
     else if(smoothType=="ARIMA"){
         if(any(unlist(gregexpr("combine",object$model))==-1)){
-            args <- c(args,list(orders=orders(object), lags=lags(object),
-                                AR=object$AR, MA=object$MA, constant=object$constant));
+            args$orders <- orders(object);
+            args$lags <- lags(object);
+            args$AR <- object$AR;
+            args$MA <- object$MA;
+            args$constant <- object$constant;
 
             simulatedData <- do.call("sim.ssarima",args);
         }
@@ -1768,19 +2154,23 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
         }
     }
     else if(smoothType=="CES"){
-        args <- c(args,list(seasonality=modelType(object), A=object$A, B=object$B));
+        args$seasonality <- modelType(object);
+        args$A <- object$A;
+        args$B <- object$B;
 
         simulatedData <- do.call("sim.ces",args);
     }
     else if(smoothType=="GUM"){
-        args <- c(args,list(orders=orders(object), lags=lags(object),
-                            measurement=object$measurement, transition=object$transition,
-                            persistence=object$persistence));
+        args$orders <- orders(object);
+        args$lags <- lags(object);
+        args$measurement <- object$measurement;
+        args$transition <- object$transition;
+        args$persistence <- object$persistence;
 
         simulatedData <- do.call("sim.gum",args);
     }
     else if(smoothType=="SMA"){
-        args <- c(args,list(order=orders(object)));
+        args$order <- orders(object);
 
         simulatedData <- do.call("sim.sma",args);
     }

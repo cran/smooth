@@ -1,6 +1,7 @@
 # smooth
 [![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/smooth)](https://cran.r-project.org/package=smooth)
 [![Downloads](http://cranlogs.r-pkg.org/badges/smooth)](https://cran.r-project.org/package=smooth)
+[![ko-fi](https://ivan.svetunkov.ru/ko-fi.png)](https://ko-fi.com/G2G51C4C4)
 
 The package _smooth_ contains several smoothing (exponential and not) functions that are used in forecasting.
 
@@ -28,11 +29,12 @@ Here is the list of the included functions:
 20. sowhat - returns the ultimate answer to any question.
 21. smoothCombine - the function that combines forecasts from es(), ces(), gum(), ssarima() and sma() functions.
 22. cma - Centred Moving Average. This is the function used for smoothing of time series, not for forecasting.
+23. msdecompose - multiple seasonal decomposition based on centred moving averages.
 
 Available methods:
 
-1. AICc, BICc;
-2. coef;
+1. AIC, BIC, AICc, BICc;
+2. coefficients;
 3. covar - covariance matrix of multiple steps ahead forecast errors;
 4. errorType - the type of the error in the model: either additive or multiplicative;
 5. fitted;
@@ -44,14 +46,17 @@ Available methods:
 11. nobs;
 12. nparam - number of the estimated parameters in the model;
 13. orders - orders of the components of the model (mainly needed for ARIMA, GUM and SMA);
-14. plot;
-15. pls - Prediction Likelihood Score for the model and the provided holdout;
-16. pointLik - the vector of the individual likelihoods for each in-sample observation;
-17. pAIC - point AIC, based on pointLik
-18. print;
-19. sigma;
-20. simulate;
-21. summary;
+14. residuals - the residuals of the model (et in case of additive and log(1+et) for the multiplicative ones);
+15. rstandard - standardised residuals;
+16. rstudent - studentised residuals;
+17. plot - produces several plots for diagnostics purposes. See the documentation for plot.smooth();
+18. pls - Prediction Likelihood Score for the model and the provided holdout;
+19. pointLik - the vector of the individual likelihoods for each in-sample observation;
+20. pAIC - point AIC, based on pointLik
+21. print;
+22. sigma;
+23. simulate;
+24. summary;
 
 Future works:
 

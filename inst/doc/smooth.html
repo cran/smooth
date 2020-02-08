@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
 
 <head>
 
 <meta charset="utf-8" />
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="pandoc" />
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
@@ -13,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2019-10-22" />
+<meta name="date" content="2020-02-08" />
 
 <title>smooth: forecasting using state-space models</title>
 
@@ -218,7 +217,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2019-10-22</h4>
+<h4 class="date">2020-02-08</h4>
 
 
 
@@ -226,26 +225,33 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <p>The package includes the following functions:</p>
 <ol style="list-style-type: decimal">
 <li><a href="es.html">es() - Exponential Smoothing</a>;</li>
-<li><a href="ssarima.html">ssarima() - State-Space ARIMA</a>, also known as Several Seasonalities ARIMA;</li>
+<li><a href="ssarima.html">ssarima() - State-Space ARIMA</a>, also known as Several Seasonalities ARIMA and <code>msarima()</code>, aka Multiple Seasonal ARIMA;</li>
 <li><a href="ces.html">ces() - Complex Exponential Smoothing</a>;</li>
 <li><a href="gum.html">gum() - Generalised Univariate Model</a>;</li>
 <li><a href="ves.html">ves() - Vector Exponential Smoothing</a>;</li>
 <li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
 <li><a href="simulate.html">Simulate functions of the package</a>.</li>
-<li><code>smoothCombine()</code> - function that combines forecasts of the main univariate functions of smooth package.</li>
+<li><code>smoothCombine()</code> - function that combines forecasts of the main univariate functions of smooth package based on information criteria.</li>
 <li><a href="oes.html">oes() - Occurrence part of iETS model</a> – function that estimates probability of occurrence of variable using one of the following model types: 1. Fixed probability; 2. Odds ratio probability; 3. Inverse odds ratio probability; 4. Direct probability; 5. General. It can also select the most appropriate model among these five. The model produced by <code>oes()</code> can then be used in any forecasting function as input variable for <code>occurrence</code> parameter. This is the new function introduced in smooth v2.5.0, substituting the old <code>iss()</code> function. There is also vector counterpart of this function called <code>viss()</code> which implements multivariate fixed and logistic probabilities.</li>
 </ol>
 <p>The functions (1) - (4) and (6) return object of class <code>smooth</code>, (5) returns the object of class <code>vsmooth</code>, (7) returns <code>smooth.sim</code> class and finally (8) returns <code>oes</code> or <code>viss</code> (depending on the function used). There are several methods for these classes in the package.</p>
+<p>Some other functions, which are not considered as core and important:</p>
+<ol style="list-style-type: decimal">
+<li><code>cma()</code> - Centred Moving Average based on <code>sma()</code> and <code>msarima()</code></li>
+<li><code>msdecompose</code> - Multiple Seasonal Decomposition based on centred moving averages. Useful if a series with several frequencies need to be decomposed. The frequencies are specified separately in the <code>lags</code> parameter. Given that this function does not rely on any state space model, it might be moved to a different package at some point.</li>
+</ol>
 <div id="methods-for-the-class-smooth" class="section level2">
 <h2>Methods for the class <code>smooth</code></h2>
-<p>There are several functions that can be used together with the forecasting functions of the package. So when a model is saved to some object <code>ourModel</code>, these function will do some things. Here’s the list of all the available methods with brief explanations:</p>
+<p>There are several methods that can be used together with the forecasting functions of the package. When a model is saved to some object <code>ourModel</code>, these function will do some magic. Here’s the list of all the available methods with brief explanations:</p>
 <ol style="list-style-type: decimal">
 <li><code>summary(ourModel)</code> – function prints brief output with explanation of what was fitted, with what parameters and errors;</li>
 <li><code>fitted(ourModel)</code> – fitted values of the model;</li>
 <li><code>forecast(ourModel)</code> – point and interval forecasts. This is needed for compatibility with Rob Hyndman’s “forecast” package. <code>forecast(ourModel)</code> returns object of class <code>forecastSmooth</code>;</li>
 <li><code>residuals(ourModel)</code> – residuals of constructed model;</li>
+<li><code>rstandard(ourModel)</code> – standardised residuals of the model;</li>
+<li><code>rstudent(ourModel)</code> – studentised residuals of the model;</li>
 <li><code>AIC(ourModel)</code>, <code>BIC(ourModel)</code>, <code>AICc(ourModel)</code> and <code>BICc(ourModel)</code> – information criteria of the constructed model. <code>AICc()</code> and <code>BICc()</code> functions are not standard <code>stats</code> functions and are imported from <code>greybox</code> package and modified in <code>smooth</code> for the specific models;</li>
-<li><code>plot(ourModel)</code> – plots states of constructed model. If number of states is higher than 10, then several graphs are produced.</li>
+<li><code>plot(ourModel)</code> – produces plots for the diagnostics of the constructed model. There are 9 options of what to produce, see <code>?plot.smooth()</code> for more details. Note that if the number of states is higher than 10, then several graphs are produced for the option <code>which=9</code>.</li>
 <li><code>simulate(ourModel)</code> – produces data simulated from provided model;</li>
 <li><code>summary(forecast(ourModel))</code> – prints point and interval forecasts;</li>
 <li><code>plot(forecast(ourModel))</code> – produces graph with actuals, forecast, fitted and prediction interval using <code>graphmaker()</code> function from <code>greybox</code> package.</li>
@@ -260,9 +266,9 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <li><code>errorType(ourModel)</code> – the type of the error of a model (additive or multiplicative);</li>
 <li><code>coef(ourModel)</code> – returns the vector of all the estimated coefficients of the model;</li>
 <li><code>formula(ourModel)</code> – returns the formula for the measurement equation. This is just for the information and general understanding what we work with;</li>
-<li><code>getResponse(ourModel)</code> – returns actual values;</li>
+<li><code>actuals(ourModel)</code> – returns actual values;</li>
 <li><code>covar(ourModel)</code> – covariance matrix of multiple steps ahead forecast errors;</li>
-<li><code>pls(ourModel)</code> - Prediction Likelihood Score for the model and the provided holdout.</li>
+<li><code>pls(ourModel)</code> - Prediction Likelihood Score for the model and the provided holdout. This is buggy and needs to be updated. Don’t rely on this method too much.</li>
 </ol>
 </div>
 
