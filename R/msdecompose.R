@@ -41,8 +41,20 @@
 #' @export msdecompose
 msdecompose <- function(y, lags=c(12), type=c("additive","multiplicative")){
     # Function decomposes time series, assuming multiple frequencies provided in lags
-    type <- match.arg(type,c("additive","multiplicative"));
+    type <- match.arg(type);
     if(type=="multiplicative"){
+        shiftedData <- FALSE;
+        # If there are negative values, stop
+        if(any(y<0)){
+            stop("Multiplicative decomposition is not available for the data with negative values.",
+                 call.=FALSE);
+        }
+        # If there are zeroes, shift the variable up.
+        # In the perfect world, we would need to interpolate and repeate seasonal patterns.
+        else if(any(y==0)){
+            shiftedData[] <- TRUE;
+            y[] <- y + 1;
+        }
         yInsample <- log(y);
     }
     else{
@@ -91,6 +103,10 @@ msdecompose <- function(y, lags=c(12), type=c("additive","multiplicative")){
         initial[] <- exp(initial);
         trend <- exp(trend);
         patterns[] <- lapply(patterns,exp);
+        if(shiftedData){
+            initial[1] <- initial[1] - 1;
+            trend[] <- trend -1;
+        }
     }
 
     return(structure(list(y=y, initial=initial, trend=trend, seasonal=patterns, loss="MSE",
@@ -232,6 +248,7 @@ nparam.msdecompose <- function(object, ...){
     return(length(object$lags)+1);
 }
 
+#' @rdname plot.smooth
 #' @export
 plot.msdecompose <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
                              ask=prod(par("mfcol")) < length(which) && dev.interactive(),
@@ -245,7 +262,12 @@ plot.msdecompose <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         on.exit(devAskNewPage(oask));
     }
 
-    if(any(which==1)){
+    if(any(c(1:6,8,9) %in% which)){
+        plot.smooth(x, which=which[which!=7 & which!=10], level=level,
+                    legend=legend, ask=FALSE, lowess=lowess, ...);
+    }
+
+    if(any(which==7)){
         ellipsis$x <- actuals(x);
         if(!any(names(ellipsis)=="ylab")){
             ellipsis$ylab <- x$yName;
@@ -256,12 +278,7 @@ plot.msdecompose <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         lines(yFitted, col="red");
     }
 
-    if(any(c(2:8) %in% which)){
-        plot.smooth(x, which=which[which!=1 & which!=9], level=level,
-                    legend=legend, ask=FALSE, lowess=lowess, ...);
-    }
-
-    if(any(which==9)){
+    if(any(which==10)){
         yDecomposed <- cbind(actuals(x),x$trend);
         for(i in 1:length(x$seasonal)){
             yDecomposed <- cbind(yDecomposed,rep(x$seasonal[[i]],ceiling(obs/x$lags[i]))[1:obs]);

@@ -1,3 +1,27 @@
+smooth v2.5.6 (Release data: 2020-03-31)
+==============
+
+Changes:
+* oes() now returns full names of occurrence.
+* Renamed covar() method into multicov().
+* oes() with occurrence="none" now returns values based on p=1 (likelihood is based on p=1-1e-100).
+* pointLik() method for oes class.
+* A separate plot method for oes, because the general diagnostics is not useful.
+* Added the plot of residuals over time in plot.smooth(), which=9.
+* oes() now produces "occurrence" class, which is exported from greybox v0.5.9. This is needed for proper integration between greybox and smooth functions.
+* ves() now accepts B, ub and lb for the optimiser.
+* ves() is now optimised using Nelder-Mead only.
+* msarima() now has an option of producing initials using optimisation.
+* Renamed parameter for the initials of optimiser from "C" or "A" to "B" and upper and lower bounds respectively to "ub" and "lb". This is done for consistency purposes. Functions now also return this in $B and almos all of them accept B=B as a parameter for the initialisation of optimiser.
+* plot.smooth() now produces "Actuals vs Fitted" plot in case of which=1. The default time series plot is moved to which=7.
+
+Bugfix:
+* print.smooth.forecast() would print prediction intervals even if it wasn't asked to do so.
+* plot.smooth.forecast() would plot prediction intervals even if it wasn't asked to do so.
+* A bugfix for oes() and model selection, removing the occurrence type.
+* A crude fix for the msdecompose(), when type="multiplicative" and there are zeroes in the data.
+
+
 smooth v2.5.5 (Release data: 2020-01-25)
 ==============
 

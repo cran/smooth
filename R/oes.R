@@ -113,6 +113,8 @@ utils::globalVariables(c("modelDo","initialValue","lagsModelMax"));
 #' \item \code{persistenceX} - persistence vector g for exogenous variables.
 #' \item \code{transitionX} - transition matrix F for exogenous variables.
 #' \item \code{accuracy} - The error measures for the forecast (in case of \code{holdout=TRUE}).
+#' \item \code{B} - the vector of all the estimated parameters (in case of "odds-ratio",
+#' "inverse-odds-ratio" and "direct" models).
 #' }
 #' @seealso \code{\link[forecast]{ets}, \link[smooth]{oesg}, \link[smooth]{es}}
 #' @keywords iss intermittent demand intermittent demand state space model
@@ -156,7 +158,7 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
         model <- occurrence;
     }
 
-    # If the model is oes or oesg, use it
+    # If the model is oesg, use it
     if(is.oesg(model)){
         return(oesg(y, modelA=model$modelA, modelB=model$modelB, h=h, holdout=holdout,
                     interval=interval, level=level, bounds=bounds,
@@ -177,7 +179,7 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
     }
 
     ##### Preparations #####
-    occurrence <- substring(occurrence[1],1,1);
+    occurrence <- substr(match.arg(occurrence,c("fixed","general","odds-ratio","inverse-odds-ratio","direct","auto","none")),1,1);
 
     if(is.smooth.sim(y)){
         y <- y$data;
@@ -390,39 +392,39 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
 
         ##### Fill in the elements of oes #####
         # This takes the existing matrices and fills them in
-        oesElements <- function(A, lagsModel, Ttype, Stype, damped,
+        oesElements <- function(B, lagsModel, Ttype, Stype, damped,
                                 nComponentsAll, nComponentsNonSeasonal, nExovars, lagsModelMax,
                                 persistenceEstimate, initialType, phiEstimate, modelIsSeasonal, initialSeasonEstimate,
                                 xregEstimate, initialXEstimate, updateX,
                                 matvt, vecg, matF, matw, matat, matFX, vecgX){
             i <- 0;
             if(persistenceEstimate){
-                vecg[] <- A[1:nComponentsAll];
+                vecg[] <- B[1:nComponentsAll];
                 i[] <- nComponentsAll;
             }
             if(damped && phiEstimate){
                 i[] <- i + 1;
-                matF[,nComponentsNonSeasonal] <- A[i];
-                matw[,nComponentsNonSeasonal] <- A[i];
+                matF[,nComponentsNonSeasonal] <- B[i];
+                matw[,nComponentsNonSeasonal] <- B[i];
             }
             if(initialType=="o"){
-                matvt[1:nComponentsNonSeasonal,1:lagsModelMax] <- A[i+c(1:nComponentsNonSeasonal)];
+                matvt[1:nComponentsNonSeasonal,1:lagsModelMax] <- B[i+c(1:nComponentsNonSeasonal)];
                 i[] <- i + nComponentsNonSeasonal;
             }
             if(modelIsSeasonal && initialSeasonEstimate){
-                matvt[nComponentsAll,1:lagsModelMax] <- A[i+c(1:lagsModelMax)];
+                matvt[nComponentsAll,1:lagsModelMax] <- B[i+c(1:lagsModelMax)];
                 i[] <- i + lagsModelMax;
             }
             if(xregEstimate){
                 if(initialXEstimate){
-                    matat[,1:lagsModelMax] <- A[i+c(1:nExovars)];
+                    matat[,1:lagsModelMax] <- B[i+c(1:nExovars)];
                     i[] <- i + nExovars;
                 }
                 if(updateX){
-                    matFX[] <- A[i+c(1:(nExovars^2))];
+                    matFX[] <- B[i+c(1:(nExovars^2))];
                     i[] <- i + nExovars^2;
 
-                    vecgX[] <- A[i+c(1:nExovars)];
+                    vecgX[] <- B[i+c(1:nExovars)];
                 }
             }
 
@@ -430,70 +432,70 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
                         matat=matat, matFX=matFX, vecgX=vecgX));
         }
 
-        ##### A values for estimation #####
-        # Function constructs default bounds where A values should lie
-        AValues <- function(bounds, Ttype, Stype, damped, phiEstimate, persistenceEstimate,
+        ##### B values for estimation #####
+        # Function constructs default bounds where B values should lie
+        BValues <- function(bounds, Ttype, Stype, damped, phiEstimate, persistenceEstimate,
                             initialType, modelIsSeasonal, initialSeasonEstimate,
                             xregEstimate, initialXEstimate, updateX,
                             lagsModelMax, nComponentsAll, nComponentsNonSeasonal,
                             vecg, matvt, matat, matFX, vecgX, xregNames, nExovars){
-            A <- NA;
-            ALower <- NA;
-            AUpper <- NA;
+            B <- NA;
+            lb <- NA;
+            ub <- NA;
 
             #### Usual bounds ####
             if(bounds=="u"){
                 # Smoothing parameters
                 if(persistenceEstimate){
-                    A <- c(A,vecg);
-                    ALower <- c(ALower,rep(0,nComponentsAll));
-                    AUpper <- c(AUpper,rep(1,nComponentsAll));
+                    B <- c(B,vecg);
+                    lb <- c(lb,rep(0,nComponentsAll));
+                    ub <- c(ub,rep(1,nComponentsAll));
                 }
                 # Phi
                 if(damped && phiEstimate){
-                    A <- c(A,0.95);
-                    ALower <- c(ALower,0);
-                    AUpper <- c(AUpper,1);
+                    B <- c(B,0.95);
+                    lb <- c(lb,0);
+                    ub <- c(ub,1);
                 }
                 # Initial states
                 if(initialType=="o"){
                     if(Etype=="A"){
-                        A <- c(A,matvt[1:nComponentsNonSeasonal,lagsModelMax]);
-                        ALower <- c(ALower,-Inf);
-                        AUpper <- c(AUpper,Inf);
+                        B <- c(B,matvt[1:nComponentsNonSeasonal,lagsModelMax]);
+                        lb <- c(lb,-Inf);
+                        ub <- c(ub,Inf);
                     }
                     else{
                         if(Ttype=="A"){
                             # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
-                            A <- c(A,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
-                            ALower <- c(ALower,-Inf);
-                            AUpper <- c(AUpper,Inf);
+                            B <- c(B,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
+                            lb <- c(lb,-Inf);
+                            ub <- c(ub,Inf);
                         }
                         else{
-                            A <- c(A,abs(matvt[1:nComponentsNonSeasonal,lagsModelMax]));
-                            ALower <- c(ALower,1E-10);
-                            AUpper <- c(AUpper,Inf);
+                            B <- c(B,abs(matvt[1:nComponentsNonSeasonal,lagsModelMax]));
+                            lb <- c(lb,1E-10);
+                            ub <- c(ub,Inf);
                         }
                     }
                     if(Ttype=="A"){
-                        ALower <- c(ALower,-Inf);
-                        AUpper <- c(AUpper,Inf);
+                        lb <- c(lb,-Inf);
+                        ub <- c(ub,Inf);
                     }
                     else if(Ttype=="M"){
-                        ALower <- c(ALower,1E-20);
-                        AUpper <- c(AUpper,3);
+                        lb <- c(lb,1E-20);
+                        ub <- c(ub,3);
                     }
                     # Initial seasonals
                     if(modelIsSeasonal){
                         if(initialSeasonEstimate){
-                            A <- c(A,matvt[nComponentsAll,1:lagsModelMax]);
+                            B <- c(B,matvt[nComponentsAll,1:lagsModelMax]);
                             if(Stype=="A"){
-                                ALower <- c(ALower,rep(-Inf,lagsModelMax));
-                                AUpper <- c(AUpper,rep(Inf,lagsModelMax));
+                                lb <- c(lb,rep(-Inf,lagsModelMax));
+                                ub <- c(ub,rep(Inf,lagsModelMax));
                             }
                             else{
-                                ALower <- c(ALower,matvt[nComponentsAll,1:lagsModelMax]*0.1);
-                                AUpper <- c(AUpper,matvt[nComponentsAll,1:lagsModelMax]*10);
+                                lb <- c(lb,matvt[nComponentsAll,1:lagsModelMax]*0.1);
+                                ub <- c(ub,matvt[nComponentsAll,1:lagsModelMax]*10);
                             }
                         }
                     }
@@ -503,55 +505,55 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
             else if(bounds=="a"){
                 # Smoothing parameters
                 if(persistenceEstimate){
-                    A <- c(A,vecg);
-                    ALower <- c(ALower,rep(-5,nComponentsAll));
-                    AUpper <- c(AUpper,rep(5,nComponentsAll));
+                    B <- c(B,vecg);
+                    lb <- c(lb,rep(-5,nComponentsAll));
+                    ub <- c(ub,rep(5,nComponentsAll));
                 }
                 # Phi
                 if(damped && phiEstimate){
-                    A <- c(A,0.95);
-                    ALower <- c(ALower,0);
-                    AUpper <- c(AUpper,1);
+                    B <- c(B,0.95);
+                    lb <- c(lb,0);
+                    ub <- c(ub,1);
                 }
                 # Initial states
                 if(initialType=="o"){
                     if(Etype=="A"){
-                        A <- c(A,matvt[1:nComponentsNonSeasonal,lagsModelMax]);
-                        ALower <- c(ALower,-Inf);
-                        AUpper <- c(AUpper,Inf);
+                        B <- c(B,matvt[1:nComponentsNonSeasonal,lagsModelMax]);
+                        lb <- c(lb,-Inf);
+                        ub <- c(ub,Inf);
                     }
                     else{
                         if(Ttype=="A"){
                             # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
-                            A <- c(A,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
-                            ALower <- c(ALower,-Inf);
-                            AUpper <- c(AUpper,Inf);
+                            B <- c(B,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
+                            lb <- c(lb,-Inf);
+                            ub <- c(ub,Inf);
                         }
                         else{
-                            A <- c(A,abs(matvt[1:nComponentsNonSeasonal,lagsModelMax]));
-                            ALower <- c(ALower,1E-10);
-                            AUpper <- c(AUpper,Inf);
+                            B <- c(B,abs(matvt[1:nComponentsNonSeasonal,lagsModelMax]));
+                            lb <- c(lb,1E-10);
+                            ub <- c(ub,Inf);
                         }
                     }
                     if(Ttype=="A"){
-                        ALower <- c(ALower,-Inf);
-                        AUpper <- c(AUpper,Inf);
+                        lb <- c(lb,-Inf);
+                        ub <- c(ub,Inf);
                     }
                     else if(Ttype=="M"){
-                        ALower <- c(ALower,1E-20);
-                        AUpper <- c(AUpper,3);
+                        lb <- c(lb,1E-20);
+                        ub <- c(ub,3);
                     }
                     # Initial seasonals
                     if(modelIsSeasonal){
                         if(initialSeasonEstimate){
-                            A <- c(A,matvt[nComponentsAll,1:lagsModelMax]);
+                            B <- c(B,matvt[nComponentsAll,1:lagsModelMax]);
                             if(Stype=="A"){
-                                ALower <- c(ALower,rep(-Inf,lagsModelMax));
-                                AUpper <- c(AUpper,rep(Inf,lagsModelMax));
+                                lb <- c(lb,rep(-Inf,lagsModelMax));
+                                ub <- c(ub,rep(Inf,lagsModelMax));
                             }
                             else{
-                                ALower <- c(ALower,matvt[nComponentsAll,1:lagsModelMax]*0.1);
-                                AUpper <- c(AUpper,matvt[nComponentsAll,1:lagsModelMax]*10);
+                                lb <- c(lb,matvt[nComponentsAll,1:lagsModelMax]*0.1);
+                                ub <- c(ub,matvt[nComponentsAll,1:lagsModelMax]*10);
                             }
                         }
                     }
@@ -561,55 +563,55 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
             else{
                 # Smoothing parameters
                 if(persistenceEstimate){
-                    A <- c(A,vecg);
-                    ALower <- c(ALower,rep(-Inf,nComponentsAll));
-                    AUpper <- c(AUpper,rep(Inf,nComponentsAll));
+                    B <- c(B,vecg);
+                    lb <- c(lb,rep(-Inf,nComponentsAll));
+                    ub <- c(ub,rep(Inf,nComponentsAll));
                 }
                 # Phi
                 if(damped && phiEstimate){
-                    A <- c(A,0.95);
-                    ALower <- c(ALower,-Inf);
-                    AUpper <- c(AUpper,Inf);
+                    B <- c(B,0.95);
+                    lb <- c(lb,-Inf);
+                    ub <- c(ub,Inf);
                 }
                 # Initial states
                 if(initialType=="o"){
                     if(Etype=="A"){
-                        A <- c(A,matvt[1:nComponentsNonSeasonal,lagsModelMax]);
-                        ALower <- c(ALower,-Inf);
-                        AUpper <- c(AUpper,Inf);
+                        B <- c(B,matvt[1:nComponentsNonSeasonal,lagsModelMax]);
+                        lb <- c(lb,-Inf);
+                        ub <- c(ub,Inf);
                     }
                     else{
                         if(Ttype=="A"){
                             # This is something like ETS(M,A,N), so set level to mean, trend to zero for stability
-                            A <- c(A,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
-                            ALower <- c(ALower,-Inf);
-                            AUpper <- c(AUpper,Inf);
+                            B <- c(B,mean(ot[1:min(dataFreq,obsInSample)]),1E-5);
+                            lb <- c(lb,-Inf);
+                            ub <- c(ub,Inf);
                         }
                         else{
-                            A <- c(A,abs(matvt[1:nComponentsNonSeasonal,lagsModelMax]));
-                            ALower <- c(ALower,1E-10);
-                            AUpper <- c(AUpper,Inf);
+                            B <- c(B,abs(matvt[1:nComponentsNonSeasonal,lagsModelMax]));
+                            lb <- c(lb,1E-10);
+                            ub <- c(ub,Inf);
                         }
                     }
                     if(Ttype=="A"){
-                        ALower <- c(ALower,-Inf);
-                        AUpper <- c(AUpper,Inf);
+                        lb <- c(lb,-Inf);
+                        ub <- c(ub,Inf);
                     }
                     else if(Ttype=="M"){
-                        ALower <- c(ALower,1E-20);
-                        AUpper <- c(AUpper,3);
+                        lb <- c(lb,1E-20);
+                        ub <- c(ub,3);
                     }
                     # Initial seasonals
                     if(modelIsSeasonal){
                         if(initialSeasonEstimate){
-                            A <- c(A,matvt[nComponentsAll,1:lagsModelMax]);
+                            B <- c(B,matvt[nComponentsAll,1:lagsModelMax]);
                             if(Stype=="A"){
-                                ALower <- c(ALower,rep(-Inf,lagsModelMax));
-                                AUpper <- c(AUpper,rep(Inf,lagsModelMax));
+                                lb <- c(lb,rep(-Inf,lagsModelMax));
+                                ub <- c(ub,rep(Inf,lagsModelMax));
                             }
                             else{
-                                ALower <- c(ALower,matvt[nComponentsAll,1:lagsModelMax]*0.1);
-                                AUpper <- c(AUpper,matvt[nComponentsAll,1:lagsModelMax]*10);
+                                lb <- c(lb,matvt[nComponentsAll,1:lagsModelMax]*0.1);
+                                ub <- c(ub,matvt[nComponentsAll,1:lagsModelMax]*10);
                             }
                         }
                     }
@@ -620,40 +622,40 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
             if(xregEstimate){
                 # Initial values of at
                 if(initialXEstimate){
-                    A <- c(A,matat[xregNames,1]);
-                    ALower <- c(ALower,rep(-Inf,nExovars));
-                    AUpper <- c(AUpper,rep(Inf,nExovars));
+                    B <- c(B,matat[xregNames,1]);
+                    lb <- c(lb,rep(-Inf,nExovars));
+                    ub <- c(ub,rep(Inf,nExovars));
                 }
                 if(updateX){
                     # Initials for the transition matrix
-                    A <- c(A,as.vector(matFX));
-                    ALower <- c(ALower,rep(-Inf,nExovars^2));
-                    AUpper <- c(AUpper,rep(Inf,nExovars^2));
+                    B <- c(B,as.vector(matFX));
+                    lb <- c(lb,rep(-Inf,nExovars^2));
+                    ub <- c(ub,rep(Inf,nExovars^2));
 
                     # Initials for the persistence matrix
-                    A <- c(A,as.vector(vecgX));
-                    ALower <- c(ALower,rep(-Inf,nExovars));
-                    AUpper <- c(AUpper,rep(Inf,nExovars));
+                    B <- c(B,as.vector(vecgX));
+                    lb <- c(lb,rep(-Inf,nExovars));
+                    ub <- c(ub,rep(Inf,nExovars));
                 }
             }
 
             # Clean and remove NAs
-            A <- A[!is.na(A)];
-            ALower <- ALower[!is.na(ALower)];
-            AUpper <- AUpper[!is.na(AUpper)];
+            B <- B[!is.na(B)];
+            lb <- lb[!is.na(lb)];
+            ub <- ub[!is.na(ub)];
 
-            return(list(A=A,ALower=ALower,AUpper=AUpper));
+            return(list(B=B,lb=lb,ub=ub));
         }
 
         ##### Cost Function for oes #####
-        CF <- function(A, lagsModel, Etype, Ttype, Stype, occurrence, damped,
+        CF <- function(B, lagsModel, Etype, Ttype, Stype, occurrence, damped,
                        nComponentsAll, nComponentsNonSeasonal, nExovars, lagsModelMax,
                        persistenceEstimate, initialType, phiEstimate, modelIsSeasonal, initialSeasonEstimate,
                        xregEstimate, updateX, initialXEstimate,
                        matvt, vecg, matF, matw, matat, matFX, vecgX, matxt,
                        ot, bounds){
 
-            elements <- oesElements(A, lagsModel, Ttype, Stype, damped,
+            elements <- oesElements(B, lagsModel, Ttype, Stype, damped,
                                     nComponentsAll, nComponentsNonSeasonal, nExovars, lagsModelMax,
                                     persistenceEstimate, initialType, phiEstimate, modelIsSeasonal, initialSeasonEstimate,
                                     xregEstimate, initialXEstimate, updateX,
@@ -759,14 +761,14 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
             if(any(c(persistenceEstimate,initialType=="o",phiEstimate,initialSeasonEstimate,
                      xregEstimate,initialXEstimate))){
                 # Prepare the parameters
-                A <- AValues(bounds, Ttype, Stype, damped, phiEstimate, persistenceEstimate,
+                B <- BValues(bounds, Ttype, Stype, damped, phiEstimate, persistenceEstimate,
                              initialType, modelIsSeasonal, initialSeasonEstimate,
                              xregEstimate, initialXEstimate, updateX,
                              lagsModelMax, nComponentsAll, nComponentsNonSeasonal,
                              vecg, matvt, matat, matFX, vecgX, xregNames, nExovars);
 
                 # Run the optimisation
-                res <- nloptr(A$A, CF, lb=A$ALower, ub=A$AUpper,
+                res <- nloptr(B$B, CF, lb=B$lb, ub=B$ub,
                               opts=list(algorithm=algorithm, xtol_rel=xtol_rel, maxeval=maxeval, print_level=print_level),
                               lagsModel=lagsModel, Etype=Etype, Ttype=Ttype, Stype=Stype, occurrence=occurrence,
                               nComponentsAll=nComponentsAll, nComponentsNonSeasonal=nComponentsNonSeasonal, nExovars=nExovars,
@@ -776,19 +778,19 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
                               xregEstimate=xregEstimate, initialXEstimate=initialXEstimate, updateX=updateX,
                               matvt=matvt, vecg=vecg, matF=matF, matw=matw, matat=matat, matFX=matFX, vecgX=vecgX, matxt=matxt,
                               ot=ot, bounds=bounds);
-                A <- res$solution;
+                B <- res$solution;
 
                 # Parameters estimated. The variance is not estimated, so not needed
-                parametersNumber[1,1] <- length(A);
+                parametersNumber[1,1] <- length(B);
 
                 # Write down phi if it was estimated
                 if(damped && phiEstimate){
-                    phi <- A[nComponentsAll+1];
+                    phi <- B[nComponentsAll+1];
                 }
             }
 
             ##### Deal with the fitting and the forecasts #####
-            elements <- oesElements(A, lagsModel, Ttype, Stype, damped,
+            elements <- oesElements(B, lagsModel, Ttype, Stype, damped,
                                     nComponentsAll, nComponentsNonSeasonal, nExovars, lagsModelMax,
                                     persistenceEstimate, initialType, phiEstimate, modelIsSeasonal, initialSeasonEstimate,
                                     xregEstimate, initialXEstimate, updateX,
@@ -845,7 +847,7 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
             }
             environment(ssForecaster) <- environment();
             # This is needed for the degrees of freedom calculation
-            nParam <- length(A);
+            nParam <- length(B);
             # Call the forecaster
             ssForecaster(ParentEnvironment=environment());
             # Revert to the original occurrence
@@ -913,7 +915,8 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
                            nParam=parametersNumber, residuals=errors, y=otAll,
                            persistence=vecg, phi=phi, initial=matvt[1,1:nComponentsNonSeasonal],
                            initialSeason=initialSeason, fittedModel=yFitted, forecastModel=yForecast,
-                           initialX=matat[1,], xreg=xreg, updateX=updateX, transitionX=matFX, persistenceX=vecgX);
+                           initialX=matat[1,], xreg=xreg, updateX=updateX, transitionX=matFX, persistenceX=vecgX,
+                           B=B);
         }
         #### Automatic model selection ####
         else if(occurrence=="a"){
@@ -923,7 +926,7 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
                          "BIC"=BIC,
                          "BICc"=BICc);
 
-            occurrencePool <- c("f","o","i","d","g");
+            occurrencePool <- c("f","o","i","d","g","n");
             occurrencePoolLength <- length(occurrencePool);
             occurrenceModels <- vector("list",occurrencePoolLength);
             for(i in 1:occurrencePoolLength){
@@ -939,20 +942,20 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
 
             if(!silentGraph){
                 graphmaker(actuals=otAll,forecast=occurrenceModels[[ICBest]]$forecast,fitted=occurrenceModels[[ICBest]]$fitted,
-                           legend=!silentLegend,main=paste0(occurrenceModels[[ICBest]]$model,"_",toupper(occurrence)));
+                           legend=!silentLegend,main=occurrenceModels[[ICBest]]$model);
             }
             return(occurrenceModels[[ICBest]]);
         }
         #### None ####
         else{
-            pt <- ts(ot,start=dataStart,frequency=dataFreq);
+            pt <- ts(rep(1,obsInSample),start=dataStart,frequency=dataFreq);
             if(h>0){
-                pForecast <- ts(rep(ot[obsInSample],h), start=yForecastStart, frequency=dataFreq);
+                pForecast <- ts(rep(1,h), start=yForecastStart, frequency=dataFreq);
             }
             else{
                 pForecast <- NA;
             }
-            errors <- ts(rep(0,obsInSample), start=dataStart, frequency=dataFreq);
+            errors <- ts(ot-1, start=dataStart, frequency=dataFreq);
             parametersNumber[] <- 0;
             output <- list(fitted=pt, forecast=pForecast, lower=NA, upper=NA,
                            states=pt,
@@ -1240,8 +1243,15 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
         modelname <- "oETS";
     }
     output$s2 <- mean(output$residuals^2);
-    output$occurrence <- occurrence;
-    output$model <- paste0(modelname,"[",toupper(occurrence),"]","(",model,")");
+    output$occurrence <- switch(occurrence,
+                                "f"="fixed",
+                                "o"="odds-ratio",
+                                "i"="inverse-odds-ratio",
+                                "g"="general",
+                                "d"="direct",
+                                "n"="none",
+                                occurrence);
+    output$model <- paste0(modelname,"[",toupper(substr(occurrence,1,1)),"]","(",model,")");
     output$timeElapsed <- Sys.time()-startTime;
 
     ##### Make a plot #####
@@ -1253,7 +1263,7 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
         }
         else{
             graphmaker(actuals=otAll,forecast=output$forecast,fitted=output$fitted,
-                       legend=!silentLegend,main=paste0(output$model));
+                       legend=!silentLegend,main=output$model);
         }
     }
 
@@ -1268,13 +1278,13 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
         output$logLik <- (sum(log(pt[ot!=0])) + sum(log(1-pt[ot==0])));
     }
 
-    # The occurrence="none" should have unreasonable likelihood for security reasons
+    # The occurrence="none" should have likelihood based on pt->1
     if(occurrence=="n"){
-        output$logLik <- -Inf;
+        output$logLik <- (obsOnes*log(1-1e-100) + (obsInSample-obsOnes)*log(1e-100));
     }
 
     # This is needed in order to standardise the output and make plots work
     output$loss <- "likelihood";
 
-    return(structure(output,class=c("oes","smooth")));
+    return(structure(output,class=c("oes","smooth","occurrence")));
 }

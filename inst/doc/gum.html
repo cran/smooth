@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2020-02-08" />
+<meta name="date" content="2020-04-04" />
 
 <title>gum() - Generalised Univariate Model</title>
 
@@ -303,7 +303,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 <h1 class="title toc-ignore">gum() - Generalised Univariate Model</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2020-02-08</h4>
+<h4 class="date">2020-04-04</h4>
 
 
 
@@ -316,7 +316,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <p>Generalised Exponential Smoothing is a next step from CES. It is a state-space model in which all the matrices and vectors are estimated. It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GUM<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our example with monthly data N2457, we will have GUM<span class="math inline">\((1^1,1^{12})\)</span>:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" title="1"><span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.37 seconds
+<pre><code>## Time elapsed: 0.45 seconds
 ## Model estimated: GUM(1[1],1[12])
 ## Persistence vector g:
 ##        [,1]   [,2]
@@ -342,7 +342,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## MASE: 2.782; sMAE: 113.5%; sMSE: 221.7%; rMAE: 1.188; rRMSE: 1.306</code></pre>
 <p>But some different orders and lags can be specified. For example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb4-1" title="1"><span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>))</a></code></pre></div>
-<pre><code>## Time elapsed: 0.31 seconds
+<pre><code>## Time elapsed: 0.37 seconds
 ## Model estimated: GUM(2[1],1[12])
 ## Persistence vector g:
 ##        [,1]   [,2]    [,3]
@@ -373,7 +373,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## Searching for appropriate lags:  —\|/—\|/—\|/We found them!
 ## Searching for appropriate orders:  —\|/—\|/—Orders found.
 ## Reestimating the model. Done!</code></pre>
-<pre><code>## Time elapsed: 22.95 seconds
+<pre><code>## Time elapsed: 28.16 seconds
 ## Model estimated: GUM(1[1],1[4])
 ## Persistence vector g:
 ##        [,1]   [,2]
@@ -404,7 +404,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" title="1">    transition &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>),<span class="dv">3</span>,<span class="dv">3</span>)</a>
 <a class="sourceLine" id="cb9-2" title="2">    measurement &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>)</a>
 <a class="sourceLine" id="cb9-3" title="3">    <span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>), <span class="dt">transition=</span>transition, <span class="dt">measurement=</span>measurement)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.26 seconds
+<pre><code>## Time elapsed: 0.32 seconds
 ## Model estimated: GUM(2[1],1[12])
 ## Persistence vector g:
 ##        [,1]   [,2]    [,3]
