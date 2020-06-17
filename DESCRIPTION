@@ -1,8 +1,8 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using State Space Models
-Version: 2.5.6
-Date: 2020-03-31
+Version: 2.6.0
+Date: 2020-06-16
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
 URL: https://github.com/config-i1/smooth
@@ -23,12 +23,12 @@ Imports: Rcpp (>= 0.12.3), stats, graphics, forecast (>= 7.0), nloptr,
 LinkingTo: Rcpp, RcppArmadillo (>= 0.8.100.0.0)
 Suggests: Mcomp, numDeriv, testthat, knitr, rmarkdown
 VignetteBuilder: knitr
-RoxygenNote: 7.0.2
+RoxygenNote: 7.1.0
 Encoding: UTF-8
 NeedsCompilation: yes
-Packaged: 2020-04-04 16:18:34 UTC; config
+Packaged: 2020-06-16 10:00:33 UTC; isvetunkov
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2020-04-05 05:00:06 UTC
+Date/Publication: 2020-06-17 04:10:03 UTC

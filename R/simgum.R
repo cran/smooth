@@ -76,11 +76,11 @@ sim.gum <- function(orders=c(1), lags=c(1),
                     frequency=1, measurement=NULL,
                     transition=NULL, persistence=NULL, initial=NULL,
                     randomizer=c("rnorm","rt","rlaplace","rs"),
-                    iprob=1, ...){
+                    probability=1, ...){
 
     randomizer <- randomizer[1];
 
-    args <- list(...);
+    ellipsis <- list(...);
 
 # Function generates values of measurement, transition and persistence
     gumGenerator <- function(nsim=nsim){
@@ -238,17 +238,17 @@ sim.gum <- function(orders=c(1), lags=c(1),
     }
 
 # Check the vector of probabilities
-    if(is.vector(iprob)){
-        if(any(iprob!=iprob[1])){
-            if(length(iprob)!=obs){
-                warning("Length of iprob does not correspond to number of observations.",call.=FALSE);
-                if(length(iprob)>obs){
+    if(is.vector(probability)){
+        if(any(probability!=probability[1])){
+            if(length(probability)!=obs){
+                warning("Length of probability does not correspond to number of observations.",call.=FALSE);
+                if(length(probability)>obs){
                     warning("We will cut off the excessive ones.",call.=FALSE);
-                    iprob <- iprob[1:obs];
+                    probability <- probability[1:obs];
                 }
                 else{
                     warning("We will duplicate the last one.",call.=FALSE);
-                    iprob <- c(iprob,rep(iprob[length(iprob)],obs-length(iprob)));
+                    probability <- c(probability,rep(probability[length(probability)],obs-length(probability)));
                 }
             }
         }
@@ -282,16 +282,17 @@ sim.gum <- function(orders=c(1), lags=c(1),
     }
 
     # If the chosen randomizer is not default and no parameters are provided, change to rnorm.
-    if(all(randomizer!=c("rnorm","rt","rlaplace","rs")) & (length(args)==0)){
+    if(all(randomizer!=c("rnorm","rt","rlaplace","rs")) & (length(ellipsis)==0)){
         warning(paste0("The chosen randomizer - ",randomizer," - needs some arbitrary parameters! Changing to 'rnorm' now."),call.=FALSE);
         randomizer = "rnorm";
     }
 
     # Check if no argument was passed in dots
-    if(length(args)==0){
+    if(length(ellipsis)==0){
+        ellipsis$n <- nsim*obs;
         # Create vector of the errors
         if(any(randomizer==c("rnorm","rlaplace","rs"))){
-            materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,")")));
+            materrors[,] <- do.call(randomizer,ellipsis);
         }
         else if(randomizer=="rt"){
             # The degrees of freedom are df = n - k.
@@ -308,7 +309,8 @@ sim.gum <- function(orders=c(1), lags=c(1),
     }
     # If arguments are passed, use them. WE ASSUME HERE THAT USER KNOWS WHAT HE'S DOING!
     else{
-        materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,",", toString(as.character(args)),")")));
+        ellipsis$n <- nsim*obs;
+        materrors[,] <- do.call(randomizer,ellipsis);
         if(randomizer=="rbeta"){
             # Center the errors around 0
             materrors <- materrors - 0.5;
@@ -323,17 +325,17 @@ sim.gum <- function(orders=c(1), lags=c(1),
     }
 
 # Generate ones for the possible intermittency
-    if(all(iprob == 1)){
+    if(all(probability == 1)){
         matot[,] <- 1;
     }
     else{
-        matot[,] <- rbinom(obs*nsim,1,iprob);
+        matot[,] <- rbinom(obs*nsim,1,probability);
     }
 
 #### Simulate the data ####
     simulateddata <- simulatorwrap(arrvt,materrors,matot,arrF,matw,matg,"A","N","N",lagsModel);
 
-    if(all(iprob == 1)){
+    if(all(probability == 1)){
         matyt <- simulateddata$matyt;
     }
     else{
@@ -374,7 +376,7 @@ sim.gum <- function(orders=c(1), lags=c(1),
 
     modelname <- "GUM";
     modelname <- paste0(modelname,"(",paste(orders,"[",lags,"]",collapse=",",sep=""),")");
-    if(any(iprob!=1)){
+    if(any(probability!=1)){
         modelname <- paste0("i",modelname);
     }
 

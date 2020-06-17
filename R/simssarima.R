@@ -68,7 +68,7 @@
 #' }
 #'
 #' @seealso \code{\link[smooth]{sim.es}, \link[smooth]{ssarima},
-#' \link[stats]{Distributions}, \link[smooth]{orders}, \link[smooth]{lags}}
+#' \link[stats]{Distributions}, \link[smooth]{orders}}
 #'
 #' @examples
 #'
@@ -90,16 +90,16 @@ sim.ssarima <- function(orders=list(ar=0,i=1,ma=1), lags=1,
                         frequency=1, AR=NULL, MA=NULL, constant=FALSE,
                         initial=NULL, bounds=c("admissible","none"),
                         randomizer=c("rnorm","rt","rlaplace","rs"),
-                        iprob=1, ...){
+                        probability=1, ...){
 # Function generates data using SSARIMA in Single Source of Error as a data generating process.
 #    Copyright (C) 2015 - Inf Ivan Svetunkov
 
     randomizer <- randomizer[1];
-    args <- list(...);
+    ellipsis <- list(...);
     bounds <- bounds[1];
     # If R decided that by "b" we meant "bounds", fix this!
     if(is.numeric(bounds)){
-        args$b <- bounds;
+        ellipsis$b <- bounds;
         bounds <- "u";
     }
 
@@ -122,17 +122,17 @@ sim.ssarima <- function(orders=list(ar=0,i=1,ma=1), lags=1,
         ma.orders <- 0;
     }
 
-    if("ar.orders" %in% names(args)){
-        ar.orders <- args$ar.orders;
-        args$ar.orders <- NULL;
+    if("ar.orders" %in% names(ellipsis)){
+        ar.orders <- ellipsis$ar.orders;
+        ellipsis$ar.orders <- NULL;
     }
-    if("i.orders" %in% names(args)){
-        i.orders <- args$i.orders;
-        args$i.orders <- NULL;
+    if("i.orders" %in% names(ellipsis)){
+        i.orders <- ellipsis$i.orders;
+        ellipsis$i.orders <- NULL;
     }
-    if("ma.orders" %in% names(args)){
-        ma.orders <- args$ma.orders;
-        args$ma.orders <- NULL;
+    if("ma.orders" %in% names(ellipsis)){
+        ma.orders <- ellipsis$ma.orders;
+        ellipsis$ma.orders <- NULL;
     }
 
 #### Elements Generator for AR and MA ####
@@ -388,17 +388,17 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     }
 
 # Check the vector of probabilities
-    if(is.vector(iprob)){
-        if(any(iprob!=iprob[1])){
-            if(length(iprob)!=obs){
-                warning("Length of iprob does not correspond to number of observations.",call.=FALSE);
-                if(length(iprob)>obs){
+    if(is.vector(probability)){
+        if(any(probability!=probability[1])){
+            if(length(probability)!=obs){
+                warning("Length of probability does not correspond to number of observations.",call.=FALSE);
+                if(length(probability)>obs){
                     warning("We will cut off the excessive ones.",call.=FALSE);
-                    iprob <- iprob[1:obs];
+                    probability <- probability[1:obs];
                 }
                 else{
                     warning("We will duplicate the last one.",call.=FALSE);
-                    iprob <- c(iprob,rep(iprob[length(iprob)],obs-length(iprob)));
+                    probability <- c(probability,rep(probability[length(probability)],obs-length(probability)));
                 }
             }
         }
@@ -419,19 +419,16 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     if((componentsNumber==0) & !constantRequired){
         warning("You have not defined any model. So here's series generated from your distribution.", call.=FALSE);
         matyt <- materrors <- matrix(NA,obs,nsim);
-        if(length(args)==0){
-            materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,")")));
-        }
-        else{
-            materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,",", toString(as.character(args)),")")));
-        }
+        ellipsis$n <- nsim*obs;
+        materrors[,] <- do.call(randomizer,ellipsis);
+
         matot <- matrix(NA,obs,nsim);
         # Generate values for occurence variable
-        if(all(iprob == 1)){
+        if(all(probability == 1)){
             matot[,] <- 1;
         }
         else{
-            matot[,] <- rbinom(obs*nsim,1,iprob);
+            matot[,] <- rbinom(obs*nsim,1,probability);
         }
 
         matot <- ts(matot,frequency=frequency);
@@ -556,16 +553,17 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     }
 
     # If the chosen randomizer is not default and no parameters are provided, change to rnorm.
-    if(all(randomizer!=c("rnorm","rt","rlaplace","rs")) & (length(args)==0)){
+    if(all(randomizer!=c("rnorm","rt","rlaplace","rs")) & (length(ellipsis)==0)){
         warning(paste0("The chosen randomizer - ",randomizer," - needs some arbitrary parameters! Changing to 'rnorm' now."),call.=FALSE);
         randomizer = "rnorm";
     }
 
     # Check if no argument was passed in dots
-    if(length(args)==0){
+    if(length(ellipsis)==0){
+        ellipsis$n <- nsim*obs;
         # Create vector of the errors
         if(any(randomizer==c("rnorm","rlaplace","rs"))){
-            materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,")")));
+            materrors[,] <- do.call(randomizer,ellipsis);
         }
         else if(randomizer=="rt"){
             # The degrees of freedom are df = n - k.
@@ -582,7 +580,8 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     }
     # If arguments are passed, use them. WE ASSUME HERE THAT USER KNOWS WHAT HE'S DOING!
     else{
-        materrors[,] <- eval(parse(text=paste0(randomizer,"(n=",nsim*obs,",", toString(as.character(args)),")")));
+        ellipsis$n <- nsim*obs;
+        materrors[,] <- do.call(randomizer,ellipsis);
         if(randomizer=="rbeta"){
             # Center the errors around 0
             materrors <- materrors - 0.5;
@@ -597,17 +596,17 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
     }
 
 # Generate ones for the possible intermittency
-    if(all(iprob == 1)){
+    if(all(probability == 1)){
         matot[,] <- 1;
     }
     else{
-        matot[,] <- rbinom(obs*nsim,1,iprob);
+        matot[,] <- rbinom(obs*nsim,1,probability);
     }
 
 #### Simulate the data ####
     simulateddata <- simulatorwrap(arrvt,materrors,matot,arrF,matw,matg,"A","N","N",lagsModel);
 
-    if(all(iprob == 1)){
+    if(all(probability == 1)){
         matyt <- simulateddata$matyt;
     }
     else{
@@ -677,7 +676,7 @@ elementsGenerator <- function(ar.orders=ar.orders, ma.orders=ma.orders, i.orders
         }
         modelname <- paste0("SARIMA",modelname);
     }
-    if(any(iprob!=1)){
+    if(any(probability!=1)){
         modelname <- paste0("i",modelname);
     }
 

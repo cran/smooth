@@ -23,11 +23,11 @@ ourSimulation <- sim.es("MAdM", frequency=12, obs=120, phi=0.95, persistence=c(0
 plot(ourSimulation)
 
 ## ----sim_es_iMNN--------------------------------------------------------------
-ourSimulation <- sim.es("MNN", frequency=12, obs=120, iprob=0.2, initial=10, persistence=0.1)
+ourSimulation <- sim.es("MNN", frequency=12, obs=120, probability=0.2, initial=10, persistence=0.1)
 plot(ourSimulation)
 
 ## ----sim_es_iMNN_50-----------------------------------------------------------
-ourSimulation <- sim.es("MNN", frequency=12, obs=120, iprob=0.2, initial=10, persistence=0.1, nsim=50)
+ourSimulation <- sim.es("MNN", frequency=12, obs=120, probability=0.2, initial=10, persistence=0.1, nsim=50)
 
 ## ----simulate_smooth_es-------------------------------------------------------
 x <- ts(rnorm(100,120,15),frequency=12)
@@ -60,7 +60,7 @@ ourSimulation
 plot(ourSimulation)
 
 ## ----sim_ssarima_(1,0,2)_1(0,1,1)_7intermittent-------------------------------
-ourSimulation <- sim.ssarima(orders=list(ar=c(1,0),i=c(0,1),ma=c(2,1)), lags=c(1,7), obs=120, iprob=0.2)
+ourSimulation <- sim.ssarima(orders=list(ar=c(1,0),i=c(0,1),ma=c(2,1)), lags=c(1,7), obs=120, probability=0.2)
 ourSimulation
 plot(ourSimulation)
 
@@ -97,7 +97,7 @@ ourSimulation <- sim.ces("s",frequency=24, obs=120, nsim=1, initial=ourSimulatio
 plot(ourSimulation)
 
 ## ----sim_ces_(p)--------------------------------------------------------------
-ourSimulation <- sim.ces("p",B=0.2,frequency=12, obs=240, nsim=10)
+ourSimulation <- sim.ces("p",b=0.2,frequency=12, obs=240, nsim=10)
 plot(ourSimulation)
 
 ## ----sim_ces_(f)--------------------------------------------------------------
