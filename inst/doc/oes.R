@@ -12,7 +12,7 @@ oETSFModel1
 plot(oETSFModel1)
 
 ## ----iETSFExample2------------------------------------------------------------
-es(y, "MMN", occurrence="fixed", h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence="fixed", h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSOExample1------------------------------------------------------------
 oETSOModel <- oes(y, model="MMN", occurrence="o", h=10, holdout=TRUE)
@@ -20,10 +20,10 @@ oETSOModel
 plot(oETSOModel)
 
 ## ----iETSOExample2------------------------------------------------------------
-es(y, "MMN", occurrence="o", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence="o", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSOExample3, eval=FALSE------------------------------------------------
-#  es(y, "MMN", occurrence=oETSOModel, h=10, holdout=TRUE, silent=FALSE)
+#  adam(y, "MMN", occurrence=oETSOModel, h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSIExample1------------------------------------------------------------
 oETSIModel <- oes(y, model="MMN", occurrence="i", h=10, holdout=TRUE)
@@ -31,10 +31,10 @@ oETSIModel
 plot(oETSIModel)
 
 ## ----iETSIExample2------------------------------------------------------------
-es(y, "MMN", occurrence="i", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence="i", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSIExample3, eval=FALSE------------------------------------------------
-#  es(y, "MMN", occurrence=oETSIModel, h=10, holdout=TRUE, silent=FALSE)
+#  adam(y, "MMN", occurrence=oETSIModel, h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSDExample1------------------------------------------------------------
 oETSDModel <- oes(y, model="MMN", occurrence="d", h=10, holdout=TRUE)
@@ -42,7 +42,7 @@ oETSDModel
 plot(oETSDModel)
 
 ## ----iETSDExample2------------------------------------------------------------
-es(y, "MMN", occurrence=oETSDModel, h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence=oETSDModel, h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSGExample1------------------------------------------------------------
 oETSGModel1 <- oesg(y, modelA="MNN", modelB="AAN", h=10, holdout=TRUE)

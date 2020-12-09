@@ -94,8 +94,10 @@ msdecompose <- function(y, lags=c(12), type=c("additive","multiplicative")){
     }
 
     # Initial level and trend
-    initial <- c(mean(ySmooth[[lagsLength]],na.rm=T),
+    initial <- c(ySmooth[[lagsLength]][!is.na(ySmooth[[lagsLength]])][1],
                  mean(diff(ySmooth[[lagsLength]]),na.rm=T));
+    # Fix the initial, to get to the begining of the sample
+    initial[1] <- initial[1] - initial[2]*floor(max(lags)/2);
     names(initial) <- c("level","trend");
 
     # Return to the original scale
@@ -262,8 +264,8 @@ plot.msdecompose <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         on.exit(devAskNewPage(oask));
     }
 
-    if(any(c(1:6,8,9) %in% which)){
-        plot.smooth(x, which=which[which!=7 & which!=10], level=level,
+    if(any(which %in% c(1:6))){
+        plot.smooth(x, which=which[which %in% c(1:6)], level=level,
                     legend=legend, ask=FALSE, lowess=lowess, ...);
     }
 
@@ -278,7 +280,12 @@ plot.msdecompose <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         lines(yFitted, col="red");
     }
 
-    if(any(which==10)){
+    if(any(which %in% c(8:11))){
+        plot.smooth(x, which=which[which %in% c(8:11)], level=level,
+                    legend=legend, ask=FALSE, lowess=lowess, ...);
+    }
+
+    if(any(which==12)){
         yDecomposed <- cbind(actuals(x),x$trend);
         for(i in 1:length(x$seasonal)){
             yDecomposed <- cbind(yDecomposed,rep(x$seasonal[[i]],ceiling(obs/x$lags[i]))[1:obs]);

@@ -146,15 +146,9 @@ utils::globalVariables(c("vecg","nComponents","lagsModel","phiEstimate","yInSamp
 #' \item \code{cumulative} - whether the produced forecast was cumulative or not.
 #' \item \code{y} - original data.
 #' \item \code{holdout} - holdout part of the original data.
-#' \item \code{occurrence} - model of the class "oes" if the occurrence model was estimated.
-#' If the model is non-intermittent, then occurrence is \code{NULL}.
 #' \item \code{xreg} - provided vector or matrix of exogenous variables. If \code{xregDo="s"},
 #' then this value will contain only selected exogenous variables.
-#' \item \code{updateX} - boolean, defining, if the states of exogenous variables were
-#' estimated as well.
 #' \item \code{initialX} - initial values for parameters of exogenous variables.
-#' \item \code{persistenceX} - persistence vector g for exogenous variables.
-#' \item \code{transitionX} - transition matrix F for exogenous variables.
 #' \item \code{ICs} - values of information criteria of the model. Includes AIC, AICc, BIC and BICc.
 #' \item \code{logLik} - concentrated log-likelihood of the function.
 #' \item \code{lossValue} - loss function value.
@@ -188,7 +182,6 @@ utils::globalVariables(c("vecg","nComponents","lagsModel","phiEstimate","yInSamp
 #' \item \code{cumulative},
 #' \item \code{y},
 #' \item \code{holdout},
-#' \item \code{occurrence},
 #' \item \code{ICs} - combined ic,
 #' \item \code{ICw} - ic weights used in the combination,
 #' \item \code{loss},
@@ -228,31 +221,8 @@ utils::globalVariables(c("vecg","nComponents","lagsModel","phiEstimate","yInSamp
 #' # Semiparametric interval example
 #' \dontrun{es(M3$N1587$x,h=18,holdout=TRUE,interval="sp")}
 #'
-#' # Exogenous variables in ETS example
-#' \dontrun{x <- cbind(c(rep(0,25),1,rep(0,43)),c(rep(0,10),1,rep(0,58)))
-#' y <- ts(c(M3$N1457$x,M3$N1457$xx),frequency=12)
-#' es(y,h=18,holdout=TRUE,xreg=x,loss="aTMSE",interval="np")
-#' ourModel <- es(ts(c(M3$N1457$x,M3$N1457$xx),frequency=12),h=18,holdout=TRUE,xreg=x,updateX=TRUE)}
-#'
 #' # This will be the same model as in previous line but estimated on new portion of data
 #' \dontrun{es(ts(c(M3$N1457$x,M3$N1457$xx),frequency=12),model=ourModel,h=18,holdout=FALSE)}
-#'
-#' # Intermittent data example
-#' x <- rpois(100,0.2)
-#' # Odds ratio model with the best ETS for demand sizes
-#' es(x,"ZZN",occurrence="o")
-#' # Inverse odds ratio model (underlies Croston) on iETS(M,N,N)
-#' es(x,"MNN",occurrence="i")
-#' # Constant probability based on iETS(M,N,N)
-#' es(x,"MNN",occurrence="fixed")
-#' # Best type of occurrence model based on iETS(Z,Z,N)
-#' ourModel <- es(x,"ZZN",occurrence="auto")
-#' par(mfcol=c(2,2))
-#' plot(ourModel)
-#'
-#' summary(ourModel)
-#' forecast(ourModel)
-#' plot(forecast(ourModel))
 #'
 #' @export es
 es <- function(y, model="ZZZ", persistence=NULL, phi=NULL,
@@ -260,21 +230,25 @@ es <- function(y, model="ZZZ", persistence=NULL, phi=NULL,
                loss=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                h=10, holdout=FALSE, cumulative=FALSE,
                interval=c("none","parametric","likelihood","semiparametric","nonparametric"), level=0.95,
-               occurrence=c("none","auto","fixed","general","odds-ratio","inverse-odds-ratio","direct"),
-               oesmodel="MNN",
                bounds=c("usual","admissible","none"),
                silent=c("all","graph","legend","output","none"),
-               xreg=NULL, xregDo=c("use","select"), initialX=NULL,
-               updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
+               xreg=NULL, xregDo=c("use","select"), initialX=NULL, ...){
 # Copyright (C) 2015 - Inf  Ivan Svetunkov
 
 # Start measuring the time of calculations
     startTime <- Sys.time();
 
-    ##### Check if data was used instead of y. Remove by 2.6.0 #####
-    y <- depricator(y, list(...), "data");
-    loss <- depricator(loss, list(...), "cfType");
-    interval <- depricator(interval, list(...), "intervals");
+    ### Depricate the old parameters
+    ellipsis <- list(...)
+    ellipsis <- depricator(ellipsis, "occurrence", "es");
+    ellipsis <- depricator(ellipsis, "oesmodel", "es");
+    ellipsis <- depricator(ellipsis, "updateX", "es");
+    ellipsis <- depricator(ellipsis, "persistenceX", "es");
+    ellipsis <- depricator(ellipsis, "transitionX", "es");
+    updateX <- FALSE;
+    persistenceX <- transitionX <- NULL;
+    occurrence <- "none";
+    oesmodel <- "MNN";
 
     #This overrides the similar thing in ssfunctions.R but only for data generated from sim.es()
     if(is.smooth.sim(y)){
@@ -394,7 +368,7 @@ es <- function(y, model="ZZZ", persistence=NULL, phi=NULL,
     }
 
 # Add all the variables in ellipsis to current environment
-    list2env(list(...),environment());
+    list2env(ellipsis,environment());
 
 ##### Set environment for ssInput and make all the checks #####
     environment(ssInput) <- environment();
@@ -844,8 +818,18 @@ EstimatorES <- function(...){
         }
     }
 
+    yFittedSumLog <- 0;
+    if(Etype=="M"){
+        elements <- etsmatrices(matvt, vecg, phi, matrix(B,nrow=1), nComponents,
+                                lagsModel, initialType, Ttype, Stype, nExovars, matat,
+                                persistenceEstimate, phiEstimate, initialType=="o", initialSeasonEstimate, xregEstimate,
+                                matFX, vecgX, updateX, FXEstimate, gXEstimate, initialXEstimate);
+        yFittedSumLog[] <- sum(log(abs(fitterwrap(elements$matvt, elements$matF, elements$matw, yInSample, elements$vecg,
+                                                  lagsModel, Etype, Ttype, Stype, initialType,
+                                                  matxt, elements$matat, elements$matFX, elements$vecgX, ot)$yfit)));
+    }
     ICValues <- ICFunction(nParam=nParam,nParamOccurrence=nParamOccurrence,
-                           B=res$solution,Etype=Etype);
+                           B=res$solution,Etype=Etype,yFittedSumLog=yFittedSumLog);
     ICs <- ICValues$ICs;
     logLik <- ICValues$llikelihood;
 
@@ -966,7 +950,7 @@ PoolPreparerES <- function(...){
                 poolErrors <- Etype;
             }
             else{
-                small.pool.error <- "A";
+                small.pool.error <- c("A");
             }
 
             if(Ttype!="Z"){
@@ -1023,6 +1007,10 @@ PoolPreparerES <- function(...){
             small.pool <- paste0(rep(small.pool.error,length(small.pool.trend)*length(small.pool.season)),
                                  rep(small.pool.trend,each=length(small.pool.season)),
                                  rep(small.pool.season,length(small.pool.trend)));
+            # If the "M" is allowed, align errors with the seasonality
+            if(allowMultiplicative){
+                small.pool[substr(small.pool,3,3)=="M"] <- paste0("M",substr(small.pool[substr(small.pool,3,3)=="M"],2,3))
+            }
             tested.model <- NULL;
 
 # Counter + checks for the components
@@ -1331,61 +1319,34 @@ CreatorES <- function(silent=FALSE,...){
     # First two columns are needed for additive seasonality, the 3rd and 4th - for the multiplicative
     if(Ttype!="N"){
         if(initialType!="p"){
-            initialstates <- matrix(NA,1,4);
+            initialstates <- matrix(NA,1,5);
             initialstates[1,2] <- (cov(yot[1:min(max(dataFreq,12),obsNonzero)],
                                        c(1:min(max(dataFreq,12),obsNonzero)))/
                                        var(c(1:min(max(dataFreq,12),obsNonzero))));
             initialstates[1,1] <- (mean(yot[1:min(max(dataFreq,12),obsNonzero)]) -
                                        initialstates[1,2] *
                                        mean(c(1:min(max(dataFreq,12), obsNonzero))));
-            if(any(loss=="LogisticD")){
-                if(all(yot[1:min(max(dataFreq,12),obsNonzero)]==0)){
-                    initialstates[1,1] <- -50;
-                }
-                else if(all(yot[1:min(max(dataFreq,12),obsNonzero)]==1)){
-                    initialstates[1,1] <- 50;
-                }
-                else{
-                    initialstates[1,1] <- (initialstates[1,1] - 0.5);
-                }
-            }
             if(allowMultiplicative){
-                if(any(loss=="LogisticL")){
-                    initialstates[1,3] <- initialstates[1,1];
-                    initialstates[1,4] <- exp(initialstates[1,2]);
-                    initialstates[1,3] <- exp((initialstates[1,3] - 0.5));
-                }
-                else{
-                    initialstates[1,4] <- exp(cov(log(yot[1:min(max(dataFreq,12),obsNonzero)]),
-                                                  c(1:min(max(dataFreq,12),obsNonzero)))/
-                                                  var(c(1:min(max(dataFreq,12),obsNonzero))));
-                    initialstates[1,3] <- exp(mean(log(yot[1:min(max(dataFreq,12),obsNonzero)])) -
-                                                  log(initialstates[1,4]) *
-                                                  mean(c(1:min(max(dataFreq,12),obsNonzero))));
-                }
+                initialstates[1,4] <- exp(cov(log(yot[1:min(max(dataFreq,12),obsNonzero)]),
+                                              c(1:min(max(dataFreq,12),obsNonzero)))/
+                                              var(c(1:min(max(dataFreq,12),obsNonzero))));
+                initialstates[1,3] <- exp(mean(log(yot[1:min(max(dataFreq,12),obsNonzero)])) -
+                                              log(initialstates[1,4]) *
+                                              mean(c(1:min(max(dataFreq,12),obsNonzero))));
             }
+            # Initials for non-trended model
+            initialstates[1,5] <- mean(yot[1:min(max(dataFreq,12),obsNonzero)]);
         }
         else{
-            initialstates <- matrix(rep(initialValue,2),nrow=1);
+            initialstates <- matrix(rep(initialValue,3)[1:5],nrow=1);
         }
     }
     else{
         if(initialType!="p"){
-            initialstates <- matrix(rep(mean(yot[1:min(max(dataFreq,12),obsNonzero)]),4),nrow=1);
-            if(any(loss=="LogisticL") & any(initialstates==0)){
-                initialstates[initialstates==0] <- 0.001;
-            }
-            if(any(loss=="LogisticD")){
-                if(all(yot[1:min(max(dataFreq,12),obsNonzero)]==0)){
-                    initialstates[,] <- -50;
-                }
-                else if(all(yot[1:min(max(dataFreq,12),obsNonzero)]==1)){
-                    initialstates[,] <- 50;
-                }
-            }
+            initialstates <- matrix(rep(mean(yot[1:min(max(dataFreq,12),obsNonzero)]),5),nrow=1);
         }
         else{
-            initialstates <- matrix(rep(initialValue,4),nrow=1);
+            initialstates <- matrix(rep(initialValue,5),nrow=1);
         }
     }
 
@@ -1394,9 +1355,9 @@ CreatorES <- function(silent=FALSE,...){
     if(Stype!="N"){
         if(is.null(initialSeason)){
             initialSeasonEstimate <- TRUE;
-            seasonalCoefs <- decompose(ts(c(yInSample),frequency=dataFreq),type="additive")$seasonal[1:dataFreq];
+            seasonalCoefs <- decompose(ts(c(yInSample),frequency=dataFreq),type="additive")$figure;
             decompositionM <- decompose(ts(c(yInSample),frequency=dataFreq), type="multiplicative");
-            seasonalCoefs <- cbind(seasonalCoefs,decompositionM$seasonal[1:dataFreq]);
+            seasonalCoefs <- cbind(seasonalCoefs,decompositionM$figure);
             seasonalRandomness <- c(min(decompositionM$random,na.rm=TRUE),
                                     max(decompositionM$random,na.rm=TRUE));
         }
@@ -1415,13 +1376,7 @@ CreatorES <- function(silent=FALSE,...){
         smoothingParameters <- cbind(persistence,persistence);
     }
     else{
-        # smoothingParameters <- cbind(c(0.2,0.1,0.05),rep(0.05,3));
-        if(occurrence=="n"){
-            smoothingParameters <- cbind(c(0.3,0.2,0.1),c(0.1,0.05,0.01));
-        }
-        else{
-            smoothingParameters <- cbind(c(0.1,0.05,0.1),c(0.05,0.01,0.01));
-        }
+        smoothingParameters <- cbind(c(0.3,0.2,0.1),c(0.1,0.01,0.01));
 
         if(loss=="HAM"){
             smoothingParameters <- cbind(rep(0.01,3),rep(0.01,3));
@@ -1648,7 +1603,7 @@ CreatorES <- function(silent=FALSE,...){
             smoothingParameters <- matrix(0,3,2);
             initialValue <- mean(yInSample);
             initialType <- "p";
-            initialstates <- matrix(rep(initialValue,2),nrow=1);
+            initialstates <- matrix(rep(initialValue,3)[1:5],nrow=1);
             warning("We did not have enough of non-zero observations, so persistence value was set to zero and initial was preset.",
                     call.=FALSE);
             modelDo <- "nothing"
@@ -1668,7 +1623,7 @@ CreatorES <- function(silent=FALSE,...){
             smoothingParameters <- matrix(0,3,2);
             initialValue <- yInSample[yInSample!=0];
             initialType <- "p";
-            initialstates <- matrix(rep(initialValue,2),nrow=1);
+            initialstates <- matrix(rep(initialValue,3)[1:5],nrow=1);
             warning("We did not have enough of non-zero observations, so we used Naive.",call.=FALSE);
             modelDo <- "nothing"
             model <- "ANN";
@@ -1959,7 +1914,6 @@ CreatorES <- function(silent=FALSE,...){
 # Write down the initials. Done especially for Nikos and issue #10
         if(persistenceEstimate){
             persistence <- as.vector(vecg);
-            parametersNumber[1,1] <- parametersNumber[1,1] + length(vecg);
         }
         if(Ttype!="N"){
             names(persistence) <- c("alpha","beta","gamma")[1:nComponents];
@@ -1970,9 +1924,6 @@ CreatorES <- function(silent=FALSE,...){
 
         if(initialType!="p"){
             initialValue <- matvt[lagsModelMax,1:(nComponents - (Stype!="N"))];
-            if(initialType!="b"){
-                parametersNumber[1,1] <- parametersNumber[1,1] + length(initialValue);
-            }
         }
 
         if(initialXEstimate){
@@ -1999,18 +1950,11 @@ CreatorES <- function(silent=FALSE,...){
             if(Stype!="N"){
                 initialSeason <- matvt[1:lagsModelMax,nComponents];
                 names(initialSeason) <- paste0("s",1:lagsModelMax);
-                if(initialType!="b"){
-                    parametersNumber[1,1] <- parametersNumber[1,1] + length(initialSeason);
-                }
             }
         }
 
-        if(phiEstimate & phi!=1){
-            parametersNumber[1,1] <- parametersNumber[1,1] + 1;
-        }
-
-        # Add variance estimation
-        parametersNumber[1,1] <- parametersNumber[1,1] + 1;
+        # Number of estimated parameters + variance
+        parametersNumber[1,1] <- length(B) + 1;
 
 # Write down the formula of ETS
         esFormula <- "l[t-1]";
@@ -2281,8 +2225,8 @@ CreatorES <- function(silent=FALSE,...){
                       nParam=parametersNumber,
                       fitted=yFitted,forecast=yForecast,lower=yLower,upper=yUpper,residuals=errors,
                       errors=errors.mat,s2=s2,interval=intervalType,level=level,cumulative=cumulative,
-                      y=y,holdout=yHoldout,occurrence=occurrenceModel,
-                      xreg=xreg,updateX=updateX,initialX=initialX,persistenceX=persistenceX,transitionX=transitionX,
+                      y=y,holdout=yHoldout,
+                      xreg=xreg,initialX=initialX,
                       ICs=ICs,logLik=logLik,lossValue=cfObjective,loss=loss,FI=FI,accuracy=errormeasures,
                       B=B);
         return(structure(model,class="smooth"));
@@ -2294,7 +2238,7 @@ CreatorES <- function(silent=FALSE,...){
                       lower=yLower,upper=yUpper,residuals=errors,s2=s2,interval=intervalType,level=level,
                       cumulative=cumulative,
                       y=y,holdout=yHoldout,occurrence=occurrenceModel,
-                      xreg=xreg,updateX=updateX,
+                      xreg=xreg,
                       ICs=ICs,ICw=icWeights,lossValue=NULL,loss=loss,accuracy=errormeasures);
         return(structure(model,class="smooth"));
     }

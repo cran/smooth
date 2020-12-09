@@ -26,10 +26,10 @@ ssarima(M3$N2457$x, orders=list(ar=c(0,0,1),i=c(1,0,0),ma=c(1,1,1)), lags=c(1,6,
 x <- cbind(rnorm(length(M3$N2457$x),50,3),rnorm(length(M3$N2457$x),100,7))
 
 ## ----auto_ssarima_N2457_xreg--------------------------------------------------
-ourModel <- auto.ssarima(M3$N2457$x, h=18, holdout=TRUE, xreg=x, updateX=TRUE)
+ourModel <- auto.ssarima(M3$N2457$x, h=18, holdout=TRUE, xreg=x)
 
 ## ----auto_ssarima_N2457_xreg_update-------------------------------------------
-ssarima(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, xreg=x, updateX=TRUE, interval=TRUE)
+ssarima(M3$N2457$x, model=ourModel, h=18, holdout=FALSE, xreg=x, interval=TRUE)
 
 ## ----auto_ssarima_N2457_combination-------------------------------------------
 ssarima(M3$N2457$x, h=18, holdout=FALSE, interval=TRUE, combine=TRUE)

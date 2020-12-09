@@ -4,7 +4,7 @@ author: "Ivan Svetunkov"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Occurrence part of iETS model}
+  %\VignetteIndexEntry{oes() - occurrence part of iETS model}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 bibliography: library.bib
@@ -123,9 +123,9 @@ oETSFModel1
 plot(oETSFModel1)
 ```
 
-All the smooth forecasting functions support the occurrence part of the model. For example, here's how the iETS(M,M,N)$_F$ can be constructed:
+The occurrence part of the model is supported by `adam()` function. For example, here's how the iETS(M,M,N)$_F$ can be constructed:
 ```{r iETSFExample2}
-es(y, "MMN", occurrence="fixed", h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence="fixed", h=10, holdout=TRUE, silent=FALSE)
 ```
 
 
@@ -167,12 +167,12 @@ plot(oETSOModel)
 
 And here's the full iETS(M,M,N)$_O$ model:
 ```{r iETSOExample2}
-es(y, "MMN", occurrence="o", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence="o", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
 ```
 
-This should give the same results as running, meaning that we ask explicitly for the `es()` function to use the earlier estimated model:
+This should give the same results as before, meaning that we ask explicitly for the `adam()` function to use the earlier estimated model:
 ```{r iETSOExample3, eval=FALSE}
-es(y, "MMN", occurrence=oETSOModel, h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence=oETSOModel, h=10, holdout=TRUE, silent=FALSE)
 ```
 This gives an additional flexibility, because the construction can be done in two steps, with a more refined model for the occurrence part (e.g. including explanatory variables).
 
@@ -190,7 +190,7 @@ Similarly to the odds-ratio iETS, inverse-odds-ratio model uses only one model f
     \end{matrix}.
 \end{equation}
 
-This model resembles the logistic regression, where the probability is obtained from an underlying regressio model of $x_t'A$. In the estimation of the model, the initial level is set to the transformed mean probability of occurrence $l_{b,0}=\frac{1-\bar{p}}{\bar{p}}$ for multiplicative error model and $l_{b,0} = \log l_{b,0}$ for the additive one, where $\bar{p}=\frac{1}{T} \sum_{t=1}^T o_t$, the initial trend is equal to 0 in case of the additive and 1 in case of the multiplicative types. The seasonality is treated similar to the iETS$_O$ model, but using the inverse-odds transformation.
+This model resembles the logistic regression, where the probability is obtained from an underlying regression model of $x_t'A$. In the estimation of the model, the initial level is set to the transformed mean probability of occurrence $l_{b,0}=\frac{1-\bar{p}}{\bar{p}}$ for multiplicative error model and $l_{b,0} = \log l_{b,0}$ for the additive one, where $\bar{p}=\frac{1}{T} \sum_{t=1}^T o_t$, the initial trend is equal to 0 in case of the additive and 1 in case of the multiplicative types. The seasonality is treated similar to the iETS$_O$ model, but using the inverse-odds transformation.
 
 The construction of the model is done via the set of equations similar to the ones for the iETS$_O$ model:
 \begin{equation} \label{eq:iETSIEstimation}
@@ -215,12 +215,12 @@ plot(oETSIModel)
 
 And here's the full iETS(M,M,N)$_O$ model:
 ```{r iETSIExample2}
-es(y, "MMN", occurrence="i", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence="i", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
 ```
 
 Once again, an earlier estimated model can be used in the univariate forecasting functions:
 ```{r iETSIExample3, eval=FALSE}
-es(y, "MMN", occurrence=oETSIModel, h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence=oETSIModel, h=10, holdout=TRUE, silent=FALSE)
 ```
 
 
@@ -279,7 +279,7 @@ plot(oETSDModel)
 
 The usage of the model in case of univariate forecasting functions is the same as in the cases of other occurrence models, discussed above:
 ```{r iETSDExample2}
-es(y, "MMN", occurrence=oETSDModel, h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence=oETSDModel, h=10, holdout=TRUE, silent=FALSE)
 ```
 
 

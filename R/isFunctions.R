@@ -36,7 +36,6 @@
 #' ourModel <- msarima(rnorm(100,100,10))
 #'
 #' is.smooth(ourModel)
-#' is.iss(ourModel)
 #' is.msarima(ourModel)
 #' is.vsmooth(ourModel)
 #'
@@ -62,12 +61,6 @@ is.smoothC <- function(x){
 #' @export
 is.msarima <- function(x){
     return(inherits(x,"msarima"))
-}
-
-#' @rdname isFunctions
-#' @export
-is.iss <- function(x){
-    return(inherits(x,"iss"))
 }
 
 #' @rdname isFunctions
@@ -104,4 +97,36 @@ is.vsmooth.sim <- function(x){
 #' @export
 is.smooth.forecast <- function(x){
     return(inherits(x,"smooth.forecast"))
+}
+
+#' ADAM classes checkers
+#'
+#' Functions to check if an object is of the specified class
+#'
+#' The list of functions includes:
+#' \itemize{
+#' \item \code{is.adam()} tests if the object was produced by a \link[smooth]{adam} function
+#' \item \code{is.adam.sim()} tests if the object was produced by sim.adam() function (not implemented yet);
+#' }
+#'
+#' @param x The object to check.
+#' @return \code{TRUE} if this is the specified class and \code{FALSE} otherwise.
+#'
+#' @template ssAuthor
+#' @keywords ts univar
+#' @examples
+#'
+#' ourModel <- adam(rnorm(100,100,10))
+#' is.adam(ourModel)
+#'
+#' @rdname isFunctions
+#' @export
+is.adam <- function(x){
+    return(inherits(x,"adam"))
+}
+
+#' @rdname isFunctions
+#' @export
+is.adam.sim <- function(x){
+    return(inherits(x,"sim.adam"))
 }

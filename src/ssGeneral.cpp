@@ -6,7 +6,6 @@
 
 using namespace Rcpp;
 
-
 /* # Function allows to multiply polinomails */
 arma::vec polyMult(arma::vec const &poly1, arma::vec const &poly2){
 
@@ -50,76 +49,6 @@ double cdf(arma::vec const &vecYt, arma::vec const &vecYfit, double const &error
     }
 
     return CF;
-}
-
-/* # Function returns multiplicative or additive error for scalar */
-double errorf(double const &yact, double &yfit, char const &E){
-    if(E=='A'){
-        return yact - yfit;
-    }
-    else if(E=='D'){
-        // This is a logistic additive error
-        double yProb;
-        if(yfit > 500){
-            if(yact==1){
-                yProb = 1;
-            }
-            else{
-                return(-yfit);
-            }
-        }
-        else if(yfit < -500){
-            if(yact==0){
-                yProb = 0;
-            }
-            else{
-                return(-yfit);
-            }
-        }
-        else{
-            yProb = exp(yfit) / (1 + exp(yfit));
-        }
-        return log((1 + yact - yProb)/(1 - yact + yProb));
-    }
-    else if(E=='L'){
-        // This is a logistic multiplicative error
-        // double yProb = yfit / (1 + yfit);
-        return ((1 + yact + yact * yfit)/(1 - yact - yact * yfit + 2 * yfit) - 1);
-    }
-    else{
-        if((yact==0) & (yfit==0)){
-            return 0;
-        }
-        else if((yact!=0) & (yfit==0)){
-            return R_PosInf;
-        }
-        else{
-            return (yact - yfit) / yfit;
-        }
-    }
-}
-
-/* # Function is needed to estimate the correct error for ETS when multisteps model selection with r(matvt) is sorted out. */
-arma::mat errorvf(arma::mat yact, arma::mat yfit, char const &E){
-    if(E=='A'){
-        return yact - yfit;
-    }
-    else if(E=='D'){
-        // This is an additive logistic error
-        yfit = clamp(yfit, -500,500);
-        yfit = exp(yfit) / (1 + exp(yfit));
-
-        return log((1 + yact - yfit)/(1 - yact + yfit));
-    }
-    else if(E=='L'){
-        // This is a multiplicative logistic error
-        // yfit = yfit / (1 + yfit);
-        return ((1 + yact + yact * yfit)/(1 - yact - yact * yfit + 2 * yfit) - 1);
-    }
-    else{
-        yfit.elem(find(yfit==0)).fill(1e-100);
-        return (yact - yfit) / yfit;
-    }
 }
 
 /* # initparams - function that initialises the basic parameters of ETS */
@@ -184,7 +113,7 @@ RcppExport SEXP initparams(SEXP Etype, SEXP Ttype, SEXP Stype, SEXP datafreq, SE
 // # Define the initial states for level and trend components
     switch(T){
     case 'N':
-        matrixVt.submat(0,0,lagsModelMax-1,0).each_row() = initial.submat(0,0,0,0);
+        matrixVt.submat(0,0,lagsModelMax-1,0).each_row() = initial.submat(0,4,0,4);
     break;
     case 'A':
         matrixVt.submat(0,0,lagsModelMax-1,1).each_row() = initial.submat(0,0,0,1);
@@ -831,10 +760,6 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
             matrixVt.col(i) = matrixVt(lagrows);
         }
 
-        if(E=='D'){
-            // This is a restriction of values for logistic additive error model
-            matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
-        }
 
 /* Renormalise components if the seasonal model is chosen */
         if(S!='N'){
@@ -866,21 +791,6 @@ List fitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec const &r
                 matrixVt(1,i) = arma::as_scalar(matrixVt(lagrows.row(1)));
             }
         }
-
-        if(E=='D'){
-            // This is a restriction of values for logistic additive error model
-            matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
-        }
-    }
-
-    if(E=='D'){
-        // This is a logistic additive error
-        vecYfit = clamp(vecYfit, -500,500);
-        vecYfit = exp(vecYfit) / (1 + exp(vecYfit));
-    }
-    else if(E=='L'){
-        // This is a logistic multiplicative error
-        vecYfit = vecYfit / (1 + vecYfit);
     }
 
     return List::create(Named("matvt") = matrixVt.t(), Named("yfit") = vecYfit,
@@ -1006,11 +916,6 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
                 matrixVt.col(i) = matrixVt(lagrows);
             }
 
-            if(E=='D'){
-                // This is a restriction of values for logistic additive error model
-                matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
-            }
-
 /* Renormalise components if the seasonal model is chosen */
             if(S!='N'){
                 if(double(i+1) / double(lagsModelMax) == double((i+1) / lagsModelMax)){
@@ -1043,11 +948,6 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
             }
             if(any(matrixVt.col(i)>1e+100)){
                 matrixVt.col(i) = matrixVt(lagrows);
-            }
-
-            if(E=='D'){
-                // This is a restriction of values for logistic additive error model
-                matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
             }
         }
 
@@ -1099,11 +999,6 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
                 matrixVt.col(i) = matrixVt(lagrows);
             }
 
-            if(E=='D'){
-                // This is a restriction of values for logistic additive error model
-                matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
-            }
-
 /* Skipping renormalisation of components in backcasting */
 
 /* # Transition equation for xreg */
@@ -1132,22 +1027,7 @@ List backfitter(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec cons
             if(any(matrixVt.col(i)>1e+100)){
                 matrixVt.col(i) = matrixVt(lagrows);
             }
-
-            if(E=='D'){
-                // This is a restriction of values for logistic additive error model
-                matrixVt.col(i) = clamp(matrixVt.col(i), -500,500);
-            }
         }
-    }
-
-    if(E=='D'){
-        // This is a logistic additive error
-        vecYfit = clamp(vecYfit, -500,500);
-        vecYfit = exp(vecYfit) / (1 + exp(vecYfit));
-    }
-    else if(E=='L'){
-        // This is a logistic multiplicative error
-        vecYfit = vecYfit / (1 + vecYfit);
     }
 
     return List::create(Named("matvt") = matrixVt.t(), Named("yfit") = vecYfit,
@@ -1352,7 +1232,7 @@ RcppExport SEXP errorerwrap(SEXP matvt, SEXP matF, SEXP matw, SEXP yt,
 
 int CFtypeswitch (std::string const& CFtype) {
     // MSE, MAE, HAM, MSEh, TMSE, GTMSE, aMSEh, aTMSE, aGTMSE, MAEh, TMAE, GTMAE, HAMh, THAM, GTHAM,
-    // GPL, aGPL, Rounded, TSB
+    // GPL, aGPL, Rounded
     if(CFtype=="MSE") return 1;
     else if(CFtype=="MAE") return 2;
     else if(CFtype=="HAM") return 3;
@@ -1375,7 +1255,6 @@ int CFtypeswitch (std::string const& CFtype) {
     else if(CFtype=="aGPL") return 20;
     // else if(CFtype=="aMSCE") return 18;
     else if(CFtype=="Rounded") return 21;
-    else if(CFtype=="TSB") return 22;
     else return 1;
 }
 
@@ -1389,20 +1268,7 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
     std::ostream nullstream(0);
     arma::set_cerr_stream(nullstream);
 
-    // These lines of code are needed for logistic probability:
-    // We define E as 'L' or 'D' in this case and use TSB CF.
-    char ENew = E;
-    std::string CFtypeNew = CFtype;
-    if(CFtype=="LogisticD"){
-        ENew = 'D';
-        CFtypeNew = "TSB";
-    }
-    else if(CFtype=="LogisticL"){
-        ENew = 'L';
-        CFtypeNew = "TSB";
-    }
-
-    int CFSwitch = CFtypeswitch(CFtypeNew);
+    int CFSwitch = CFtypeswitch(CFtype);
 
     arma::uvec nonzeroes = find(vecOt>0);
     unsigned int obs = vecYt.n_rows;
@@ -1425,12 +1291,12 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
 
     switch(fitterType){
         case 'b':
-        fitting = backfitter(matrixVt, matrixF, rowvecW, vecYt, vecG, lags, ENew, T, S,
+        fitting = backfitter(matrixVt, matrixF, rowvecW, vecYt, vecG, lags, E, T, S,
                              matrixXt, matrixAt, matrixFX, vecGX, vecOt);
         break;
         case 'o':
         default:
-        fitting = fitter(matrixVt, matrixF, rowvecW, vecYt, vecG, lags, ENew, T, S,
+        fitting = fitter(matrixVt, matrixF, rowvecW, vecYt, vecG, lags, E, T, S,
                          matrixXt, matrixAt, matrixFX, vecGX, vecOt);
     }
 
@@ -1447,22 +1313,11 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
 
     if((multi==true) & (CFSwitch<=16)){
         matErrors = errorer(matrixVt, matrixF, rowvecW, vecYt, hor, E, T, S, lags, matrixXt, matrixAt, matrixFX, vecOt);
-        if(E=='M'){
-            matErrors = log(1 + matErrors);
-            matErrors.elem(arma::find_nonfinite(matErrors)).fill(1e10);
-
-// This correction is needed in order to take the correct number of observations in the error matrix
-// !!! This needs to be revised !!! ///
-            yactsum = yactsum / obs * matobs;
-        }
     }
     else{
         arma::mat matErrorsfromfit(errorsfromfit.begin(), errorsfromfit.nrow(), errorsfromfit.ncol(), false);
         matErrors = matErrorsfromfit;
         matErrors = matErrors.elem(nonzeroes);
-        if(E=='M'){
-            matErrors = log(1 + matErrors);
-        }
     }
 
 // If this is an analytical multistep cost function
@@ -1496,10 +1351,10 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         }
     }
 
-    // Rounded CF and TSB
+    // Rounded CF
+    NumericMatrix yfitfromfit = as<NumericMatrix>(fitting["yfit"]);
     arma::vec vecYfit;
-    if(CFSwitch>=21){
-        NumericMatrix yfitfromfit = as<NumericMatrix>(fitting["yfit"]);
+    if(CFSwitch==21){
         vecYfit = as<arma::vec>(yfitfromfit);
     }
 
@@ -1587,11 +1442,6 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         // Rounded
         case 21:
             CFres = -cdf(vecYt.elem(nonzeroes), vecYfit.elem(nonzeroes), errorSD, E);
-        break;
-        // TSB
-        case 22:
-            // 0.5 is needed for cases, when the variable is continuous in (0, 1)
-            CFres = -sum(log(vecYfit.elem(find(vecYt>=0.5)))) - sum(log(1-vecYfit.elem(find(vecYt<0.5))));
         }
     break;
     case 'M':
@@ -1681,11 +1531,6 @@ double optimizer(arma::mat &matrixVt, arma::mat const &matrixF, arma::rowvec con
         // Rounded
         case 21:
             CFres = -cdf(vecYt.elem(nonzeroes), vecYfit.elem(nonzeroes), errorSD, E);
-        break;
-        // TSB
-        case 22:
-            // 0.5 is needed for cases, when the variable is continuous in (0, 1)
-            CFres = -sum(log(vecYfit.elem(find(vecYt>=0.5)))) - sum(log(1-vecYfit.elem(find(vecYt<0.5))));
         }
     }
     return CFres;

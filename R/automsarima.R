@@ -86,12 +86,9 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                          loss=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                          h=10, holdout=FALSE, cumulative=FALSE,
                          interval=c("none","parametric","likelihood","semiparametric","nonparametric"), level=0.95,
-                         occurrence=c("none","auto","fixed","general","odds-ratio","inverse-odds-ratio","direct"),
-                         oesmodel="MNN",
                          bounds=c("admissible","none"),
                          silent=c("all","graph","legend","output","none"),
-                         xreg=NULL, xregDo=c("use","select"), initialX=NULL,
-                         updateX=FALSE, persistenceX=NULL, transitionX=NULL, ...){
+                         xreg=NULL, xregDo=c("use","select"), initialX=NULL, ...){
 # Function estimates several msarima models and selects the best one using the selected information criterion.
 #
 #    Copyright (C) 2015 - 2016  Ivan Svetunkov
@@ -99,14 +96,20 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
 # Start measuring the time of calculations
     startTime <- Sys.time();
 
-    ##### Check if data was used instead of y. Remove by 2.6.0 #####
-    y <- depricator(y, list(...), "data");
-    loss <- depricator(loss, list(...), "cfType");
-    fast <- depricator(fast, list(...), "workFast");
-    interval <- depricator(interval, list(...), "intervals");
+    ### Depricate the old parameters
+    ellipsis <- list(...)
+    ellipsis <- depricator(ellipsis, "occurrence", "es");
+    ellipsis <- depricator(ellipsis, "oesmodel", "es");
+    ellipsis <- depricator(ellipsis, "updateX", "es");
+    ellipsis <- depricator(ellipsis, "persistenceX", "es");
+    ellipsis <- depricator(ellipsis, "transitionX", "es");
+    updateX <- FALSE;
+    persistenceX <- transitionX <- NULL;
+    occurrence <- "none";
+    oesmodel <- "MNN";
 
 # Add all the variables in ellipsis to current environment
-    list2env(list(...),environment());
+    list2env(ellipsis,environment());
 
     if(!is.null(orders)){
         arMax <- orders$ar;
@@ -361,10 +364,8 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                              constant=constantValue, initial=initialType, loss=loss,
                              h=h, holdout=holdout, cumulative=cumulative,
                              interval=intervalType, level=level,
-                             occurrence=occurrence, oesmodel=oesmodel,
                              bounds=bounds, silent=TRUE,
-                             xreg=xreg, xregDo=xregDo, initialX=initialX,
-                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                             xreg=xreg, xregDo=xregDo, initialX=initialX, FI=FI);
         return(bestModel);
     }
 
@@ -397,10 +398,8 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                              constant=constantValue, initial=initialType, loss=loss,
                              h=h, holdout=holdout, cumulative=cumulative,
                              interval=intervalType, level=level,
-                             occurrence=occurrence, oesmodel=oesmodel,
                              bounds=bounds, silent=TRUE,
-                             xreg=xreg, xregDo=xregDo, initialX=initialX,
-                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                             xreg=xreg, xregDo=xregDo, initialX=initialX, FI=FI);
         ICValue <- testModel$ICs[ic];
         if(combine){
             testForecasts[[m]] <- matrix(NA,h,3);
@@ -462,10 +461,8 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                                              constant=FALSE, initial=initialType, loss=loss,
                                              h=h, holdout=FALSE,
                                              interval=intervalType, level=level,
-                                             occurrence=occurrence, oesmodel=oesmodel,
                                              bounds=bounds, silent=TRUE,
-                                             xreg=NULL, xregDo="use", initialX=initialX,
-                                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                                             xreg=NULL, xregDo="use", initialX=initialX, FI=FI);
                         # Exclude the variance from the number of parameters
                         nParamMA <- nparam(testModel)-1;
                         nParamNew <- nParamOriginal + nParamMA;
@@ -529,10 +526,8 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                                                              constant=FALSE, initial=initialType, loss=loss,
                                                              h=h, holdout=FALSE,
                                                              interval=intervalType, level=level,
-                                                             occurrence=occurrence, oesmodel=oesmodel,
                                                              bounds=bounds, silent=TRUE,
-                                                             xreg=NULL, xregDo="use", initialX=initialX,
-                                                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                                                             xreg=NULL, xregDo="use", initialX=initialX, FI=FI);
                                         # Exclude the variance from the number of parameters
                                         nParamAR <- nparam(testModel)-1;
                                         nParamNew <- nParamOriginal + nParamMA + nParamAR;
@@ -605,10 +600,8 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                                                  constant=FALSE, initial=initialType, loss=loss,
                                                  h=h, holdout=FALSE,
                                                  interval=intervalType, level=level,
-                                                 occurrence=occurrence, oesmodel=oesmodel,
                                                  bounds=bounds, silent=TRUE,
-                                                 xreg=NULL, xregDo="use", initialX=initialX,
-                                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                                                 xreg=NULL, xregDo="use", initialX=initialX, FI=FI);
                             ICValue <- icCorrector(testModel$ICs[ic], nParamAR, obsNonzero, nParamNew);
                             if(combine){
                                 testForecasts[[m]] <- matrix(NA,h,3);
@@ -665,10 +658,8 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                                  constant=FALSE, initial=initialType, loss=loss,
                                  h=h, holdout=holdout, cumulative=cumulative,
                                  interval=intervalType, level=level,
-                                 occurrence=occurrence, oesmodel=oesmodel,
                                  bounds=bounds, silent=TRUE,
-                                 xreg=xreg, xregDo=xregDo, initialX=initialX,
-                                 updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                                 xreg=xreg, xregDo=xregDo, initialX=initialX, FI=FI);
             ICValue <- testModel$ICs[ic];
             if(combine){
                 testForecasts[[m]] <- matrix(NA,h,3);
@@ -739,9 +730,8 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                           initialType=initialType,
                           fitted=yFitted,forecast=yForecast,cumulative=cumulative,
                           lower=yLower,upper=yUpper,residuals=errors,s2=s2,interval=intervalType,level=level,
-                          y=y,holdout=yHoldout,occurrence=occurrence,
+                          y=y,holdout=yHoldout,
                           xreg=xreg, xregDo=xregDo, initialX=initialX,
-                          updateX=updateX, persistenceX=persistenceX, transitionX=transitionX,
                           ICs=ICs,ICw=icWeights,lossValue=NULL,loss=loss,accuracy=errormeasures);
 
         bestModel <- structure(bestModel,class=c("smooth","msarima"));
@@ -752,10 +742,8 @@ auto.msarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,
                              constant=constantValue, initial=initialType, loss=loss,
                              h=h, holdout=holdout, cumulative=cumulative,
                              interval=intervalType, level=level,
-                             occurrence=occurrence, oesmodel=oesmodel,
                              bounds=bounds, silent=TRUE,
-                             xreg=xreg, xregDo=xregDo, initialX=initialX,
-                             updateX=updateX, persistenceX=persistenceX, transitionX=transitionX, FI=FI);
+                             xreg=xreg, xregDo=xregDo, initialX=initialX, FI=FI);
 
         yFitted <- bestModel$fitted;
         yForecast <- bestModel$forecast;

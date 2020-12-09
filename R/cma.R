@@ -10,7 +10,7 @@
 #'
 #' This then corresponds to the centered MA with 0.5 weight for the
 #' first observation and 0.5 weight for an additional one. e.g. if this is
-#' monthly data and we use order=12, then half of the first january and
+#' monthly data and we use order=12, then half of the first January and
 #' half of the new one is taken.
 #'
 #' This is not a forecasting tool. This is supposed to smooth the time
@@ -70,9 +70,6 @@ cma <- function(y, order=NULL, silent=TRUE, ...){
 
 # Start measuring the time of calculations
     startTime <- Sys.time();
-
-    ##### Check if data was used instead of y. Remove by 2.6.0 #####
-    y <- depricator(y, list(...), "data");
 
     holdout <- FALSE;
     h <- 0;

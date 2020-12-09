@@ -93,9 +93,9 @@ utils::globalVariables(c("modelDo","initialValue","lagsModelMax"));
 #' (only for occurrence=c("o","i","d"));
 #' \item \code{lower} - the lower bound of the interval if \code{interval!="none"};
 #' \item \code{upper} - the upper bound of the interval if \code{interval!="none"};
-#' \item \code{lowerModel} - the lower bound of the interval of the undelying ETS model
+#' \item \code{lowerModel} - the lower bound of the interval of the underlying ETS model
 #' if \code{interval!="none"};
-#' \item \code{upperModel} - the upper bound of the interval of the undelying ETS model
+#' \item \code{upperModel} - the upper bound of the interval of the underlying ETS model
 #' if \code{interval!="none"};
 #' \item \code{states} - the values of the state vector;
 #' \item \code{logLik} - the log-likelihood value of the model;
@@ -141,10 +141,6 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
 # Start measuring the time of calculations
     startTime <- Sys.time();
 
-    ##### Check if data was used instead of y. Remove by 2.6.0 #####
-    y <- depricator(y, list(...), "data");
-    interval <- depricator(interval, list(...), "intervals");
-
     # Options for the fitter and forecaster:
     # O: M / A odds-ratio - "odds-ratio"
     # I: - M / A inverse-odds-ratio - "inverse-odds-ratio"
@@ -175,6 +171,7 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
         updateX <- model$updateX;
         transitionX <- model$transitionX;
         persistenceX <- model$persistenceX;
+        B <- model$B;
         model <- modelType(model);
     }
 
@@ -291,7 +288,7 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
 
             # Persistence vector. The initials are set here!
             if(persistenceEstimate){
-                vecg <- matrix(0.01, nComponentsAll, 1);
+                vecg <- matrix(0.1, nComponentsAll, 1);
             }
             else{
                 vecg <- matrix(persistence, nComponentsAll, 1);
@@ -788,6 +785,25 @@ oes <- function(y, model="MNN", persistence=NULL, initial="o", initialSeason=NUL
                               xregEstimate=xregEstimate, initialXEstimate=initialXEstimate, updateX=updateX,
                               matvt=matvt, vecg=vecg, matF=matF, matw=matw, matat=matat, matFX=matFX, vecgX=vecgX, matxt=matxt,
                               ot=ot, bounds=bounds);
+
+                # If the smoothing parameters are high, try different initialisation and reestimate
+                if(persistenceEstimate && any(res$solution[c(1:(1+(Ttype!="N")*1+(Stype!="N")*1))]>0.5)){
+                    B$B[c(1:(1+(Ttype!="N")*1+(Stype!="N")*1))] <- 0.01;
+                    res2 <- nloptr(B$B, CF, lb=B$lb, ub=B$ub,
+                                  opts=list(algorithm=algorithm, xtol_rel=xtol_rel, maxeval=maxeval, print_level=print_level),
+                                  lagsModel=lagsModel, Etype=Etype, Ttype=Ttype, Stype=Stype, occurrence=occurrence,
+                                  nComponentsAll=nComponentsAll, nComponentsNonSeasonal=nComponentsNonSeasonal, nExovars=nExovars,
+                                  lagsModelMax=lagsModelMax, damped=damped,
+                                  persistenceEstimate=persistenceEstimate, initialType=initialType, phiEstimate=phiEstimate,
+                                  modelIsSeasonal=modelIsSeasonal, initialSeasonEstimate=initialSeasonEstimate,
+                                  xregEstimate=xregEstimate, initialXEstimate=initialXEstimate, updateX=updateX,
+                                  matvt=matvt, vecg=vecg, matF=matF, matw=matw, matat=matat, matFX=matFX, vecgX=vecgX, matxt=matxt,
+                                  ot=ot, bounds=bounds);
+                    # If the new optimal is better than the old, use it
+                    if(res$objective > res2$objective){
+                        res <- res2;
+                    }
+                }
                 B <- res$solution;
 
                 # Parameters estimated. The variance is not estimated, so not needed

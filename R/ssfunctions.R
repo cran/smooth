@@ -740,7 +740,7 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
                      "GPL","aMSEh","aTMSE","aGTMSE","aGPL"))){
         multisteps <- TRUE;
     }
-    else if(any(loss==c("MSE","MAE","HAM","TSB","Rounded","LogisticD","LogisticL"))){
+    else if(any(loss==c("MSE","MAE","HAM","Rounded"))){
         multisteps <- FALSE;
     }
     else{
@@ -837,6 +837,11 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
         occurrence <- occurrence$occurrence;
         occurrenceModelProvided <- FALSE;
     }
+    else if(is.null(occurrence)){
+        occurrence <- "none";
+        occurrenceModel <- "MNN";
+        occurrenceModelProvided <- FALSE;
+    }
     else{
         if(is.null(oesmodel) || is.na(oesmodel)){
             occurrenceModel <- "MNN";
@@ -848,33 +853,6 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
     }
 
     if(smoothType!="oes"){
-        if(exists("intermittent",envir=ParentEnvironment,inherits=FALSE)){
-            if(!is.null(intermittent)){
-                intermittent <- substr(intermittent[1],1,1);
-                warning("The parameter \"intermittent\" is obsolete. Please, use \"occurrence\" instead");
-                occurrence <- switch(intermittent,
-                                     "l"="o",
-                                     "p"="d",
-                                     "f"="f",
-                                     "n"="n",
-                                     "a"="a",
-                                     "i"=,
-                                     "s"="i");
-            }
-            else{
-                occurrence <- intermittent;
-            }
-        }
-        if(exists("imodel",envir=ParentEnvironment,inherits=FALSE)){
-            if(!is.null(imodel)){
-                oesmodel <- imodel;
-                warning("The parameter \"imodel\" is obsolete. Please, use \"oesmodel\" instead");
-            }
-            else{
-                oesmodel <- imodel;
-            }
-        }
-
         if(is.numeric(occurrence)){
             # If it is data, then it should either correspond to the whole sample (in-sample + holdout)
             # or be equal to forecating horizon.
@@ -961,9 +939,6 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
         # Check if multiplicative models can be fitted
         allowMultiplicative <- !((any(yInSample<=0) && occurrence=="n") |
                                      (occurrence!="n" && any(yInSample<0)));
-        if(any(loss==c("LogisticL","LogisticD"))){
-            allowMultiplicative <- TRUE;
-        }
         # If non-positive values are present, check if data is intermittent,
         # if negatives are here, switch to additive models
         if(!allowMultiplicative){
@@ -1698,7 +1673,7 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.gum","auto.ssarima","auto.
                      "GPL","aMSEh","aTMSE","aGTMSE","aGPL"))){
         multisteps <- TRUE;
     }
-    else if(any(loss==c("MSE","MAE","HAM","Rounded","TSB","LogisticD","LogisticL"))){
+    else if(any(loss==c("MSE","MAE","HAM","Rounded"))){
         multisteps <- FALSE;
     }
     else{
@@ -1769,6 +1744,11 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.gum","auto.ssarima","auto.
                 call.=FALSE);
         occurrenceModel <- modelType(occurrence);
         occurrence <- occurrenceModel$occurrence;
+        occurrenceModelProvided <- FALSE;
+    }
+    else if(is.null(occurrence)){
+        occurrence <- "none";
+        occurrenceModel <- "MNN";
         occurrenceModelProvided <- FALSE;
     }
     else{
@@ -1885,18 +1865,8 @@ ssFitter <- function(...){
     ellipsis <- list(...);
     ParentEnvironment <- ellipsis[['ParentEnvironment']];
 
-    if(loss=="LogisticL"){
-        EtypeNew <- "L";
-    }
-    else if(loss=="LogisticD"){
-        EtypeNew <- "D";
-    }
-    else{
-        EtypeNew <- Etype;
-    }
-
     fitting <- fitterwrap(matvt, matF, matw, yInSample, vecg,
-                          lagsModel, EtypeNew, Ttype, Stype, initialType,
+                          lagsModel, Etype, Ttype, Stype, initialType,
                           matxt, matat, matFX, vecgX, ot);
     statesNames <- colnames(matvt);
     matvt <- ts(fitting$matvt,start=(time(y)[1] - deltat(y)*lagsModelMax),frequency=dataFreq);
@@ -1911,7 +1881,7 @@ ssFitter <- function(...){
                        "Please, use a different model."),
                 call.=FALSE);
     }
-    if(EtypeNew=="M" & any(matvt[,1]<0)){
+    if(Etype=="M" & any(matvt[,1]<0)){
         matvt[matvt[,1]<0,1] <- 0.001;
         warning(paste0("Negative values produced in the level of state vector of model ",model,".\n",
                        "We had to substitute them by low values. Please, use a different model."),
@@ -2551,12 +2521,6 @@ ssForecaster <- function(...){
                                          matat[(obsAll-h+1):(obsAll),,drop=FALSE], matFX)),
                         start=yForecastStart,frequency=dataFreq);
 
-        if(any(loss==c("LogisticL","LogisticD"))){
-            if(any(is.nan(yForecast)) | any(is.infinite(yForecast))){
-                yForecast[] <- matvt[obsInSample,1];
-            }
-        }
-
         if(any(is.nan(yForecast))){
             warning(paste0("NaNs were produced in the forecast.\n",
                            "This could happen if you used multiplicative model on non-positive data. ",
@@ -2744,33 +2708,6 @@ ssForecaster <- function(...){
         warning("Please check the input and report this error to the maintainer if it persists.",call.=FALSE);
     }
 
-    if(loss=="LogisticL"){
-        yForecast <- yForecast / (1 + yForecast);
-        yLower <- yLower / (1 + yLower);
-        yUpper <- yUpper / (1 + yUpper);
-    }
-    else if(loss=="LogisticD"){
-        # If the values are too high (hard to take exp), substitute by 1
-        yForecastNew <- exp(yForecast) / (1 + exp(yForecast));
-        yLowerNew <- exp(yLower) / (1 + exp(yLower));
-        yUpperNew <- exp(yUpper) / (1 + exp(yUpper));
-        if(any(yForecast>500)){
-            yForecastNew[yForecast>500] <- 1;
-            yLowerNew[yLowerNew>500] <- 1;
-            yUpperNew[yLowerNew>500] <- 1;
-        }
-        # If the values are too low (hard to take exp), substitute by 0
-        if(any(yForecast< -500)){
-            yForecastNew[yForecast< -500] <- 0;
-            yLowerNew[yLowerNew< -500] <- 0;
-            yUpperNew[yLowerNew< -500] <- 0;
-        }
-
-        yForecast <- yForecastNew;
-        yLower <- yLowerNew;
-        yUpper <- yUpperNew;
-    }
-
     assign("s2",s2,ParentEnvironment);
     assign("yForecast",yForecast,ParentEnvironment);
     assign("yLower",yLower,ParentEnvironment);
@@ -2821,12 +2758,11 @@ ssXreg <- function(y, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                             call.=FALSE);
                     # If this is a binary variable, use iss function.
                     if(all((xreg==0) | (xreg==1))){
-                        xregForecast <- oes(xreg,model="MNN",h=obsAll-length(xreg),
-                                            occurrence="o",ic="AIC")$forecast;
+                        xregForecast <- oes(xreg, model="MNN", h=obsAll-length(xreg),
+                                            occurrence="o", ic="AIC")$forecast;
                     }
                     else{
-                        xregForecast <- es(xreg,h=obsAll-length(xreg),occurrence="auto",
-                                           ic="AICc",silent=TRUE)$forecast;
+                        xregForecast <- es(xreg, h=obsAll-length(xreg), ic="AICc",silent=TRUE)$forecast;
                     }
                     xreg <- c(as.vector(xreg),as.vector(xregForecast));
                 }
@@ -2898,12 +2834,10 @@ ssXreg <- function(y, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
                     }
 
                     if(all((xreg[,j]==0) | (xreg[,j]==1))){
-                        xregForecast[,j] <- oes(xreg[,j],model="MNN",h=obsAll-nrow(xreg),
-                                                occurrence="o",ic="AIC")$forecast;
+                        xregForecast[,j] <- oes(xreg[,j], model="MNN", h=obsAll-nrow(xreg), occurrence="o",ic="AIC")$forecast;
                     }
                     else{
-                        xregForecast[,j] <- es(xreg[,j],h=obsAll-nrow(xreg),
-                                               occurrence="auto",ic="AICc",silent=TRUE)$forecast;
+                        xregForecast[,j] <- es(xreg[,j], h=obsAll-nrow(xreg), ic="AICc")$forecast;
                     }
                 }
                 xreg <- rbind(xreg,xregForecast);
@@ -3151,15 +3085,12 @@ ssXreg <- function(y, Etype="A", xreg=NULL, updateX=FALSE, ot=NULL,
 }
 
 ##### *Likelihood function* #####
-likelihoodFunction <- function(B){
+likelihoodFunction <- function(B,yFittedSumLog=0){
     #### Concentrated logLikelihood based on B and CF ####
     logLikFromCF <- function(B, loss){
-        yotSumLog <- switch(Etype,
-                            "M" = sum(log(yot)),
-                            "A" = 0);
         if(Etype=="M" && any(loss==c("TMSE","GTMSE","TMAE","GTMAE","THAM","GTHAM",
                                        "GPL","aTMSE","aGTMSE","aGPL"))){
-            yotSumLog <- yotSumLog * h;
+            yFittedSumLog <- yFittedSumLog * h;
         }
 
         if(all(loss!=c("GTMSE","GTMAE","GTHAM","GPL","aGPL","aGTMSE"))){
@@ -3167,21 +3098,18 @@ likelihoodFunction <- function(B){
         }
 
         if(any(loss==c("MAE","MAEh","MACE","TMAE","GTMAE"))){
-            return(- (obsInSample*(log(2) + 1 + CFValue) + obsZero) - yotSumLog);
+            return(- (obsInSample*(log(2) + 1 + CFValue) + obsZero) - yFittedSumLog);
         }
         else if(any(loss==c("HAM","HAMh","CHAM","THAM","GTHAM"))){
             #### This is a temporary fix for the oes models... Needs to be done properly!!! ####
-            return(- 2*(obsInSample*(log(2) + 1 + CFValue) + obsZero) - yotSumLog);
+            return(- 2*(obsInSample*(log(2) + 1 + CFValue) + obsZero) - yFittedSumLog);
         }
         else if(any(loss==c("GPL","aGPL","aGTMSE"))){
-            return(- 0.5 *(obsInSample*(h*log(2*pi) + 1 + CFValue) + obsZero) - yotSumLog);
-        }
-        else if(any(loss==c("LogisticD","LogisticL","TSB","Rounded"))){
-            return(-CFValue);
+            return(- 0.5 *(obsInSample*(h*log(2*pi) + 1 + CFValue) + obsZero) - yFittedSumLog);
         }
         else{
             #if(loss==c("MSE","MSEh","MSCE")) obsNonzero
-            return(- 0.5 *(obsInSample*(log(2*pi) + 1 + CFValue) + obsZero) - yotSumLog);
+            return(- 0.5 *(obsInSample*(log(2*pi) + 1 + CFValue) + obsZero) - yFittedSumLog);
         }
     }
     CFValue <- CF(B);
@@ -3231,13 +3159,13 @@ likelihoodFunction <- function(B){
 
 ##### *Function calculates ICs* #####
 ICFunction <- function(nParam=nParam,nParamOccurrence=nParamOccurrence,
-                       B,Etype=Etype){
+                       B,Etype=Etype,yFittedSumLog=0){
     # Information criteria are calculated with the constant part "log(2*pi*exp(1)*h+log(obs))*obs".
     # And it is based on the mean of the sum squared residuals either than sum.
     # Hyndman likelihood is: llikelihood <- obs*log(obs*cfObjective)
 
     nParamOverall <- nParam + nParamOccurrence;
-    llikelihood <- likelihoodFunction(B);
+    llikelihood <- likelihoodFunction(B,yFittedSumLog=yFittedSumLog);
 
     # max here is needed in order to take into account cases with higher
     ## number of parameters than observations
