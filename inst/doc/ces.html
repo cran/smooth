@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2020-12-08" />
+<meta name="date" content="2021-01-12" />
 
 <title>ces() - Complex Exponential Smoothing</title>
 
@@ -349,7 +349,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">ces() - Complex Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2020-12-08</h4>
+<h4 class="date">2021-01-12</h4>
 
 
 
@@ -365,7 +365,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## a0 + ia1: 1.1085+1.0114i
 ## Initial values were produced using backcasting.
 ## 
-## Loss function type: MSE; Loss function value: 1951898.9225
+## Loss function type: likelihood; Loss function value: 840.1262
 ## Error standard deviation: 1419.223
 ## Sample size: 97
 ## Number of estimated parameters: 3
@@ -407,7 +407,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <p>Note that prediction interval are too narrow and do not include 95% of values. This is because CES is pure additive model and it cannot take into account possible heteroscedasticity.</p>
 <p>If for some reason we want to optimise initial values then we call:</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb7-1" data-line-number="1"><span class="kw">auto.ces</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">initial=</span><span class="st">&quot;o&quot;</span>, <span class="dt">interval=</span><span class="st">&quot;sp&quot;</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.35 seconds
+<pre><code>## Time elapsed: 0.34 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.0984+1.0122i
 ## Initial values were optimised.
@@ -430,27 +430,27 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" data-line-number="1">x &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">rnorm</span>(<span class="kw">length</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x),<span class="dv">50</span>,<span class="dv">3</span>),<span class="kw">rnorm</span>(<span class="kw">length</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x),<span class="dv">100</span>,<span class="dv">7</span>))</a></code></pre></div>
 <p><code>ces()</code> allows using exogenous variables and different types of prediction interval in exactly the same manner as <code>es()</code>:</p>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb10-1" data-line-number="1"><span class="kw">auto.ces</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x, <span class="dt">xregDo=</span><span class="st">&quot;select&quot;</span>, <span class="dt">interval=</span><span class="st">&quot;p&quot;</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.94 seconds
+<pre><code>## Time elapsed: 0.82 seconds
 ## Model estimated: CESX(f)
-## a0 + ia1: 1.1249+1.0069i
-## b0 + ib1: 1.0061+0.9997i
+## a0 + ia1: 1.1299+1.0059i
+## b0 + ib1: 1.0093+0.9996i
 ## Initial values were produced using backcasting.
 ## Xreg coefficients were estimated in a normal style
 ## 
-## Loss function type: MSE; Loss function value: 1703240.5937
-## Error standard deviation: 1347.421
+## Loss function type: MSE; Loss function value: 1664010.2767
+## Error standard deviation: 1331.813
 ## Sample size: 97
 ## Number of estimated parameters: 6
 ## Number of degrees of freedom: 91
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
-## 1679.034 1679.968 1694.483 1696.617 
+## 1676.774 1677.707 1692.222 1694.357 
 ## 
 ## 95% parametric prediction interval was constructed
 ## 61% of values are in the prediction interval
 ## Forecast errors:
-## MPE: 14.1%; sCE: 1407.4%; Bias: 74.9%; MAPE: 34.2%
-## MASE: 2.434; sMAE: 99.3%; sMSE: 182.3%; rMAE: 1.04; rRMSE: 1.184</code></pre>
+## MPE: 14.4%; sCE: 1416.2%; Bias: 79.2%; MAPE: 33.9%
+## MASE: 2.42; sMAE: 98.7%; sMSE: 183.4%; rMAE: 1.034; rRMSE: 1.188</code></pre>
 
 
 

@@ -6,10 +6,10 @@
 \usage{
 ssarima(y, orders = list(ar = c(0), i = c(1), ma = c(1)), lags = c(1),
   constant = FALSE, AR = NULL, MA = NULL, initial = c("backcasting",
-  "optimal"), ic = c("AICc", "AIC", "BIC", "BICc"), loss = c("MSE", "MAE",
-  "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
-  cumulative = FALSE, interval = c("none", "parametric", "likelihood",
-  "semiparametric", "nonparametric"), level = 0.95,
+  "optimal"), ic = c("AICc", "AIC", "BIC", "BICc"), loss = c("likelihood",
+  "MSE", "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10,
+  holdout = FALSE, cumulative = FALSE, interval = c("none", "parametric",
+  "likelihood", "semiparametric", "nonparametric"), level = 0.95,
   bounds = c("admissible", "none"), silent = c("all", "graph", "legend",
   "output", "none"), xreg = NULL, xregDo = c("use", "select"),
   initialX = NULL, ...)
@@ -54,7 +54,8 @@ produced using backcasting procedure.}
 \item{ic}{The information criterion used in the model selection procedure.}
 
 \item{loss}{The type of Loss Function used in optimization. \code{loss} can
-be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
+be: \code{likelihood} (assuming Normal distribution of error term),
+\code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
 \code{HAM} (Half Absolute Moment), \code{TMSE} - Trace Mean Squared Error,
 \code{GTMSE} - Geometric Trace Mean Squared Error, \code{MSEh} - optimisation
 using only h-steps ahead error, \code{MSCE} - Mean Squared Cumulative Error.
@@ -298,7 +299,7 @@ Generating Prediction Intervals. Management Science, Vol 45, No 2, pp
 \item Lichtendahl Kenneth C., Jr., Grushka-Cockayne Yael, Winkler
 Robert L., (2013) Is It Better to Average Probabilities or
 Quantiles? Management Science 59(7):1594-1611. DOI:
-[10.1287/mnsc.1120.1667](https://doi.org/10.1287/mnsc.1120.1667)
+\doi{10.1287/mnsc.1120.1667}
 }
 
 \itemize{
@@ -306,13 +307,13 @@ Quantiles? Management Science 59(7):1594-1611. DOI:
 Journal of the Royal Statistical Society, Series B (Methodological) 47 (2), 272-276.
 \item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 Forecasting with exponential smoothing: the state space approach,
-Springer-Verlag. \url{http://dx.doi.org/10.1007/978-3-540-71918-2}.
+Springer-Verlag. \doi{10.1007/978-3-540-71918-2}.
 }
 
 \itemize{
 \item Svetunkov, I., & Boylan, J. E. (2019). State-space ARIMA for supply-chain forecasting.
 International Journal of Production Research, 0(0), 1–10.
-\url{https://doi.org/10.1080/00207543.2019.1600764}
+\doi{10.1080/00207543.2019.1600764}
 }
 }
 \seealso{

@@ -41,7 +41,7 @@ testModel <- adam(M3[[1234]], "AAN", silent=FALSE, loss=lossFunction)
 testModel
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[1234]], "MMN", silent=FALSE, distribution="dgnorm", beta=3)
+testModel <- adam(M3[[1234]], "MMN", silent=FALSE, distribution="dgnorm", shape=3)
 
 ## -----------------------------------------------------------------------------
 testModel <- adam(M3[[2568]], "ZXZ", lags=c(1,12), silent=FALSE)

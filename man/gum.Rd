@@ -8,8 +8,8 @@
 gum(y, orders = c(1, 1), lags = c(1, frequency(y)), type = c("additive",
   "multiplicative"), persistence = NULL, transition = NULL,
   measurement = NULL, initial = c("optimal", "backcasting"),
-  ic = c("AICc", "AIC", "BIC", "BICc"), loss = c("MSE", "MAE", "HAM",
-  "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
+  ic = c("AICc", "AIC", "BIC", "BICc"), loss = c("likelihood", "MSE",
+  "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
   cumulative = FALSE, interval = c("none", "parametric", "likelihood",
   "semiparametric", "nonparametric"), level = 0.95,
   bounds = c("restricted", "admissible", "none"), silent = c("all",
@@ -54,7 +54,8 @@ produced using backcasting procedure.}
 \item{ic}{The information criterion used in the model selection procedure.}
 
 \item{loss}{The type of Loss Function used in optimization. \code{loss} can
-be: \code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
+be: \code{likelihood} (assuming Normal distribution of error term),
+\code{MSE} (Mean Squared Error), \code{MAE} (Mean Absolute Error),
 \code{HAM} (Half Absolute Moment), \code{TMSE} - Trace Mean Squared Error,
 \code{GTMSE} - Geometric Trace Mean Squared Error, \code{MSEh} - optimisation
 using only h-steps ahead error, \code{MSCE} - Mean Squared Cumulative Error.
@@ -270,7 +271,7 @@ Generating Prediction Intervals. Management Science, Vol 45, No 2, pp
 \item Lichtendahl Kenneth C., Jr., Grushka-Cockayne Yael, Winkler
 Robert L., (2013) Is It Better to Average Probabilities or
 Quantiles? Management Science 59(7):1594-1611. DOI:
-[10.1287/mnsc.1120.1667](https://doi.org/10.1287/mnsc.1120.1667)
+\doi{10.1287/mnsc.1120.1667}
 }
 }
 \seealso{

@@ -11,10 +11,11 @@
 #' skipped in the order selection. This is not advised for models with \code{lags} greater than 12.
 #'
 #' @examples
-#' ourModel <- auto.adam(rnorm(100,100,10), model="ZZN", lags=c(1,4),
-#'                       orders=list(ar=c(2,2),ma=c(2,2),select=TRUE))
+#' \dontrun{ourModel <- auto.adam(rnorm(100,100,10), model="ZZN", lags=c(1,4),
+#'                       orders=list(ar=c(2,2),ma=c(2,2),select=TRUE))}
 #'
 #' @rdname adam
+#' @importFrom stats update.formula
 #' @export
 auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0),i=c(0),ma=c(0),select=FALSE),
                       formula=NULL, outliers=c("ignore","use","select"), level=0.99,
@@ -43,7 +44,7 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
     }
 
     ic <- match.arg(ic,c("AICc","AIC","BIC","BICc"));
-    ICFunction <- switch(ic,
+    IC <- switch(ic,
                          "AIC"=AIC,
                          "AICc"=AICc,
                          "BIC"=BIC,
@@ -88,7 +89,7 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
     else{
         obsInSample <- nrow(data) - holdout*h;
         if(!is.null(formula)){
-            yInSample <- data[1:obsInSample,formula[[2]]];
+            yInSample <- data[1:obsInSample,all.vars(formula)[1]];
         }
         else{
             yInSample <- data[1:obsInSample,1];
@@ -458,6 +459,7 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                                   occurrence, ic, bounds, fast,
                                   silent, regressors, testModelETS, ...){
             silentDebug <- FALSE;
+            # silentDebug <- TRUE;
 
             # Save the original values
             modelOriginal <- model;
@@ -478,16 +480,17 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
             }
             else{
                 # Fit just mean
-                testModelETS <- adam(data, model="NNN",lags=1, distribution=distribution, formula=formula,
+                testModelETS <- adam(data, model="NNN", lags=1, distribution=distribution, formula=formula,
                                      h=h,holdout=holdout, occurrence=occurrence, bounds=bounds, silent=TRUE);
                 dataAR <- dataI <- dataMA <- yInSample <- actuals(testModelETS);
 
-                # Originally, we only have a constant
-                nParamOriginal <- 1;
+                # This should be zero, because we do not use residuals of this
+                nParamOriginal <- 0;
             }
             testModel <- testModelETS;
-            bestIC <- bestICI <- ICFunction(testModel);
-            obsNonzero <- nobs(testModelETS,all=FALSE);
+            ICValue <- bestIC <- bestICI <- IC(testModel);
+            testLogLikAR <- testLogLikI <- testLogLikMA <- testLogLik <- logLik(testModel);
+            obsNonzero <- nobs(testModel,all=FALSE);
 
             if(silentDebug){
                 cat("Best IC:",bestIC,"\n");
@@ -503,7 +506,6 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
             else{
                 nModelsARIMA <- prod(iMax + 1) * (1 + sum(maMax*(1 + sum(arMax))));
             }
-            ICValue <- 1E+100;
             m <- 0;
 
             lagsTest <- maTest <- arTest <- rep(0,length(lags));
@@ -530,26 +532,41 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                     cat(round((m)/nModelsARIMA,2)*100,"\b%");
                 }
                 nParamInitial <- 0;
-                # If differences are zero, skip this step
                 if(!all(iOrders[d,]==0)){
                     # Run the model for differences
-                    testModel <- adam(data=yInSample, model=model, lags=lags,
-                                      orders=list(ar=0,i=iOrders[d,],ma=0),
-                                      distribution=distribution,
-                                      h=h, holdout=FALSE,
-                                      persistence=persistence, phi=phi, initial=initial,
-                                      occurrence=occurrence, ic=ic, bounds=bounds,
-                                      regressors=regressors, silent=TRUE, ...);
+                    testModel <- try(adam(data=yInSample, model=model, lags=lags,
+                                          orders=list(ar=0,i=iOrders[d,],ma=0),
+                                          distribution=distribution,
+                                          h=h, holdout=FALSE,
+                                          persistence=persistence, phi=phi, initial=initial,
+                                          occurrence=occurrence, ic=ic, bounds=bounds,
+                                          regressors=regressors, silent=TRUE, ...),
+                                     silent=TRUE);
+                    # If the function didn't work (e.g. small sample), go next
+                    if(inherits(testModel,"try-error")){
+                        next;
+                    }
                     nParamInitial[] <- (initial=="optimal") * (iOrders[d,] %*% lags);
+
+                    # If a positive distribution is used, modify logLik
+                    if(any(distribution==c("dlnorm","dinvgauss"))){
+                        testLogLikI <- testLogLik + logLik(testModel);
+                    }
+                    else{
+                        testLogLikI <- logLik(testModel);
+                    }
+                    ICValue <- icCorrector(testLogLikI, ic,
+                                           nParamOriginal + nParamInitial,
+                                           obsNonzero);
                 }
-                # Extract Information criteria
-                ICValue <- ICFunction(testModel);
+
                 if(silentDebug){
                     cat("I:",iOrders[d,],"\b,",ICValue,"\n");
                 }
-                if(ICValue < bestICI){
+                if(ICValue <= bestICI){
                     bestICI <- ICValue;
                     dataMA <- dataI <- residuals(testModel);
+                    nParamOriginal <- nparam(testModelETS)-1;
                     if(ICValue < bestIC){
                         iBest <- iOrders[d,];
                         bestIC <- ICValue;
@@ -579,21 +596,35 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                                     cat(round((m)/nModelsARIMA,2)*100,"\b%");
                                 }
                                 maTest[seasSelectMA] <- maMax[seasSelectMA] - maSelect + 1;
+                                # maTest[seasSelectMA] <- maSelect;
 
                                 # Run the model for MA
-                                testModel <- adam(data=dataI, model="NNN", lags=lags,
-                                                  orders=list(ar=0,i=0,ma=maTest),
-                                                  distribution=distribution,
-                                                  h=h, holdout=FALSE,
-                                                  persistence=NULL, phi=NULL, initial=initial,
-                                                  occurrence="none", ic=ic, bounds=bounds,
-                                                  regressors="use", silent=TRUE, ...);
+                                testModel <- try(adam(data=dataI, model="NNN", lags=lags,
+                                                      orders=list(ar=0,i=0,ma=maTest),
+                                                      distribution=distribution,
+                                                      h=h, holdout=FALSE,
+                                                      persistence=NULL, phi=NULL, initial=initial,
+                                                      occurrence="none", ic=ic, bounds=bounds,
+                                                      regressors="use", silent=TRUE, ...),
+                                                 silent=TRUE);
+                                if(inherits(testModel,"try-error")){
+                                    next;
+                                }
+
+                                # If a positive distribution is used, modify logLik
+                                if(any(distribution==c("dlnorm","dinvgauss"))){
+                                    testLogLikMA <- testLogLikI + logLik(testModel);
+                                }
+                                else{
+                                    testLogLikMA <- logLik(testModel);
+                                }
+
                                 if(initial=="optimal" && (maTest %*% lags > nParamInitial)){
                                     nParamInitial[] <-  (maTest %*% lags);
                                 }
                                 # Exclude the initials from the number of parameters
                                 nParamMA <- sum(maTest);
-                                ICValue <- icCorrector(logLik(testModel), ic,
+                                ICValue <- icCorrector(testLogLikMA, ic,
                                                        nParamOriginal + nParamMA + nParamInitial,
                                                        obsNonzero);
                                 if(silentDebug){
@@ -636,21 +667,35 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                                                     cat(round((m)/nModelsARIMA,2)*100,"\b%");
                                                 }
                                                 arTest[seasSelectAR] <- arMax[seasSelectAR] - arSelect + 1;
+                                                # arTest[seasSelectAR] <- arSelect;
 
                                                 # Run the model for AR
-                                                testModel <- adam(data=dataMA, model="NNN", lags=lags,
-                                                                  orders=list(ar=arTest,i=0,ma=0),
-                                                                  distribution=distribution,
-                                                                  h=h, holdout=FALSE,
-                                                                  persistence=NULL, phi=NULL, initial=initial,
-                                                                  occurrence="none", ic=ic, bounds=bounds,
-                                                                  regressors="use", silent=TRUE, ...);
+                                                testModel <- try(adam(data=dataMA, model="NNN", lags=lags,
+                                                                      orders=list(ar=arTest,i=0,ma=0),
+                                                                      distribution=distribution,
+                                                                      h=h, holdout=FALSE,
+                                                                      persistence=NULL, phi=NULL, initial=initial,
+                                                                      occurrence="none", ic=ic, bounds=bounds,
+                                                                      regressors="use", silent=TRUE, ...),
+                                                                 silent=TRUE);
+                                                if(inherits(testModel,"try-error")){
+                                                    next;
+                                                }
+
+                                                # If a positive distribution is used, modify logLik
+                                                if(any(distribution==c("dlnorm","dinvgauss"))){
+                                                    testLogLikAR <- testLogLikMA + logLik(testModel);
+                                                }
+                                                else{
+                                                    testLogLikAR <- logLik(testModel);
+                                                }
+
                                                 if(initial=="optimal" && (arTest %*% lags > nParamInitial)){
                                                     nParamInitial[] <-  (arTest %*% lags);
                                                 }
                                                 # Exclude the initials (in order not to duplicate them)
                                                 nParamAR <- sum(arTest);
-                                                ICValue <- icCorrector(logLik(testModel), ic,
+                                                ICValue <- icCorrector(testLogLikAR, ic,
                                                                        nParamOriginal + nParamMA + nParamAR + nParamInitial,
                                                                        obsNonzero);
                                                 if(silentDebug){
@@ -699,21 +744,35 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                                         cat(round((m)/nModelsARIMA,2)*100,"\b%");
                                     }
                                     arTest[seasSelectAR] <- arMax[seasSelectAR] - arSelect + 1;
+                                    # arTest[seasSelectAR] <- arSelect;
 
                                     # Run the model for MA
-                                    testModel <- adam(data=dataI, model="NNN", lags=lags,
-                                                      orders=list(ar=arTest,i=0,ma=0),
-                                                      distribution=distribution,
-                                                      h=h, holdout=FALSE,
-                                                      persistence=NULL, phi=NULL, initial=initial,
-                                                      occurrence="none", ic=ic, bounds=bounds,
-                                                      regressors="use", silent=TRUE, ...);
+                                    testModel <- try(adam(data=dataI, model="NNN", lags=lags,
+                                                          orders=list(ar=arTest,i=0,ma=0),
+                                                          distribution=distribution,
+                                                          h=h, holdout=FALSE,
+                                                          persistence=NULL, phi=NULL, initial=initial,
+                                                          occurrence="none", ic=ic, bounds=bounds,
+                                                          regressors="use", silent=TRUE, ...),
+                                                     silent=TRUE);
+                                    if(inherits(testModel,"try-error")){
+                                        next;
+                                    }
+
+                                    # If a positive distribution is used, modify logLik
+                                    if(any(distribution==c("dlnorm","dinvgauss"))){
+                                        testLogLikAR <- testLogLikI + logLik(testModel);
+                                    }
+                                    else{
+                                        testLogLikAR <- logLik(testModel);
+                                    }
+
                                     if(initial=="optimal" && (arTest %*% lags > nParamInitial)){
                                         nParamInitial[] <-  (arTest %*% lags);
                                     }
                                     # Exclude the initials (in order not to duplicate them)
                                     nParamAR <- sum(arTest);
-                                    ICValue <- icCorrector(logLik(testModel), ic,
+                                    ICValue <- icCorrector(testLogLikAR, ic,
                                                            nParamOriginal + nParamAR + nParamInitial,
                                                            obsNonzero);
                                     if(silentDebug){
@@ -751,10 +810,19 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                 cat(" ",100,"\b%");
             }
 
+            # If no differences, then add constant
+            if(!etsModel && all(iBest==0)){
+                constant <- TRUE;
+            }
+            else{
+                constant <- FALSE;
+            }
+
             #### Reestimate the best model in order to get rid of bias ####
             # Run the model for MA
             bestModel <- adam(data=data, model=modelOriginal, lags=lags,
                               orders=list(ar=(arBest),i=(iBest),ma=(maBest)),
+                              constant=constant,
                               distribution=distribution, formula=formula,
                               h=h, holdout=holdout,
                               persistence=persistenceOriginal, phi=phiOriginal, initial=initial,
@@ -790,16 +858,26 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                 }
                 # If select outliers, then introduce lags and leads
                 if(outliers=="select"){
-                    outliersXreg <- xregExpander(outliersXreg,c(-1:1),gaps="zero");
+                    # data.frame is needed to bind the thing with ts() object few lines below
+                    outliersXreg <- as.data.frame(xregExpander(outliersXreg,c(-1:1),gaps="zero"));
                 }
+                outliersXregNames <- colnames(outliersXreg);
                 outliersDo <- outliers;
                 data <- cbind(data,outliersXreg);
+                # If the names of xreg are wrong, fix them
+                if(!all(outliersXregNames %in% colnames(data))){
+                    colnames(data)[substr(colnames(data),1,12)=="outliersXreg"] <- outliersXregNames;
+                }
+
                 # Form new xreg matrix (check data and xreg)
                 if(xregModel){
                     # Update formula if it is provided
                     if(!is.null(formula)){
-                        formula <- update(as.formula(formula),
-                                          as.formula(paste0("~.+",paste0(colnames(outliersXreg),collapse="+"))));
+                        # If this is not the formula of a type y~., then add outliers.
+                        if(!(length(all.vars(formula))==2 && all.vars(formula)[2]==".")){
+                            formula <- update.formula(as.formula(formula),
+                                                      as.formula(paste0("~.+",paste0(colnames(outliersXreg),collapse="+"))));
+                        }
                     }
                     else{
                         formula <- as.formula(paste0(responseName,"~."));
@@ -854,14 +932,14 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                 selectedModels <- vector("list",length(distribution));
                 for(i in 1:length(distribution)){
                     if(!silent){
-                        cat(distribution[i],": ");
+                        cat(distribution[i],"\b: ");
                     }
                     selectedModels[[i]] <- arimaSelector(data=data, model=model,
                                                          lags=lags, arMax=arMax, iMax=iMax, maMax=maMax,
                                                          distribution=distribution[i], h=h, holdout=holdout,
                                                          persistence=persistence, phi=phi, initial=initial,
                                                          occurrence=occurrence, ic=ic, bounds=bounds, fast=fast,
-                                                         silent=TRUE, regressors=regressors, testModelETS=NULL, ...);
+                                                         silent=silent, regressors=regressors, testModelETS=NULL, ...);
                 }
             }
             else{
@@ -879,7 +957,7 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
     }
 
     if(modelDo=="select"){
-        ICValues <- sapply(selectedModels, ICFunction);
+        ICValues <- sapply(selectedModels, IC);
     }
     else{
         ICValues <- vector("numeric",length(distribution));

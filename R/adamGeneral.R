@@ -1,4 +1,4 @@
-parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
+parametersChecker <- function(data, model, lags, formulaProvided, orders, constant=FALSE, arma,
                               persistence, phi, initial,
                               distribution=c("default","dnorm","dlaplace","ds","dgnorm","dalaplace",
                                              "dlnorm","dinvgauss"),
@@ -154,6 +154,17 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
 
     if(!is.numeric(yInSample)){
         stop("The provided data is not numeric! Can't construct any model!", call.=FALSE);
+    }
+
+    # If the user asked for trend, but it's not in the data, add it
+    if(!is.null(formulaProvided) &&
+       any(all.vars(formulaProvided)=="trend") && all(colnames(xregData)!="trend")){
+        if(!is.null(xregData)){
+            xregData <- cbind(xregData,trend=c(1:obsAll));
+        }
+        else{
+            xregData <- cbind(y=y,trend=c(1:obsAll));
+        }
     }
 
     # Number of parameters to estimate / provided
@@ -385,11 +396,13 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
         arOrders <- orders$ar;
         iOrders <- orders$i;
         maOrders <- orders$ma;
+        select <- orders$select;
     }
     else if(is.vector(orders)){
         arOrders <- orders[1];
         iOrders <- orders[2];
         maOrders <- orders[3];
+        select <- NULL;
     }
 
     # If there is arima, prepare orders
@@ -483,13 +496,25 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
         componentsNumberARIMA <- length(lagsModelARIMA);
         # Their names
         componentsNamesARIMA <- paste0("ARIMAState",c(1:componentsNumberARIMA));
-        # Number of initials needed. This is based on the longest one. The others are just its transformations
-        initialArimaNumber <- max(lagsModelARIMA);
 
-        if(obsInSample < initialArimaNumber){
-            warning(paste0("In-sample size is ",obsInSample,", while number of ARIMA components is ",componentsNumberARIMA,
-                           ". Cannot fit the model."),call.=FALSE)
-            stop("Not enough observations for such a complicated model.",call.=FALSE);
+        # If all orders are zero, drop ARIMA part
+        if(all(c(arOrders,iOrders,maOrders)==0)){
+            arOrders <- NULL;
+            iOrders <- NULL;
+            maOrders <- NULL;
+            arimaModel <- FALSE;
+            arRequired <- arEstimate <- FALSE;
+            iRequired <- FALSE;
+            maRequired <- maEstimate <- FALSE;
+            lagsModelARIMA <- initialArimaNumber <- 0;
+            componentsNumberARIMA <- 0;
+            componentsNamesARIMA <- NULL;
+            nonZeroARI <- NULL;
+            nonZeroMA <- NULL;
+        }
+        else{
+            # Number of initials needed. This is based on the longest one. The others are just its transformations
+            initialArimaNumber <- max(lagsModelARIMA);
         }
     }
     else{
@@ -758,10 +783,10 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
                     }
                     if(xregModel && length(persistence)>j){
                         if(j>0){
-                            persistenceXreg <- as.vector(persistence)[-c(1:j)];
+                            persistenceXreg <- persistence[-c(1:j)];
                         }
                         else{
-                            persistenceXreg <- as.vector(persistence);
+                            persistenceXreg <- persistence;
                         }
                         # If there are names, make sure that only deltas are used
                         if(!is.null(names(persistenceXreg))){
@@ -882,12 +907,13 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
         else{
             occurrenceModelProvided <- TRUE;
         }
+        pFitted <- matrix(fitted(oesModel), obsInSample, 1);
     }
     else{
         occurrenceModelProvided <- FALSE;
         oesModel <- NULL;
+        pFitted <- matrix(1, obsInSample, 1);
     }
-    pFitted <- matrix(1, obsInSample, 1);
     pForecast <- rep(NA,h);
 
     if(is.numeric(occurrence)){
@@ -1403,24 +1429,75 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
                     distribution <- "dgnorm";
                     Etype <- "M";
                 }
+                trendIncluded <- any(colnames(xregData)[-1]=="trend");
+                formulaIsAbsent <- is.null(formulaProvided);
+                formulaOriginal <- formulaProvided;
                 # If the formula is not provided, construct one
-                if(is.null(formulaProvided)){
+                if(formulaIsAbsent){
                     if(Etype=="M" && any(distribution==c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace"))){
-                        formulaProvided <- as.formula(paste0("log(`",responseName,"`)~."));
+                        if(trendIncluded){
+                            formulaOriginal <- formulaProvided <- as.formula(paste0("log(`",responseName,"`)~."));
+                        }
+                        else{
+                            formulaOriginal <- as.formula(paste0("log(`",responseName,"`)~."));
+                            formulaProvided <- as.formula(paste0("log(`",responseName,"`)~.+trend"));
+                        }
                     }
                     else{
-                        formulaProvided <- as.formula(paste0("`",responseName,"`~."));
+                        if(trendIncluded){
+                            formulaOriginal <- formulaProvided <- as.formula(paste0("`",responseName,"`~."));
+                        }
+                        else{
+                            formulaOriginal <- as.formula(paste0("`",responseName,"`~."));
+                            formulaProvided <- as.formula(paste0("`",responseName,"`~.+trend"));
+                        }
                     }
                 }
                 else{
-                     # If formula contains only one element, or seeral, but no logs, then change response formula
-                    if((length(formulaProvided[[2]])==1 ||
-                        (length(formulaProvided[[2]])>1 & !any(as.character(formulaProvided[[2]])=="log"))) &&
-                       (Etype=="M" && any(distribution==c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace")))){
-                        formulaProvided <- update(formulaProvided,log(.)~.);
+                    # If formula only contains ".", then just change it
+                    if(length(all.vars(formulaProvided))==2 && all.vars(formulaProvided)[2]=="."){
+                        if(trendIncluded){
+                            formulaProvided <- as.formula(paste0("log(`",responseName,"`)~."));
+                        }
+                        else{
+                            formulaProvided <- as.formula(paste0("log(`",responseName,"`)~.+trend"));
+                        }
+                    }
+                    else{
+                        trendIncluded <- any(all.vars(formulaProvided)[-1]=="trend");
+                        # If formula contains only one element, or several, but no logs, then change response formula
+                        if((length(formulaProvided[[2]])==1 ||
+                            (length(formulaProvided[[2]])>1 & !any(as.character(formulaProvided[[2]])=="log"))) &&
+                           (Etype=="M" && any(distribution==c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace")))){
+                            if(trendIncluded){
+                                formulaProvided <- update(formulaProvided,log(.)~.);
+                            }
+                            else{
+                                formulaProvided <- update(formulaProvided,log(.)~.+trend);
+                            }
+                        }
+                        else{
+                            if(!trendIncluded){
+                                formulaProvided <- update(formulaProvided,.~.+trend);
+                            }
+                        }
                     }
                 }
-                return(do.call(alm,list(formula=formulaProvided,data=xregData,distribution=distribution,subset=which(subset))))
+                almModel <- do.call(alm,list(formula=formulaProvided,data=xregData,distribution=distribution,subset=which(subset)));
+                # Remove trend
+                if(!trendIncluded){
+                    almModel$coefficients <- almModel$coefficients[names(almModel$coefficients)!="trend"];
+                    almModel$data <- almModel$data[,colnames(almModel$data)!="trend",drop=FALSE];
+                    if(formulaIsAbsent){
+                        almModel$call$formula <- as.formula(paste0("`",responseName,"`~."));
+                    }
+                    else{
+                        almModel$call$formula <- formulaOriginal;
+                    }
+                    # Reset terms, they are not needed for what comes, but confuse the formula() method
+                    almModel$terms <- NULL;
+                }
+                return(almModel);
             }
             # Extract names and form a proper matrix for the regression
             if(!is.null(formulaProvided)){
@@ -1464,8 +1541,6 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
 
                 # Either use or select the model via greybox functions
                 if(regressors=="use"){
-                    warning("The specified model is just a regression. It is recommended to use alm() from greybox instead.",
-                            call.=FALSE);
                     # Fisher Information
                     if(is.null(ellipsis$FI)){
                         FI <- FALSE;
@@ -1499,6 +1574,13 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
             almModel <- NULL;
             if(Etype!="Z"){
                 almModel <- xregInitialiser(Etype,distribution,formulaProvided,subset,responseName);
+                # If Intercept was not included, substitute with zero
+                if(!any(names(almModel$coefficients)=="(Intercept)")){
+                    almIntercept <- 0;
+                }
+                else{
+                    almIntercept <- almModel$coefficients["(Intercept)"];
+                }
                 if(Etype=="A"){
                     # If this is just a regression, include intercept
                     if(!etsModel && !arimaModel){
@@ -1530,6 +1612,13 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
             else{
                 # Additive model
                 almModel <- xregInitialiser("A",distribution,formulaProvided,subset,responseName);
+                # If Intercept was not included, substitute with zero
+                if(!any(names(almModel$coefficients)=="(Intercept)")){
+                    almIntercept <- 0;
+                }
+                else{
+                    almIntercept <- almModel$coefficients["(Intercept)"];
+                }
                 # If this is just a regression, include intercept
                 if(!etsModel && !arimaModel){
                     xregModelInitials[[1]]$initialXreg <- almModel$coefficients;
@@ -1543,6 +1632,13 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
                 xregModelInitials[[1]]$other <- almModel$other;
                 # Multiplicative model
                 almModel[] <- xregInitialiser("M",distribution,formulaProvided,subset,responseName);
+                # If Intercept was not included, substitute with zero
+                if(!any(names(almModel$coefficients)=="(Intercept)")){
+                    almIntercept <- 0;
+                }
+                else{
+                    almIntercept <- almModel$coefficients["(Intercept)"];
+                }
                 # If this is just a regression, include intercept
                 if(!etsModel && !arimaModel){
                     xregModelInitials[[2]]$initialXreg <- almModel$coefficients;
@@ -1586,14 +1682,52 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
             xregFactorsLevels[[responseName]] <- NULL;
             # Expand the variables. We cannot use alm, because it is based on obsInSample
             xregData <- model.frame(formulaProvided,data=as.data.frame(xreg));
+            # If the number of rows is different, this might be because of NAs
+            if(nrow(xregData)!=nrow(xreg)){
+                warning("Some explanatory variables contained NAs. This might cause issues in the estimation. ",
+                        "We will substitute those values with the first non-NA values",
+                        call.=FALSE);
+                # Get indices of NAs and nonNAs
+                xregNAs <- which(is.na(xreg),arr.ind=TRUE);
+                xregNonNAs <- which(!is.na(xreg),arr.ind=TRUE);
+                # Go through variables and substitute values
+                for(i in unique(xregNAs[,2])){
+                    xreg[xregNAs[xregNAs[,2]==i,]] <- xreg[xregNonNAs[which(xregNonNAs[,2]==i)[1],,drop=FALSE]];
+                }
+                xregData <- model.frame(formulaProvided,data=as.data.frame(xreg));
+            }
             # Get the response variable, just in case it was transformed
             if(length(formulaProvided[[2]])>1){
                 y <- xregData[,1];
                 yInSample <- matrix(y[1:obsInSample],ncol=1);
                 if(holdout){
-                    yHoldout <- y[-c(1:obsInSample)];
+                    yHoldout <- matrix(y[-c(1:obsInSample)],ncol=1);
                 }
             }
+
+            #### Drop the variables with no variability and perfectly correlated
+            xregExpanded <- colnames(model.matrix(xregData,data=xregData));
+            # Remove intercept
+            if(any(xregExpanded=="(Intercept)")){
+                xregExpanded <- xregExpanded[-1];
+            }
+            if(any(!(xregExpanded %in% xregNames))){
+                xregNamesRetained <- rep(TRUE,length(xregNamesOriginal));
+                for(i in 1:length(xregNamesOriginal)){
+                    xregNamesRetained[i] <- any(grepl(xregNamesOriginal[i], xregNames));
+                }
+                # If the dropped variables are in the formula, update the formula
+                if(length(all.vars(formulaProvided))>2 &&
+                   any(all.vars(formulaProvided) %in% xregNamesOriginal[!xregNamesRetained])){
+                    formulaProvided <- update.formula(formulaProvided,
+                                                      paste0(".~.-",
+                                                             paste(xregNamesOriginal[!xregNamesRetained],
+                                                                   collapse="-")));
+                }
+                xregNamesOriginal <- c(responseName,xregNamesOriginal[xregNamesRetained]);
+                xregData <- model.frame(formulaProvided,data=as.data.frame(xreg[,xregNamesOriginal,drop=FALSE]));
+            }
+
             # Binary, flagging factors in the data
             xregFactors <- (attr(terms(xregData),"dataClasses")=="factor")[-1];
             # Expanded stuff with all levels for factors
@@ -1607,7 +1741,9 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
                 xregModelMatrix <- model.matrix(xregData,data=xregData);
                 xregNamesModified <- xregNames;
             }
+            # Drop the unused variables
             xregData <- as.matrix(xregModelMatrix);
+
             # Remove intercept
             interceptIsPresent <- FALSE;
             if(any(colnames(xregData)=="(Intercept)")){
@@ -1655,9 +1791,15 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
                                                                                xregFactorsLevels[[xregNameFound]])]] <- i;
                         # Get the index of the absent one
                         xregParametersMissing[i] <- i;
-                        # Fill in the absent one
-                        xregParametersNew[i] <- -sum(xregParametersNew[xregNamesModified[xregParametersIncluded==i]],
-                                                     na.rm=TRUE);
+                        # Fill in the absent one, add intercept
+                        xregParametersNew[i] <- almIntercept;
+                        xregParametersNew[xregNamesModified[xregParametersIncluded==i]] <- almIntercept +
+                            xregParametersNew[xregNamesModified[xregParametersIncluded==i]];
+                        # normalise all of them
+                        xregParametersNew[xregNamesModified[c(which(xregParametersIncluded==i),i)]] <-
+                            xregParametersNew[xregNamesModified[c(which(xregParametersIncluded==i),i)]] -
+                            mean(xregParametersNew[xregNamesModified[c(which(xregParametersIncluded==i),i)]]);
+
                     }
                     # Write down the new parameters
                     xregModelInitials[[1]]$initialXreg <- xregParametersNew;
@@ -1675,9 +1817,14 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
                                                                                xregFactorsLevels[[xregNameFound]])]] <- i;
                         # Get the index of the absent one
                         xregParametersMissing[i] <- i;
-                        # Fill in the absent one
-                        xregParametersNew[i] <- -sum(xregParametersNew[xregNamesModified[xregParametersIncluded==i]],
-                                                     na.rm=TRUE);
+                        # Fill in the absent one, add intercept
+                        xregParametersNew[i] <- almIntercept;
+                        xregParametersNew[xregNamesModified[xregParametersIncluded==i]] <- almIntercept +
+                            xregParametersNew[xregNamesModified[xregParametersIncluded==i]];
+                        # normalise all of them
+                        xregParametersNew[xregNamesModified[c(which(xregParametersIncluded==i),i)]] <-
+                            xregParametersNew[xregNamesModified[c(which(xregParametersIncluded==i),i)]] -
+                            mean(xregParametersNew[xregNamesModified[c(which(xregParametersIncluded==i),i)]]);
                     }
                     # Write down the new parameters
                     xregModelInitials[[2]]$initialXreg <- xregParametersNew;
@@ -1776,7 +1923,7 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
                     y <- xregData[,1];
                     yInSample <- matrix(y[1:obsInSample],ncol=1);
                     if(holdout){
-                        yHoldout <- y[-c(1:obsInSample)];
+                        yHoldout <- matrix(y[-c(1:obsInSample)],ncol=1);
                     }
                 }
 
@@ -2080,7 +2227,7 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
     # If the sample is smaller than the number of parameters
     if(obsNonzero <= nParamMax){
         # If there is both ETS and ARIMA, remove ARIMA
-        if(etsModel && arimaModel){
+        if(etsModel && arimaModel && !select){
             warning("We don't have enough observations to fit ETS with ARIMA terms. We will construct the simple ETS.",
                     call.=FALSE);
             lagsModelAll <- lagsModelAll[-c(componentsNumberETS+c(1:componentsNumberARIMA)),,drop=FALSE];
@@ -2091,7 +2238,7 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
             initialArimaNumber <- componentsNumberARIMA <- 0;
             lagsModelMax <- max(lagsModelAll);
         }
-        else if(arimaModel && !etsModel){
+        else if(arimaModel && !etsModel && !select){
             # If the backacasting helps, switch to it.
             if(initialType=="optimal" && (obsNonzero > (nParamMax - (initialType=="optimal")*initialArimaNumber))){
                 warning(paste0("The number of parameter to estimate is ",nParamMax,
@@ -2116,6 +2263,12 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
                 lagsModelMax <- max(lagsModelAll);
             }
         }
+    }
+
+    if(arimaModel && obsNonzero < initialArimaNumber && !select){
+        warning(paste0("In-sample size is ",obsNonzero,", while number of ARIMA components is ",initialArimaNumber,
+                       ". Cannot fit the model."),call.=FALSE)
+        stop("Not enough observations for such a complicated model.",call.=FALSE);
     }
 
     # Recalculate the number of parameters
@@ -2386,7 +2539,7 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
         if(any(lags>24) && arimaModel && initialType=="optimal"){
             warning(paste0("The estimation of ARIMA model with initial='optimal' on high frequency data might ",
                            "take more time to converge to the optimum. Consider either setting maxeval parameter ",
-                           "to a higher value (e.g. maxeval=10000, which will take ~25 times more time than this) ",
+                           "to a higher value (e.g. maxeval=10000, which will take ~25 times more than this) ",
                            "or using initial='backcasting'."),
                     call.=FALSE);
         }
@@ -2478,16 +2631,18 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
             other <- ellipsis$alpha;
             otherParameterEstimate <- FALSE;
         }
+        names(other) <- "alpha";
     }
     else if(any(distribution==c("dgnorm","dlgnorm"))){
-        if(is.null(ellipsis$beta)){
+        if(is.null(ellipsis$shape)){
             other <- 2
             otherParameterEstimate <- TRUE;
         }
         else{
-            other <- ellipsis$beta;
+            other <- ellipsis$shape;
             otherParameterEstimate <- FALSE;
         }
+        names(other) <- "shape";
     }
     else if(distribution=="dt"){
         if(is.null(ellipsis$nu)){
@@ -2498,6 +2653,7 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
             other <- ellipsis$nu;
             otherParameterEstimate <- FALSE;
         }
+        names(other) <- "nu";
     }
     # Fisher Information
     if(is.null(ellipsis$FI)){
@@ -2514,27 +2670,49 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
         stepSize <- ellipsis$stepSize;
     }
 
-    # See if the estimation of the model is not needed (do we estimate anything?)
-    if(!any(c(etsModel & c(persistenceLevelEstimate, persistenceTrendEstimate,
-                           persistenceSeasonalEstimate, phiEstimate,
-                           (initialType!="backcasting") & c(initialLevelEstimate,
-                                                            initialTrendEstimate,
-                                                            initialSeasonalEstimate)),
-              arimaModel & c(arEstimate, maEstimate, (initialType!="backcasting") & initialArimaEstimate),
-              xregModel & c(persistenceXregEstimate, (initialType!="backcasting") & initialXregEstimate),
-              otherParameterEstimate))){
-        modelDo <- "use";
+    # Add constant in the model
+    if(is.numeric(constant)){
+        constantRequired <- TRUE;
+        constantEstimate <- FALSE;
+        # This is just in case a vector was provided
+        constantValue <- constant[1];
+        if(any(iOrders!=0) || etsModel){
+            constantName <- "drift";
+        }
+        else{
+            constantName <- "constant";
+        }
+    }
+    else if(is.logical(constant)){
+        constantEstimate <- constantRequired <- constant;
+        constantValue <- NULL;
+        if(constantRequired){
+            if(any(iOrders!=0) || etsModel){
+                constantName <- "drift";
+            }
+            else{
+                constantName <- "constant";
+            }
+        }
+        else{
+            constantName <- NULL;
+        }
+    }
+    else{
+        warning("The parameter constant can only be TRUE or FALSE.",
+                "You have: ",constant,". Switching to FALSE",call.=FALSE);
+        constantEstimate <- constantRequired <- FALSE;
+        constantName <- NULL;
     }
 
     # If there is no model, return a constant level
     if(!etsModel && !arimaModel && !xregModel){
-        etsModel <- TRUE;
         modelsPool <- NULL;
-        persistenceLevel <- 0;
-        persistenceEstimate <- persistenceLevelEstimate <- FALSE;
-        initialLevel <- NULL;
-        initialType <- "provided";
-        initialEstimate <- initialLevelEstimate <- TRUE;
+        if(!constantRequired){
+            constantEstimate <- constantRequired <- TRUE;
+            constantName <- "constant";
+        }
+
         model <- "NNN";
         if(is.null(B)){
             modelDo <- "estimate";
@@ -2547,6 +2725,19 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
         phiEstimate <- FALSE;
         parametersNumber[1,1] <- 0;
         parametersNumber[2,1] <- 2;
+    }
+
+    # See if the estimation of the model is not needed (do we estimate anything?)
+    if(!any(c(etsModel & c(persistenceLevelEstimate, persistenceTrendEstimate,
+                           persistenceSeasonalEstimate, phiEstimate,
+                           (initialType!="backcasting") & c(initialLevelEstimate,
+                                                            initialTrendEstimate,
+                                                            initialSeasonalEstimate)),
+              arimaModel & c(arEstimate, maEstimate, (initialType!="backcasting") & initialArimaEstimate),
+              xregModel & c(persistenceXregEstimate, (initialType!="backcasting") & initialXregEstimate),
+              constantEstimate,
+              otherParameterEstimate))){
+        modelDo <- "use";
     }
 
     # Switch usual bounds to the admissible if there's no ETS - this speeds up ARIMA
@@ -2702,6 +2893,7 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
     assign("armaParameters",armaParameters,ParentEnvironment);
     assign("nonZeroARI",nonZeroARI,ParentEnvironment);
     assign("nonZeroMA",nonZeroMA,ParentEnvironment);
+    assign("select",select,ParentEnvironment);
 
     ### Explanatory variables
     assign("xregModel",xregModel,ParentEnvironment);
@@ -2716,6 +2908,12 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
     assign("xregParametersIncluded",xregParametersIncluded,ParentEnvironment);
     assign("xregParametersEstimated",xregParametersEstimated,ParentEnvironment);
     assign("xregParametersPersistence",xregParametersPersistence,ParentEnvironment);
+
+    ### Constant
+    assign("constantRequired",constantRequired,ParentEnvironment);
+    assign("constantEstimate",constantEstimate,ParentEnvironment);
+    assign("constantValue",constantValue,ParentEnvironment);
+    assign("constantName",constantName,ParentEnvironment);
 
     ### Ellipsis thingies
     # Optimisation related
@@ -2739,4 +2937,7 @@ parametersChecker <- function(data, model, lags, formulaProvided, orders, arma,
     assign("FI",FI,ParentEnvironment);
     # Step size for the hessian
     assign("stepSize",stepSize,ParentEnvironment);
+
+    # This stuff is needed for switch to auto.adam.
+    return(list(select=select));
 }

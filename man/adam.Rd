@@ -5,12 +5,13 @@
 \alias{auto.adam}
 \title{ADAM is Augmented Dynamic Adaptive Model}
 \usage{
-adam(data, model = "ZXZ", lags = c(1, frequency(data)), orders = list(ar
-  = c(0), i = c(0), ma = c(0)), formula = NULL, regressors = c("use",
-  "select", "adapt"), distribution = c("default", "dnorm", "dlaplace", "ds",
-  "dgnorm", "dalaplace", "dlnorm", "dinvgauss"), loss = c("likelihood",
-  "MSE", "MAE", "HAM", "LASSO", "RIDGE", "MSEh", "TMSE", "GTMSE", "MSCE"),
-  h = 0, holdout = FALSE, persistence = NULL, phi = NULL,
+adam(data, model = "ZXZ", lags = c(frequency(data)), orders = list(ar =
+  c(0), i = c(0), ma = c(0), select = FALSE), constant = FALSE,
+  formula = NULL, regressors = c("use", "select", "adapt"),
+  distribution = c("default", "dnorm", "dlaplace", "ds", "dgnorm",
+  "dalaplace", "dlnorm", "dinvgauss"), loss = c("likelihood", "MSE", "MAE",
+  "HAM", "LASSO", "RIDGE", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 0,
+  holdout = FALSE, persistence = NULL, phi = NULL,
   initial = c("optimal", "backcasting"), arma = NULL,
   occurrence = c("none", "auto", "fixed", "general", "odds-ratio",
   "inverse-odds-ratio", "direct"), ic = c("AICc", "AIC", "BIC", "BICc"),
@@ -85,17 +86,20 @@ assuming that the lags 1 were dropped.}
 either as a vector (in which case the non-seasonal ARIMA is assumed) or as a list of
 a type \code{orders=list(ar=c(p,P),i=c(d,D),ma=c(q,Q))}, in which case the \code{lags}
 variable is used in order to determine the seasonality m. See \link[smooth]{msarima}
-for details. Note that ARIMA here is mainly treated as an addition to the ETS model and
-does not allow constant / drift.
+for details.
+In addition, \code{orders} accepts one more parameter: \code{orders=list(select=FALSE)}.
+If \code{TRUE}, then the function will select the most appropriate order using a
+mechanism similar to \code{auto.msarima()}, but implemented in \code{auto.adam()}.
+The values \code{list(ar=...,i=...,ma=...)} specify the maximum orders to check in
+this case.}
 
-In case of \code{auto.adam()} function, \code{orders} accepts one more parameters:
-\code{orders=list(select=FALSE)}. If \code{TRUE}, then the function will select the most
-appropriate order using a mechanism similar to \code{auto.msarima()}. The values
-\code{list(ar=...,i=...,ma=...)} specify the maximum orders to check in this case.}
+\item{constant}{Logical, determining, whether the constant is needed in the model or not.
+This is mainly needed for ARIMA part of the model, but can be used for ETS as well. In
+case of pure regression, this is completely ignored (use \code{formula} instead).}
 
 \item{formula}{Formula to use in case of explanatory variables. If \code{NULL},
-then all the variables are used as is. Only considered if \code{data} is a matrix and
-\code{regressors="use"}.}
+then all the variables are used as is. Can also include \code{trend}, which would add
+the global trend. Only needed if \code{data} is a matrix or if \code{trend} is provided.}
 
 \item{regressors}{The variable defines what to do with the provided xreg:
 \code{"use"} means that all of the data should be used, while
@@ -218,7 +222,7 @@ to the number of parameters to estimate in the following order:
 You can also pass parameters to the optimiser in order to fine tune its work:
 \itemize{
 \item \code{maxeval} - maximum number of evaluations to carry out. The default is 40 per
-estimated parameter, at least 1000 if pure ARIMA is considered and at least 500 if
+estimated parameter for ETS, 80 per parameter for ARIMA and at least 500 if
 explanatory variables are introduced in the model;
 \item \code{maxtime} - stop, when the optimisation time (in seconds) exceeds this;
 \item \code{xtol_rel} - the relative precision of the optimiser (the default is 1E-6);
@@ -235,7 +239,7 @@ If equal to 41, then the detailed results of the optimisation are returned.
 You can read more about these parameters by running the function
 \link[nloptr]{nloptr.print.options}.
 Finally, the parameter \code{lambda} for LASSO / RIDGE, \code{alpha} for the Asymmetric
-Laplace, \code{beta} for the Generalised Normal and \code{nu} for Student's distributions
+Laplace, \code{shape} for the Generalised Normal and \code{nu} for Student's distributions
 can be provided here as well.}
 
 \item{outliers}{Defines what to do with outliers: \code{"ignore"}, so just returning the model,
@@ -277,6 +281,7 @@ and xreg components,
 the model,
 \item \code{initialType} - the type of initialisation used ("optimal" / "backcasting" / "provided"),
 \item \code{orders} - the orders of ARIMA used in the estimation,
+\item \code{constant} - the value of the constant (if it was included),
 \item \code{arma} - the list of AR / MA parameters used in the model,
 \item \code{nParam} - the matrix of the estimated / provided parameters,
 \item \code{occurrence} - the oes model used for the occurrence part of the model,
@@ -328,7 +333,7 @@ Inverse Gaussian is used for the Multiplicative error models.
 \item \link[stats]{Normal} - Normal distribution,
 \item \link[greybox]{dlaplace} - Laplace distribution,
 \item \link[greybox]{ds} - S distribution,
-\item dgnorm - Generalised Normal distribution,
+\item \link[greybox]{dgnorm} - Generalised Normal distribution,
 \item \link[greybox]{dalaplace} - Asymmetric Laplace distribution,
 \item \link[stats]{dlnorm} - Log normal distribution,
 \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
@@ -354,20 +359,21 @@ par(mfcol=c(3,4))
 plot(ourModel, c(1:11))
 
 # Model combination using a specified pool
-ourModel <- adam(rnorm(100,100,10), model=c("ANN","AAN","MNN","CCC"), lags=c(5,10))
+\dontrun{ourModel <- adam(rnorm(100,100,10), model=c("ANN","AAN","MNN","CCC"),
+                          lags=c(5,10))}
 
 # ADAM ARIMA
-ourModel <- adam(rnorm(100,100,10), model="NNN",
-                 lags=c(1,4), orders=list(ar=c(1,0),i=c(1,0),ma=c(1,1)))
+\dontrun{ourModel <- adam(rnorm(100,100,10), model="NNN",
+                          lags=c(1,4), orders=list(ar=c(1,0),i=c(1,0),ma=c(1,1)))}
 
-ourModel <- auto.adam(rnorm(100,100,10), model="ZZN", lags=c(1,4),
-                      orders=list(ar=c(2,2),ma=c(2,2),select=TRUE))
+\dontrun{ourModel <- auto.adam(rnorm(100,100,10), model="ZZN", lags=c(1,4),
+                      orders=list(ar=c(2,2),ma=c(2,2),select=TRUE))}
 
 }
 \references{
 \itemize{
 \item Svetunkov, I. (2020) Time Series Analysis and Forecasting with ADAM:
-Lancaster, UK. \url{https://openforecast.org/adam}.
+Lancaster, UK. \url{https://openforecast.org/adam/}.
 }
 
 \itemize{
@@ -375,7 +381,7 @@ Lancaster, UK. \url{https://openforecast.org/adam}.
 Journal of the Royal Statistical Society, Series B (Methodological) 47 (2), 272-276.
 \item Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 Forecasting with exponential smoothing: the state space approach,
-Springer-Verlag. \url{http://dx.doi.org/10.1007/978-3-540-71918-2}.
+Springer-Verlag. \doi{10.1007/978-3-540-71918-2}.
 }
 
 \itemize{
@@ -403,7 +409,7 @@ Generating Prediction Intervals. Management Science, Vol 45, No 2, pp
 \item Lichtendahl Kenneth C., Jr., Grushka-Cockayne Yael, Winkler
 Robert L., (2013) Is It Better to Average Probabilities or
 Quantiles? Management Science 59(7):1594-1611. DOI:
-[10.1287/mnsc.1120.1667](https://doi.org/10.1287/mnsc.1120.1667)
+\doi{10.1287/mnsc.1120.1667}
 }
 }
 \seealso{

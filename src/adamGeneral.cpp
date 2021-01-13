@@ -12,7 +12,7 @@ List adamFitter(arma::mat &matrixVt, arma::mat const &matrixWt, arma::mat const 
                 arma::uvec &lags, arma::umat const &profilesObserved, arma::mat profilesRecent,
                 char const &E, char const &T, char const &S,
                 unsigned int const &nNonSeasonal, unsigned int const &nSeasonal,
-                unsigned int const &nArima, unsigned int const &nXreg,
+                unsigned int const &nArima, unsigned int const &nXreg, bool const &constant,
                 arma::vec const &vectorYt, arma::vec const &vectorOt, bool const &backcast){
     /* # matrixVt should have a length of obs + lagsModelMax.
      * # matrixWt is a matrix with nrows = obs
@@ -39,19 +39,22 @@ List adamFitter(arma::mat &matrixVt, arma::mat const &matrixWt, arma::mat const 
     for (unsigned int j=1; j<nIterations; j=j+1) {
 
         // Refine the head (in order for it to make sense)
-        for (int i=0; i<lagsModelMax; i=i+1) {
-            profilesRecent(profilesObserved.col(i)) = adamFvalue(profilesRecent(profilesObserved.col(i)),
-                           matrixF, E, T, S, nETS, nNonSeasonal, nSeasonal, nArima, nComponents);
-            matrixVt.col(i) = profilesRecent(profilesObserved.col(i));
+        // This is only needed for ETS(*,Z,*) models, with trend.
+        if(!backcast){
+            for (int i=0; i<lagsModelMax; i=i+1) {
+                profilesRecent(profilesObserved.col(i)) = adamFvalue(profilesRecent(profilesObserved.col(i)),
+                               matrixF, E, T, S, nETS, nNonSeasonal, nSeasonal, nArima, nComponents);
+                matrixVt.col(i) = profilesRecent(profilesObserved.col(i));
+            }
         }
         ////// Run forward
         // Loop for the model construction
         for (int i=lagsModelMax; i<obs+lagsModelMax; i=i+1) {
 
             /* # Measurement equation and the error term */
-            vecYfit(i-lagsModelMax) = adamWvalue(profilesRecent(profilesObserved.col(i-lagsModelMax)),
+            vecYfit(i-lagsModelMax) = adamWvalue(profilesRecent(profilesObserved.col(i)),
                     matrixWt.row(i-lagsModelMax), E, T, S,
-                    nETS, nNonSeasonal, nSeasonal, nArima, nXreg, nComponents);
+                    nETS, nNonSeasonal, nSeasonal, nArima, nXreg, nComponents, constant);
 
             // Failsafe for fitted becoming Infinite
             // if((E=='M') && !vecYfit.row(i-lagsModelMax).is_finite()){
@@ -67,9 +70,9 @@ List adamFitter(arma::mat &matrixVt, arma::mat const &matrixWt, arma::mat const 
             }
 
             /* # Transition equation */
-            profilesRecent(profilesObserved.col(i-lagsModelMax)) = adamFvalue(profilesRecent(profilesObserved.col(i-lagsModelMax)),
+            profilesRecent(profilesObserved.col(i)) = adamFvalue(profilesRecent(profilesObserved.col(i)),
                            matrixF, E, T, S, nETS, nNonSeasonal, nSeasonal, nArima, nComponents) +
-                adamGvalue(profilesRecent(profilesObserved.col(i-lagsModelMax)), matrixF, matrixWt.row(i-lagsModelMax), E, T, S,
+                adamGvalue(profilesRecent(profilesObserved.col(i)), matrixF, matrixWt.row(i-lagsModelMax), E, T, S,
                            nETS, nNonSeasonal, nSeasonal, nArima, nXreg, nComponents, vectorG, vecErrors(i-lagsModelMax));
 
             // Failsafe for cases, when nan values appear
@@ -91,7 +94,7 @@ List adamFitter(arma::mat &matrixVt, arma::mat const &matrixWt, arma::mat const 
             //     }
             // }
 
-            matrixVt.col(i) = profilesRecent(profilesObserved.col(i-lagsModelMax));
+            matrixVt.col(i) = profilesRecent(profilesObserved.col(i));
         }
 
         ////// Backwards run
@@ -99,8 +102,9 @@ List adamFitter(arma::mat &matrixVt, arma::mat const &matrixWt, arma::mat const 
 
             for (int i=obs+lagsModelMax-1; i>=lagsModelMax; i=i-1) {
                 /* # Measurement equation and the error term */
-                vecYfit(i-lagsModelMax) = adamWvalue(profilesRecent(profilesObserved.col(i-lagsModelMax)),
-                        matrixWt.row(i-lagsModelMax), E, T, S, nETS, nNonSeasonal, nSeasonal, nArima, nXreg, nComponents);
+                vecYfit(i-lagsModelMax) = adamWvalue(profilesRecent(profilesObserved.col(i)),
+                        matrixWt.row(i-lagsModelMax), E, T, S,
+                        nETS, nNonSeasonal, nSeasonal, nArima, nXreg, nComponents, constant);
 
                 // Failsafe for fitted becoming negative in mixed models
                 // if((E=='M') && (vecYfit(i-lagsModelMax)<0)){
@@ -116,9 +120,9 @@ List adamFitter(arma::mat &matrixVt, arma::mat const &matrixWt, arma::mat const 
                 }
 
                 /* # Transition equation */
-                profilesRecent(profilesObserved.col(i-lagsModelMax)) = adamFvalue(profilesRecent(profilesObserved.col(i-lagsModelMax)),
+                profilesRecent(profilesObserved.col(i)) = adamFvalue(profilesRecent(profilesObserved.col(i)),
                                matrixF, E, T, S, nETS, nNonSeasonal, nSeasonal, nArima, nComponents) +
-                                   adamGvalue(profilesRecent(profilesObserved.col(i-lagsModelMax)), matrixF,
+                                   adamGvalue(profilesRecent(profilesObserved.col(i)), matrixF,
                                               matrixWt.row(i-lagsModelMax), E, T, S,
                                               nETS, nNonSeasonal, nSeasonal, nArima, nXreg, nComponents, vectorG,
                                               vecErrors(i-lagsModelMax));
@@ -145,7 +149,7 @@ List adamFitter(arma::mat &matrixVt, arma::mat const &matrixWt, arma::mat const 
                 //     }
                 // }
 
-                matrixVt.col(i) = profilesRecent(profilesObserved.col(i-lagsModelMax));
+                // matrixVt.col(i) = profilesRecent(profilesObserved.col(i));
             }
 
             // Fill in the head of the series
@@ -181,7 +185,7 @@ RcppExport SEXP adamFitterWrap(SEXP matVt, SEXP matWt, SEXP matF, SEXP vecG,
                                SEXP lagsModelAll, SEXP profilesObservedTable, SEXP profilesRecentTable,
                                SEXP Etype, SEXP Ttype, SEXP Stype,
                                SEXP componentsNumberETS, SEXP componentsNumberETSSeasonal,
-                               SEXP componentsNumberArima, SEXP xregNumber,
+                               SEXP componentsNumberArima, SEXP xregNumber, SEXP constantRequired,
                                SEXP yInSample, SEXP ot, SEXP backcasting){
 
     NumericMatrix matvt_n(matVt);
@@ -215,6 +219,7 @@ RcppExport SEXP adamFitterWrap(SEXP matVt, SEXP matWt, SEXP matF, SEXP vecG,
     unsigned int nNonSeasonal = as<int>(componentsNumberETS) - nSeasonal;
     unsigned int nArima = as<int>(componentsNumberArima);
     unsigned int nXreg = as<int>(xregNumber);
+    bool constant = as<bool>(constantRequired);
 
     NumericMatrix yt_n(yInSample);
     arma::vec vectorYt(yt_n.begin(), yt_n.nrow(), false);
@@ -226,7 +231,7 @@ RcppExport SEXP adamFitterWrap(SEXP matVt, SEXP matWt, SEXP matF, SEXP vecG,
 
     return wrap(adamFitter(matrixVt, matrixWt, matrixF, vectorG,
                            lags, profilesObserved, profilesRecent, E, T, S,
-                           nNonSeasonal, nSeasonal, nArima, nXreg,
+                           nNonSeasonal, nSeasonal, nArima, nXreg, constant,
                            vectorYt, vectorOt, backcast));
 }
 
@@ -236,7 +241,7 @@ arma::vec adamForecaster(arma::mat const &matrixWt, arma::mat const &matrixF,
                          arma::uvec lags, arma::umat const &profilesObserved, arma::mat profilesRecent,
                          char const &E, char const &T, char const &S,
                          unsigned int const &nNonSeasonal, unsigned int const &nSeasonal,
-                         unsigned int const &nArima, unsigned int const &nXreg,
+                         unsigned int const &nArima, unsigned int const &nXreg, bool const &constant,
                          unsigned int const &horizon){
     // unsigned int lagslength = lags.n_rows;
     unsigned int nETS = nNonSeasonal + nSeasonal;
@@ -247,7 +252,7 @@ arma::vec adamForecaster(arma::mat const &matrixWt, arma::mat const &matrixF,
     /* # Fill in the new xt matrix using F. Do the forecasts. */
     for (unsigned int i=0; i<horizon; i=i+1) {
         vecYfor.row(i) = adamWvalue(profilesRecent(profilesObserved.col(i)), matrixWt.row(i), E, T, S,
-                    nETS, nNonSeasonal, nSeasonal, nArima, nXreg, nComponents);
+                    nETS, nNonSeasonal, nSeasonal, nArima, nXreg, nComponents, constant);
 
         profilesRecent(profilesObserved.col(i)) = adamFvalue(profilesRecent(profilesObserved.col(i)),
                        matrixF, E, T, S, nETS, nNonSeasonal, nSeasonal, nArima, nComponents);
@@ -263,7 +268,7 @@ RcppExport SEXP adamForecasterWrap(SEXP matWt, SEXP matF,
                                    SEXP lagsModelAll, SEXP profilesObservedTable, SEXP profilesRecentTable,
                                    SEXP Etype, SEXP Ttype, SEXP Stype,
                                    SEXP componentsNumberETS, SEXP componentsNumberETSSeasonal,
-                                   SEXP componentsNumberArima, SEXP xregNumber,
+                                   SEXP componentsNumberArima, SEXP xregNumber, SEXP constantRequired,
                                    SEXP h){
 
     NumericMatrix matWt_n(matWt);
@@ -291,6 +296,7 @@ RcppExport SEXP adamForecasterWrap(SEXP matWt, SEXP matF,
     unsigned int nNonSeasonal = as<int>(componentsNumberETS) - nSeasonal;
     unsigned int nArima = as<int>(componentsNumberArima);
     unsigned int nXreg = as<int>(xregNumber);
+    bool constant = as<bool>(constantRequired);
 
     unsigned int horizon = as<int>(h);
 
@@ -298,7 +304,7 @@ RcppExport SEXP adamForecasterWrap(SEXP matWt, SEXP matF,
                                lags, profilesObserved, profilesRecent,
                                E, T, S,
                                nNonSeasonal, nSeasonal,
-                               nArima, nXreg,
+                               nArima, nXreg, constant,
                                horizon));
 }
 
@@ -307,7 +313,7 @@ arma::mat adamErrorer(arma::mat const &matrixVt, arma::mat const &matrixWt, arma
                       arma::uvec &lags, arma::umat const &profilesObserved, arma::mat profilesRecent,
                       char const &E, char const &T, char const &S,
                       unsigned int const &nNonSeasonal, unsigned int const &nSeasonal,
-                      unsigned int const &nArima, unsigned int const &nXreg,
+                      unsigned int const &nArima, unsigned int const &nXreg, bool const &constant,
                       unsigned int const &horizon,
                       arma::vec const &vectorYt, arma::vec const &vectorOt){
     unsigned int obs = vectorYt.n_rows;
@@ -323,7 +329,7 @@ arma::mat adamErrorer(arma::mat const &matrixVt, arma::mat const &matrixWt, arma
         matErrors.submat(0, i, hh-1, i) = (errorvf(vectorYt.rows(i, i+hh-1),
                                            adamForecaster(matrixWt.rows(i,i+hh-1), matrixF,
                                                           lags, profilesObserved.cols(i,i+hh-1), profilesRecent,
-                                                          E, T, S, nNonSeasonal, nSeasonal, nArima, nXreg, hh), E));
+                                                          E, T, S, nNonSeasonal, nSeasonal, nArima, nXreg, constant, hh), E));
     }
 
     // Cut-off the redundant last part
@@ -345,7 +351,7 @@ RcppExport SEXP adamErrorerWrap(SEXP matVt, SEXP matWt, SEXP matF,
                                 SEXP lagsModelAll, SEXP profilesObservedTable, SEXP profilesRecentTable,
                                 SEXP Etype, SEXP Ttype, SEXP Stype,
                                 SEXP componentsNumberETS, SEXP componentsNumberETSSeasonal,
-                                SEXP componentsNumberArima, SEXP xregNumber,
+                                SEXP componentsNumberArima, SEXP xregNumber, SEXP constantRequired,
                                 SEXP h, SEXP yInSample, SEXP ot){
 
     NumericMatrix matvt_n(matVt);
@@ -376,6 +382,7 @@ RcppExport SEXP adamErrorerWrap(SEXP matVt, SEXP matWt, SEXP matF,
     unsigned int nNonSeasonal = as<int>(componentsNumberETS) - nSeasonal;
     unsigned int nArima = as<int>(componentsNumberArima);
     unsigned int nXreg = as<int>(xregNumber);
+    bool constant = as<bool>(constantRequired);
 
     unsigned int horizon = as<int>(h);
 
@@ -388,6 +395,6 @@ RcppExport SEXP adamErrorerWrap(SEXP matVt, SEXP matWt, SEXP matF,
     return wrap(adamErrorer(matrixVt, matrixWt, matrixF,
                             lags, profilesObserved, profilesRecent,
                             E, T, S,
-                            nNonSeasonal, nSeasonal, nArima, nXreg,
+                            nNonSeasonal, nSeasonal, nArima, nXreg, constant,
                             horizon, vectorYt, vectorOt));
 }
