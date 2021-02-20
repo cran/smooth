@@ -25,14 +25,12 @@ included in the package:
 ces(), gum(), ssarima() and sma() functions.
 \item \link[smooth]{cma} - Centered Moving Average. This is for smoothing time series,
 not for forecasting.
-\item \link[smooth]{ves} - Vector Exponential Smoothing.
 \item \link[smooth]{sim.es} - simulate time series using ETS as a model.
 \item \link[smooth]{sim.ces} - simulate time series using CES as a model.
 \item \link[smooth]{sim.ssarima} - simulate time series using SARIMA as a model.
 \item \link[smooth]{sim.gum} - simulate time series using GUM as a model.
 \item \link[smooth]{sim.sma} - simulate time series using SMA.
 \item \link[smooth]{oes} - occurrence part of the intermittent state space model.
-\item \link[smooth]{viss} - Does the same as iss, but for the multivariate models.
 }
 There are also several methods implemented in the package for the classes
 "smooth" and "smooth.sim":
@@ -118,7 +116,7 @@ Quantiles? Management Science 59(7):1594-1611. DOI:
 }
 }
 \seealso{
-\code{\link[forecast:forecast]{forecast}, \link[smooth]{es},
+\code{\link[greybox]{forecast}, \link[smooth]{es},
 \link[smooth]{ssarima}, \link[smooth]{ces}, \link[smooth]{gum}}
 }
 \author{

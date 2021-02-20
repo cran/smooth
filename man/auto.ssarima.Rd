@@ -7,8 +7,8 @@
 auto.ssarima(y, orders = list(ar = c(3, 3), i = c(2, 1), ma = c(3, 3)),
   lags = c(1, frequency(y)), combine = FALSE, fast = TRUE,
   constant = NULL, initial = c("backcasting", "optimal"), ic = c("AICc",
-  "AIC", "BIC", "BICc"), loss = c("MSE", "MAE", "HAM", "MSEh", "TMSE",
-  "GTMSE", "MSCE"), h = 10, holdout = FALSE, cumulative = FALSE,
+  "AIC", "BIC", "BICc"), loss = c("likelihood", "MSE", "MAE", "HAM", "MSEh",
+  "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE, cumulative = FALSE,
   interval = c("none", "parametric", "likelihood", "semiparametric",
   "nonparametric"), level = 0.95, bounds = c("admissible", "none"),
   silent = c("all", "graph", "legend", "output", "none"), xreg = NULL,
@@ -211,7 +211,7 @@ International Journal of Production Research, 0(0), 1–10.
 }
 }
 \seealso{
-\code{\link[forecast]{ets}, \link[smooth]{es}, \link[smooth]{ces},
+\code{\link[smooth]{es}, \link[smooth]{ces},
 \link[smooth]{sim.es}, \link[smooth]{gum}, \link[smooth]{ssarima}}
 }
 \author{

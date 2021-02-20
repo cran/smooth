@@ -50,13 +50,6 @@ test_that("ADAM forecast with simulated interval", {
 
 
 #### Advanced losses for ADAM ####
-# ADAM with dalaplace
-test_that("ADAM ETS(MAN) with asymmetric Laplace on N1234", {
-    skip_on_cran()
-    testModel <- adam(Mcomp::M3[[1234]], "MAN", distribution="dalaplace", alpha=0.05)
-    expect_match(testModel$distribution, "dalaplace")
-})
-
 # ADAM with GN distribution
 test_that("ADAM ETS(MAN) with Generalised Normal on N1234", {
     skip_on_cran()
@@ -218,7 +211,7 @@ test_that("Forecast for ADAM ETSX(MMN) + xreg formula on N2568", {
 # Pure regression
 test_that("ADAM regression (ALM) on N2568", {
     skip_on_cran()
-    testModel <- adam(xreg, "NNN", h=18, holdout=TRUE, formula=y~x)
+    testModel <- adam(xreg, "NNN", h=18, holdout=TRUE, formula=y~x+trend, distribution="dlnorm")
     expect_equal(modelType(testModel),"NNN")
 })
 
@@ -469,7 +462,7 @@ test_that("Detect outliers for ARIMA on N291", {
     skip_on_cran()
     testModel <- auto.adam(Mcomp::M1[[291]], "NNN", orders=list(ar=c(3,2),i=c(2,1),ma=c(3,2),select=TRUE),
                            outliers="use")
-    expect_equal(ncol(testModel$data),2)
+    expect_match(modelType(testModel),"NNN")
 })
 
 # Best ETS+ARIMA+Regression on the 2568

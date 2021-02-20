@@ -1,8 +1,8 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using State Space Models
-Version: 3.0.1
-Date: 2021-01-12
+Version: 3.1.0
+Date: 2021-02-19
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
 URL: https://github.com/config-i1/smooth
@@ -17,19 +17,19 @@ Description: Functions implementing Single Source of Error state space models fo
              several simulation functions and intermittent demand state space models. It also allows dealing with
              intermittent demand based on the iETS framework (Svetunkov & Boylan, 2017, <doi: 10.13140/RG.2.2.35897.06242>).
 License: GPL (>= 2)
-Depends: R (>= 3.0.2), greybox (>= 0.6.5)
-Imports: Rcpp (>= 0.12.3), stats, graphics, grDevices, forecast (>=
-        7.0), pracma, statmod, MASS, nloptr, utils, zoo
+Depends: R (>= 3.0.2), greybox (>= 0.6.7)
+Imports: Rcpp (>= 0.12.3), stats, graphics, grDevices, pracma, statmod,
+        MASS, nloptr, utils, zoo
 LinkingTo: Rcpp, RcppArmadillo (>= 0.8.100.0.0)
-Suggests: Mcomp, numDeriv, testthat, knitr, rmarkdown, doMC,
-        doParallel, foreach
+Suggests: Mcomp, forecast (>= 7.0), numDeriv, testthat, knitr,
+        rmarkdown, doMC, doParallel, foreach
 VignetteBuilder: knitr
 RoxygenNote: 7.1.1
 Encoding: UTF-8
 NeedsCompilation: yes
-Packaged: 2021-01-12 23:07:09 UTC; config
+Packaged: 2021-02-19 16:55:03 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2021-01-13 10:50:05 UTC
+Date/Publication: 2021-02-20 05:50:02 UTC

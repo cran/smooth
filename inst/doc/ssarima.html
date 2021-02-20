@@ -12,49 +12,10 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2021-01-12" />
+<meta name="date" content="2021-02-19" />
 
 <title>ssarima() - State-Space ARIMA</title>
 
-<style type="text/css">
-a.anchor-section {margin-left: 10px; visibility: hidden; color: inherit;}
-a.anchor-section::before {content: '#';}
-.hasAnchor:hover a.anchor-section {visibility: visible;}
-</style>
-<script>// Anchor sections v1.0 written by Atsushi Yasumoto on Oct 3rd, 2020.
-document.addEventListener('DOMContentLoaded', function() {
-  // Do nothing if AnchorJS is used
-  if (typeof window.anchors === 'object' && anchors.hasOwnProperty('hasAnchorJSLink')) {
-    return;
-  }
-
-  const h = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-
-  // Do nothing if sections are already anchored
-  if (Array.from(h).some(x => x.classList.contains('hasAnchor'))) {
-    return null;
-  }
-
-  // Use section id when pandoc runs with --section-divs
-  const section_id = function(x) {
-    return ((x.classList.contains('section') || (x.tagName === 'SECTION'))
-            ? x.id : '');
-  };
-
-  // Add anchors
-  h.forEach(function(x) {
-    const id = x.id || section_id(x.parentElement);
-    if (id === '') {
-      return null;
-    }
-    let anchor = document.createElement('a');
-    anchor.href = '#' + id;
-    anchor.classList = ['anchor-section'];
-    x.classList.add('hasAnchor');
-    x.appendChild(anchor);
-  });
-});
-</script>
 
 <style type="text/css">
   code{white-space: pre-wrap;}
@@ -152,6 +113,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
   }
 })();
 </script>
+
 
 
 
@@ -349,7 +311,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">ssarima() - State-Space ARIMA</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2021-01-12</h4>
+<h4 class="date">2021-02-19</h4>
 
 
 
@@ -407,7 +369,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <p>This would construct us seasonal ARIMA(0,1,1)(1,0,1)<span class="math inline">\(_{12}\)</span>.</p>
 <p>We could try selecting orders manually, but this can also be done automatically via <code>auto.ssarima()</code> function:</p>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb6-1" data-line-number="1"><span class="kw">auto.ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 1.91 seconds
+<pre><code>## Time elapsed: 2.07 seconds
 ## Model estimated: SARIMA(0,1,2)[1](0,0,3)[12]
 ## Matrix of MA terms:
 ##         Lag 1 Lag 12
@@ -416,7 +378,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## MA(3)  0.0000 0.0494
 ## Initial values were produced using backcasting.
 ## 
-## Loss function type: MSE; Loss function value: 3183490.065
+## Loss function type: likelihood; Loss function value: 1024.1535
 ## Error standard deviation: 1832.683
 ## Sample size: 115
 ## Number of estimated parameters: 6
@@ -426,7 +388,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## 2060.307 2061.085 2076.777 2078.622</code></pre>
 <p>Automatic order selection in SSARIMA with optimised initials does not work well and in general is not recommended. This is partially because of the possible high number of parameters in some models and partially because of potential overfitting of first observations when non-zero order of AR is selected. This problem can be seen on example of another time series (which has complicated seasonality):</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb8-1" data-line-number="1"><span class="kw">auto.ssarima</span>(M3<span class="op">$</span>N1683<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">initial=</span><span class="st">&quot;backcasting&quot;</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 3.26 seconds
+<pre><code>## Time elapsed: 2.92 seconds
 ## Model estimated: SARIMA(0,0,3)[1](3,1,3)[12]
 ## Matrix of AR terms:
 ##        Lag 12
@@ -440,7 +402,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## MA(3) 0.2224 -0.9547
 ## Initial values were produced using backcasting.
 ## 
-## Loss function type: MSE; Loss function value: 76412.9453
+## Loss function type: likelihood; Loss function value: 760.4164
 ## Error standard deviation: 290.1899
 ## Sample size: 108
 ## Number of estimated parameters: 10
@@ -449,7 +411,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ##      AIC     AICc      BIC     BICc 
 ## 1540.833 1543.101 1567.654 1572.964</code></pre>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb10-1" data-line-number="1"><span class="kw">auto.ssarima</span>(M3<span class="op">$</span>N1683<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">initial=</span><span class="st">&quot;optimal&quot;</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 3.83 seconds
+<pre><code>## Time elapsed: 4 seconds
 ## Model estimated: ARIMA(0,0,3) with constant
 ## Matrix of MA terms:
 ##        Lag 1
@@ -459,7 +421,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## Constant value is: 3786.8136
 ## Initial values were optimised.
 ## 
-## Loss function type: MSE; Loss function value: 169345.8886
+## Loss function type: likelihood; Loss function value: 803.3891
 ## Error standard deviation: 427.6606
 ## Sample size: 108
 ## Number of estimated parameters: 8
@@ -495,26 +457,26 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb15-1" data-line-number="1">ourModel &lt;-<span class="st"> </span><span class="kw">auto.ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">xreg=</span>x)</a></code></pre></div>
 <p>we can then reuse it:</p>
 <div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb16-1" data-line-number="1"><span class="kw">ssarima</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">model=</span>ourModel, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">FALSE</span>, <span class="dt">xreg=</span>x, <span class="dt">interval=</span><span class="ot">TRUE</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.13 seconds
+<pre><code>## Time elapsed: 0.11 seconds
 ## Model estimated: SARIMAX(0,0,2)[1](0,0,3)[12] with constant
 ## Matrix of MA terms:
 ##        Lag 1 Lag 12
-## MA(1) 0.4970 0.1406
-## MA(2) 0.4818 0.2913
-## MA(3) 0.0000 0.1752
-## Constant value is: 1787.4103
+## MA(1) 0.5216 0.1451
+## MA(2) 0.4895 0.3163
+## MA(3) 0.0000 0.1818
+## Constant value is: 231.1825
 ## Initial values were provided by user.
 ## Xreg coefficients were estimated in a normal style
 ## 
-## Loss function type: likelihood; Loss function value: 1059.0352
-## Error standard deviation: 2427.045
+## Loss function type: likelihood; Loss function value: 1057.913
+## Error standard deviation: 2403.478
 ## Sample size: 115
 ## Number of estimated parameters: 1
 ## Number of provided parameters: 46
 ## Number of degrees of freedom: 114
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
-## 2120.070 2120.106 2122.815 2122.899 
+## 2117.826 2117.861 2120.571 2120.655 
 ## 
 ## 95% parametric prediction interval was constructed</code></pre>
 <p>Finally, we can combine several SARIMA models:</p>

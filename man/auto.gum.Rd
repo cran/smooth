@@ -6,8 +6,8 @@
 \usage{
 auto.gum(y, orders = 3, lags = frequency(y), type = c("additive",
   "multiplicative", "select"), initial = c("backcasting", "optimal"),
-  ic = c("AICc", "AIC", "BIC", "BICc"), loss = c("MSE", "MAE", "HAM",
-  "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
+  ic = c("AICc", "AIC", "BIC", "BICc"), loss = c("likelihood", "MSE",
+  "MAE", "HAM", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 10, holdout = FALSE,
   cumulative = FALSE, interval = c("none", "parametric", "likelihood",
   "semiparametric", "nonparametric"), level = 0.95,
   bounds = c("restricted", "admissible", "none"), silent = c("all",
@@ -180,7 +180,7 @@ estimates. International Journal of Forecasting, 21(2), 303-314.
 }
 }
 \seealso{
-\code{\link[smooth]{gum}, \link[forecast]{ets}, \link[smooth]{es},
+\code{\link[smooth]{gum}, \link[smooth]{es},
 \link[smooth]{ces}, \link[smooth]{sim.es}, \link[smooth]{ssarima}}
 }
 \author{

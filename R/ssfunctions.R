@@ -725,6 +725,13 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
         bounds <- "a";
     }
 
+    if(bounds=="n"){
+        warning("You have defined bounds='none'. ",
+                "This is dangerous and might lead to an unstable model or even break the function. ",
+                "Hopefully, you know what you are doing :).",
+                call.=FALSE);
+    }
+
     ##### Information Criteria #####
     ic <- ic[1];
     if(all(ic!=c("AICc","AIC","BIC","BICc"))){
@@ -1658,6 +1665,13 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.gum","auto.ssarima","auto.
         bounds <- "a";
     }
 
+    if(bounds=="n"){
+        warning("You have defined bounds='none'. ",
+                "This is dangerous and might lead to an unstable model or even break the function. ",
+                "Hopefully, you know what you are doing :).",
+                call.=FALSE);
+    }
+
     ##### Information Criteria #####
     ic <- ic[1];
     if(all(ic!=c("AICc","AIC","BIC","BICc"))){
@@ -1683,9 +1697,9 @@ ssAutoInput <- function(smoothType=c("auto.ces","auto.gum","auto.ssarima","auto.
         multisteps <- FALSE;
     }
 
-    if(!any(loss==c("MSE","MAE","HAM","MSEh","MAEh","HAMh","MSCE","MACE","CHAM",
+    if(!any(loss==c("likelihood","MSE","MAE","HAM","MSEh","MAEh","HAMh","MSCE","MACE","CHAM",
                       "GPL","aGPL"))){
-        warning(paste0("'",loss,"' is used as loss function instead of 'MSE'. ",
+        warning(paste0("'",loss,"' is used as loss function instead of 'likelihood'. ",
                        "The results of the model selection may be wrong."),
                 call.=FALSE);
     }

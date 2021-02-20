@@ -27,7 +27,7 @@
 #' }
 #' \code{lags()} returns the vector of lags of the model.
 #' All the other functions return strings of character.
-#' @seealso \link[forecast]{forecast}, \link[smooth]{ssarima}
+#' @seealso \link[smooth]{ssarima}, \link[smooth]{msarima}
 #' @examples
 #'
 #' x <- rnorm(100,0,1)
@@ -679,10 +679,6 @@ fitted.smooth.forecast <- function(object, ...){
     return(fitted(object$model));
 }
 
-#' @importFrom forecast forecast
-#' @export forecast
-NULL
-
 #' Forecasting time series using smooth functions
 #'
 #' This function is created in order for the package to be compatible with Rob
@@ -716,7 +712,7 @@ NULL
 #' \item \code{interval} - binary variable (whether interval were produced or not).
 #' }
 #' @template ssAuthor
-#' @seealso \code{\link[forecast]{ets}, \link[forecast]{forecast}}
+#' @seealso \code{\link[greybox]{forecast}}
 #' @references Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 #' Forecasting with exponential smoothing: the state space approach,
 #' Springer-Verlag.
@@ -725,12 +721,12 @@ NULL
 #'
 #' ourModel <- ces(rnorm(100,0,1),h=10)
 #'
-#' forecast.smooth(ourModel,h=10)
-#' forecast.smooth(ourModel,h=10,interval=TRUE)
-#' plot(forecast.smooth(ourModel,h=10,interval=TRUE))
+#' forecast(ourModel,h=10)
+#' forecast(ourModel,h=10,interval=TRUE)
+#' plot(forecast(ourModel,h=10,interval=TRUE))
 #'
 #' @rdname forecast.smooth
-#' @export forecast.smooth
+#' @importFrom greybox forecast
 #' @export
 forecast.smooth <- function(object, h=10,
                             interval=c("parametric","semiparametric","nonparametric","none"),
@@ -1545,6 +1541,18 @@ plot.smooth <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         ellipsis <- list(...);
 
         ellipsis$actuals <- actuals(x);
+        if(!is.null(x$holdout)){
+            yHoldout <- x$holdout;
+            if(is.zoo(ellipsis$actuals)){
+                ellipsis$actuals <- zoo(c(as.vector(ellipsis$actuals),as.vector(yHoldout)),
+                                        order.by=c(time(ellipsis$actuals),time(yHoldout)));
+            }
+            else{
+                ellipsis$actuals <- ts(c(ellipsis$actuals,yHoldout),
+                                       start=start(ellipsis$actuals),
+                                       frequency=frequency(ellipsis$actuals));
+            }
+        }
         if(is.null(ellipsis$main)){
             ellipsis$main <- x$model;
         }

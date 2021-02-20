@@ -8,25 +8,26 @@
 adam(data, model = "ZXZ", lags = c(frequency(data)), orders = list(ar =
   c(0), i = c(0), ma = c(0), select = FALSE), constant = FALSE,
   formula = NULL, regressors = c("use", "select", "adapt"),
-  distribution = c("default", "dnorm", "dlaplace", "ds", "dgnorm",
-  "dalaplace", "dlnorm", "dinvgauss"), loss = c("likelihood", "MSE", "MAE",
-  "HAM", "LASSO", "RIDGE", "MSEh", "TMSE", "GTMSE", "MSCE"), h = 0,
-  holdout = FALSE, persistence = NULL, phi = NULL,
-  initial = c("optimal", "backcasting"), arma = NULL,
+  outliers = c("ignore", "use", "select"), level = 0.99,
   occurrence = c("none", "auto", "fixed", "general", "odds-ratio",
-  "inverse-odds-ratio", "direct"), ic = c("AICc", "AIC", "BIC", "BICc"),
-  bounds = c("usual", "admissible", "none"), silent = TRUE, ...)
+  "inverse-odds-ratio", "direct"), distribution = c("default", "dnorm",
+  "dlaplace", "ds", "dgnorm", "dlnorm", "dinvgauss", "dgamma"),
+  loss = c("likelihood", "MSE", "MAE", "HAM", "LASSO", "RIDGE", "MSEh",
+  "TMSE", "GTMSE", "MSCE"), h = 0, holdout = FALSE, persistence = NULL,
+  phi = NULL, initial = c("optimal", "backcasting"), arma = NULL,
+  ic = c("AICc", "AIC", "BIC", "BICc"), bounds = c("usual", "admissible",
+  "none"), silent = TRUE, ...)
 
 auto.adam(data, model = "ZXZ", lags = c(frequency(data)),
   orders = list(ar = c(0), i = c(0), ma = c(0), select = FALSE),
   formula = NULL, outliers = c("ignore", "use", "select"), level = 0.99,
   distribution = c("dnorm", "dlaplace", "ds", "dgnorm", "dlnorm",
-  "dinvgauss"), h = 0, holdout = FALSE, persistence = NULL, phi = NULL,
-  initial = c("optimal", "backcasting"), arma = NULL,
+  "dinvgauss", "dgamma"), h = 0, holdout = FALSE, persistence = NULL,
+  phi = NULL, initial = c("optimal", "backcasting"), arma = NULL,
   occurrence = c("none", "auto", "fixed", "general", "odds-ratio",
   "inverse-odds-ratio", "direct"), ic = c("AICc", "AIC", "BIC", "BICc"),
   bounds = c("usual", "admissible", "none"), regressors = c("use",
-  "select", "adapt"), silent = TRUE, parallel = FALSE, fast = TRUE, ...)
+  "select", "adapt"), silent = TRUE, parallel = FALSE, ...)
 }
 \arguments{
 \item{data}{Vector, containing data needed to be forecasted. If a matrix (or
@@ -80,7 +81,10 @@ automated predictions for big  datasets.}
 \item{lags}{Defines lags for the corresponding components. All components
 count, starting from level, so ETS(M,M,M) model for monthly data will have
 \code{lags=c(1,1,12)}. However, the function will also accept \code{lags=c(12)},
-assuming that the lags 1 were dropped.}
+assuming that the lags 1 were dropped. In case of ARIMA, lags specify what should be
+the seasonal component lag. e.g. \code{lags=c(1,12)} will lead to the
+seasonal ARIMA with m=12. This can accept several lags, supporting multiple seasonal ETS
+and ARIMA models.}
 
 \item{orders}{The order of ARIMA to be included in the model. This should be passed
 either as a vector (in which case the non-seasonal ARIMA is assumed) or as a list of
@@ -101,11 +105,35 @@ case of pure regression, this is completely ignored (use \code{formula} instead)
 then all the variables are used as is. Can also include \code{trend}, which would add
 the global trend. Only needed if \code{data} is a matrix or if \code{trend} is provided.}
 
-\item{regressors}{The variable defines what to do with the provided xreg:
+\item{regressors}{The variable defines what to do with the provided explanatory
+variables:
 \code{"use"} means that all of the data should be used, while
 \code{"select"} means that a selection using \code{ic} should be done,
 \code{"adapt"} will trigger the mechanism of time varying parameters for the
 explanatory variables.}
+
+\item{outliers}{Defines what to do with outliers: \code{"ignore"}, so just returning the model,
+\code{"detect"} outliers based on specified \code{level} and include dummies for them in the model,
+or detect and \code{"select"} those of them that reduce \code{ic} value.}
+
+\item{level}{What confidence level to use for detection of outliers. The default is 99\%. The specific
+bounds of confidence interval depend on the distribution used in the model.}
+
+\item{occurrence}{The type of model used in probability estimation. Can be
+\code{"none"} - none,
+\code{"fixed"} - constant probability,
+\code{"general"} - the general Beta model with two parameters,
+\code{"odds-ratio"} - the Odds-ratio model with b=1 in Beta distribution,
+\code{"inverse-odds-ratio"} - the model with a=1 in Beta distribution,
+\code{"direct"} - the TSB-like (Teunter et al., 2011) probability update
+mechanism a+b=1,
+\code{"auto"} - the automatically selected type of occurrence model.
+
+The type of model used in the occurrence is equal to the one provided in the
+\code{model} parameter.
+
+Also, a model produced using \link[smooth]{oes} or \link[greybox]{alm} function
+can be used here.}
 
 \item{distribution}{what density function to assume for the error term. The full
 name of the distribution should be provided, starting with the letter "d" -
@@ -141,7 +169,9 @@ are available: \code{MAEh}, \code{TMAE}, \code{GTMAE}, \code{MACE},
 Last but not least, user can provide their own function here as well, making sure
 that it accepts parameters \code{actual}, \code{fitted} and \code{B}. Here is an
 example:
+
 \code{lossFunction <- function(actual, fitted, B) return(mean(abs(actual-fitted)))}
+
 \code{loss=lossFunction}}
 
 \item{h}{The forecast horizon. Mainly needed for the multistep loss functions.}
@@ -175,22 +205,6 @@ without any gaps.}
 The number of elements should correspond to the specified orders e.g.
 \code{orders=list(ar=c(1,1),ma=c(1,1)), lags=c(1,4), arma=list(ar=c(0.9,0.8),ma=c(-0.3,0.3))}}
 
-\item{occurrence}{The type of model used in probability estimation. Can be
-\code{"none"} - none,
-\code{"fixed"} - constant probability,
-\code{"general"} - the general Beta model with two parameters,
-\code{"odds-ratio"} - the Odds-ratio model with b=1 in Beta distribution,
-\code{"inverse-odds-ratio"} - the model with a=1 in Beta distribution,
-\code{"direct"} - the TSB-like (Teunter et al., 2011) probability update
-mechanism a+b=1,
-\code{"auto"} - the automatically selected type of occurrence model.
-
-The type of model used in the occurrence is equal to the one provided in the
-\code{model} parameter.
-
-Also, a model produced using \link[smooth]{oes} or \link[greybox]{alm} function
-can be used here.}
-
 \item{ic}{The information criterion to use in the model selection / combination
 procedure.}
 
@@ -222,8 +236,8 @@ to the number of parameters to estimate in the following order:
 You can also pass parameters to the optimiser in order to fine tune its work:
 \itemize{
 \item \code{maxeval} - maximum number of evaluations to carry out. The default is 40 per
-estimated parameter for ETS, 80 per parameter for ARIMA and at least 500 if
-explanatory variables are introduced in the model;
+estimated parameter for ETS and / or ARIMA and at least 500 if explanatory variables
+are introduced in the model;
 \item \code{maxtime} - stop, when the optimisation time (in seconds) exceeds this;
 \item \code{xtol_rel} - the relative precision of the optimiser (the default is 1E-6);
 \item \code{xtol_abs} - the absolute precision of the optimiser (the default is 1E-8);
@@ -242,20 +256,10 @@ Finally, the parameter \code{lambda} for LASSO / RIDGE, \code{alpha} for the Asy
 Laplace, \code{shape} for the Generalised Normal and \code{nu} for Student's distributions
 can be provided here as well.}
 
-\item{outliers}{Defines what to do with outliers: \code{"ignore"}, so just returning the model,
-\code{"detect"} outliers based on specified \code{level} and include dummies for them in the model,
-or detect and \code{"select"} those of them that reduce \code{ic} value.}
-
-\item{level}{What confidence level to use for detection of outliers. The default is 99.9%. The statistics
-values depends on the distribution used in the model.}
-
 \item{parallel}{If TRUE, the estimation of ADAM models is done in parallel (used in \code{auto.adam} only).
 If the number is provided (e.g. \code{parallel=41}), then the specified number of cores is set up.
 WARNING! Packages \code{foreach} and either \code{doMC} (Linux and Mac only)
 or \code{doParallel} are needed in order to run the function in parallel.}
-
-\item{fast}{If \code{TRUE}, then some of the orders of ARIMA are
-skipped in the order selection. This is not advised for models with \code{lags} greater than 12.}
 }
 \value{
 Object of class "adam" is returned. It contains the list of the
@@ -330,20 +334,22 @@ are regulated via the \code{distribution} parameter. This includes:
 \enumerate{
 \item \code{default} - Normal distribution is used for the Additive error models,
 Inverse Gaussian is used for the Multiplicative error models.
-\item \link[stats]{Normal} - Normal distribution,
+\item dnorm - \link[stats]{Normal} distribution,
 \item \link[greybox]{dlaplace} - Laplace distribution,
 \item \link[greybox]{ds} - S distribution,
 \item \link[greybox]{dgnorm} - Generalised Normal distribution,
-\item \link[greybox]{dalaplace} - Asymmetric Laplace distribution,
 \item \link[stats]{dlnorm} - Log normal distribution,
+\item \link[stats]{dgamma} - Gamma distribution,
 \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
 }
 
 For some more information about the model and its implementation, see the
-vignette: \code{vignette("adam","smooth")}.
+vignette: \code{vignette("adam","smooth")}. The more detailed explanation
+of ADAM is provided by Svetunkov (2020).
 
 The function \code{auto.adam()} tries out models with the specified
-distributions and returns the one with the most suitable one.
+distributions and returns the one with the most suitable one based on selected
+information criterion.
 }
 \examples{
 
@@ -413,7 +419,7 @@ Quantiles? Management Science 59(7):1594-1611. DOI:
 }
 }
 \seealso{
-\code{\link[forecast]{ets}, \link[smooth]{es}}
+\code{\link[smooth]{es}, \link[smooth]{msarima}}
 }
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}

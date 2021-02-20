@@ -12,49 +12,10 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2021-01-12" />
+<meta name="date" content="2021-02-19" />
 
 <title>gum() - Generalised Univariate Model</title>
 
-<style type="text/css">
-a.anchor-section {margin-left: 10px; visibility: hidden; color: inherit;}
-a.anchor-section::before {content: '#';}
-.hasAnchor:hover a.anchor-section {visibility: visible;}
-</style>
-<script>// Anchor sections v1.0 written by Atsushi Yasumoto on Oct 3rd, 2020.
-document.addEventListener('DOMContentLoaded', function() {
-  // Do nothing if AnchorJS is used
-  if (typeof window.anchors === 'object' && anchors.hasOwnProperty('hasAnchorJSLink')) {
-    return;
-  }
-
-  const h = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-
-  // Do nothing if sections are already anchored
-  if (Array.from(h).some(x => x.classList.contains('hasAnchor'))) {
-    return null;
-  }
-
-  // Use section id when pandoc runs with --section-divs
-  const section_id = function(x) {
-    return ((x.classList.contains('section') || (x.tagName === 'SECTION'))
-            ? x.id : '');
-  };
-
-  // Add anchors
-  h.forEach(function(x) {
-    const id = x.id || section_id(x.parentElement);
-    if (id === '') {
-      return null;
-    }
-    let anchor = document.createElement('a');
-    anchor.href = '#' + id;
-    anchor.classList = ['anchor-section'];
-    x.classList.add('hasAnchor');
-    x.appendChild(anchor);
-  });
-});
-</script>
 
 <style type="text/css">
   code{white-space: pre-wrap;}
@@ -152,6 +113,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
   }
 })();
 </script>
+
 
 
 
@@ -349,7 +311,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">gum() - Generalised Univariate Model</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2021-01-12</h4>
+<h4 class="date">2021-02-19</h4>
 
 
 
@@ -362,7 +324,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <p>Generalised Exponential Smoothing is a next step from CES. It is a state-space model in which all the matrices and vectors are estimated. It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GUM<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our example with monthly data N2457, we will have GUM<span class="math inline">\((1^1,1^{12})\)</span>:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.19 seconds
+<pre><code>## Time elapsed: 0.2 seconds
 ## Model estimated: GUM(1[1],1[12])
 ## Persistence vector g:
 ##        [,1]    [,2]
@@ -419,19 +381,19 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## Searching for appropriate lags:  —\|/—\|/—\|/We found them!
 ## Searching for appropriate orders:  —\|/—\|/—Orders found.
 ## Reestimating the model. Done!</code></pre>
-<pre><code>## Time elapsed: 11.11 seconds
+<pre><code>## Time elapsed: 12.22 seconds
 ## Model estimated: GUM(1[1],1[4])
 ## Persistence vector g:
-##        [,1]   [,2]
-## [1,] 0.4481 0.2939
+##       [,1]   [,2]
+## [1,] 0.503 0.2967
 ## Transition matrix F: 
-##        [,1]   [,2]
-## [1,] 0.4174 0.4201
-## [2,] 0.0745 1.0000
-## Measurement vector w: 0.9982, 1
+##        [,1]  [,2]
+## [1,] 0.4174 0.467
+## [2,] 0.0670 1.000
+## Measurement vector w: 0.8893, 0.9905
 ## Initial values were produced using backcasting.
 ## 
-## Loss function type: MSE; Loss function value: 3334888.4992
+## Loss function type: likelihood; Loss function value: 1026.825
 ## Error standard deviation: 1902.114
 ## Sample size: 115
 ## Number of estimated parameters: 9
@@ -450,7 +412,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" data-line-number="1">    transition &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">1</span>),<span class="dv">3</span>,<span class="dv">3</span>)</a>
 <a class="sourceLine" id="cb9-2" data-line-number="2">    measurement &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>)</a>
 <a class="sourceLine" id="cb9-3" data-line-number="3">    <span class="kw">gum</span>(M3<span class="op">$</span>N2457<span class="op">$</span>x, <span class="dt">h=</span><span class="dv">18</span>, <span class="dt">holdout=</span><span class="ot">TRUE</span>, <span class="dt">orders=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="dt">lags=</span><span class="kw">c</span>(<span class="dv">1</span>,<span class="dv">12</span>), <span class="dt">transition=</span>transition, <span class="dt">measurement=</span>measurement)</a></code></pre></div>
-<pre><code>## Time elapsed: 0.13 seconds
+<pre><code>## Time elapsed: 0.14 seconds
 ## Model estimated: GUM(2[1],1[12])
 ## Persistence vector g:
 ##        [,1]   [,2]    [,3]

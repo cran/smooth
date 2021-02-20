@@ -12,49 +12,10 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2021-01-12" />
+<meta name="date" content="2021-02-19" />
 
 <title>smooth: forecasting using state-space models</title>
 
-<style type="text/css">
-a.anchor-section {margin-left: 10px; visibility: hidden; color: inherit;}
-a.anchor-section::before {content: '#';}
-.hasAnchor:hover a.anchor-section {visibility: visible;}
-</style>
-<script>// Anchor sections v1.0 written by Atsushi Yasumoto on Oct 3rd, 2020.
-document.addEventListener('DOMContentLoaded', function() {
-  // Do nothing if AnchorJS is used
-  if (typeof window.anchors === 'object' && anchors.hasOwnProperty('hasAnchorJSLink')) {
-    return;
-  }
-
-  const h = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-
-  // Do nothing if sections are already anchored
-  if (Array.from(h).some(x => x.classList.contains('hasAnchor'))) {
-    return null;
-  }
-
-  // Use section id when pandoc runs with --section-divs
-  const section_id = function(x) {
-    return ((x.classList.contains('section') || (x.tagName === 'SECTION'))
-            ? x.id : '');
-  };
-
-  // Add anchors
-  h.forEach(function(x) {
-    const id = x.id || section_id(x.parentElement);
-    if (id === '') {
-      return null;
-    }
-    let anchor = document.createElement('a');
-    anchor.href = '#' + id;
-    anchor.classList = ['anchor-section'];
-    x.classList.add('hasAnchor');
-    x.appendChild(anchor);
-  });
-});
-</script>
 
 <style type="text/css">
   code{white-space: pre-wrap;}
@@ -64,6 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
   div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
   ul.task-list{list-style: none;}
     </style>
+
 
 
 
@@ -263,7 +225,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2021-01-12</h4>
+<h4 class="date">2021-02-19</h4>
 
 
 
@@ -275,11 +237,10 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <li><a href="ssarima.html">ssarima() - State-Space ARIMA</a>, also known as Several Seasonalities ARIMA and <code>msarima()</code>, aka Multiple Seasonal ARIMA;</li>
 <li><a href="ces.html">ces() - Complex Exponential Smoothing</a>;</li>
 <li><a href="gum.html">gum() - Generalised Univariate Model</a>;</li>
-<li><a href="ves.html">ves() - Vector Exponential Smoothing</a>;</li>
 <li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
 <li><a href="simulate.html">Simulate functions of the package</a>.</li>
 <li><code>smoothCombine()</code> - function that combines forecasts of the main univariate functions of smooth package based on information criteria.</li>
-<li><a href="oes.html">oes() - Occurrence part of iETS model</a> – function that estimates probability of occurrence of variable using one of the following model types: 1. Fixed probability; 2. Odds ratio probability; 3. Inverse odds ratio probability; 4. Direct probability; 5. General. It can also select the most appropriate model among these five. The model produced by <code>oes()</code> can then be used in any forecasting function as input variable for <code>occurrence</code> parameter. This is the new function introduced in smooth v2.5.0, substituting the old <code>iss()</code> function. There is also vector counterpart of this function called <code>viss()</code> which implements multivariate fixed and logistic probabilities.</li>
+<li><a href="oes.html">oes() - Occurrence part of iETS model</a> – function that estimates probability of occurrence of variable using one of the following model types: 1. Fixed probability; 2. Odds ratio probability; 3. Inverse odds ratio probability; 4. Direct probability; 5. General. It can also select the most appropriate model among these five. The model produced by <code>oes()</code> can then be used in any forecasting function as input variable for <code>occurrence</code> parameter. This is the new function introduced in smooth v2.5.0, substituting the old <code>iss()</code> function.</li>
 </ol>
 <p>The functions (1) - (4) and (6) return object of class <code>smooth</code>, (5) returns the object of class <code>vsmooth</code>, (7) returns <code>smooth.sim</code> class and finally (8) returns <code>oes</code> or <code>viss</code> (depending on the function used). There are several methods for these classes in the package.</p>
 <p>Some other functions, which are not considered as core and important:</p>
@@ -309,7 +270,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <li><code>sigma(ourModel)</code> – variance of the residuals of the model;</li>
 <li><code>lags(ourModel)</code> – lags of the model (used with <code>ssarima()</code> and <code>gum()</code>);</li>
 <li><code>orders(ourModel)</code> – orders of the model (can be used with <code>ssarima()</code>, <code>gum()</code> and <code>sma()</code>);</li>
-<li><code>modelType(ourModel)</code> – returns the type of the model. Returns something like “MMM” for ETS(MMM). Can be used with <code>es()</code>, <code>ces()</code>, <code>ves()</code> and <code>ets()</code>;</li>
+<li><code>modelType(ourModel)</code> – returns the type of the model. Returns something like “MMM” for ETS(MMM). Can be used with <code>es()</code>, <code>ces()</code> and <code>ets()</code>;</li>
 <li><code>errorType(ourModel)</code> – the type of the error of a model (additive or multiplicative);</li>
 <li><code>coef(ourModel)</code> – returns the vector of all the estimated coefficients of the model;</li>
 <li><code>formula(ourModel)</code> – returns the formula for the measurement equation. This is just for the information and general understanding what we work with;</li>

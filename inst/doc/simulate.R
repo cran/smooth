@@ -136,11 +136,3 @@ ourModel <- sma(x)
 ourData <- simulate(ourModel, nsim=50, obs=1000)
 plot(ourData)
 
-## ----simulate_smooth_ves------------------------------------------------------
-x <- sim.ves("ANN",frequency=4,obs=40,nSeries=3,randomizer="rnorm",mean=0,sd=100)
-
-## ----simulate_smooth_ves_estimated--------------------------------------------
-ourModel <- ves(x$data,model="AAN",persistence="dependent")
-Y <- simulate(ourModel)
-plot(Y)
-

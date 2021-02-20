@@ -40,7 +40,7 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' used to calculated variances of parameters of the model.
 #' @return Object of class "smooth" is returned. See \link[smooth]{gum} for
 #' details.
-#' @seealso \code{\link[smooth]{gum}, \link[forecast]{ets}, \link[smooth]{es},
+#' @seealso \code{\link[smooth]{gum}, \link[smooth]{es},
 #' \link[smooth]{ces}, \link[smooth]{sim.es}, \link[smooth]{ssarima}}
 #'
 #' @examples
@@ -58,7 +58,7 @@ utils::globalVariables(c("silentText","silentGraph","silentLegend","initialType"
 #' @export auto.gum
 auto.gum <- function(y, orders=3, lags=frequency(y), type=c("additive","multiplicative","select"),
                      initial=c("backcasting","optimal"), ic=c("AICc","AIC","BIC","BICc"),
-                     loss=c("MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
+                     loss=c("likelihood","MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
                      h=10, holdout=FALSE, cumulative=FALSE,
                      interval=c("none","parametric","likelihood","semiparametric","nonparametric"), level=0.95,
                      bounds=c("restricted","admissible","none"),

@@ -1,3 +1,51 @@
+smooth v3.1.0 (Release data: 2021-02-19)
+=======
+
+Changes:
+* We now use filter() function from stats instaed of ma() from forecast package in msdecompose().
+* We don't use is.ets from forecast package anymore.
+* msdecompose() now treats NAs automatically, interpolating them with a combination of fourier and polynomial.
+* adam() now relies on the same interpolation mechanism as msdecompose() in case of NAs.
+* Implemented a new auto.adam() ARIMA selection mechanism. It is faster and produces more accurate ARIMA models (e.g. more accurate than auto.ssarima()). Removed the redundant fast parameter from auto.adam().
+* Tell if bootstrap was used in summary.adam().
+* Add stars for the coefficients that are significant on the selected level.
+* Gamma distribution in adam().
+* Removed ves(), vets() and viss() from the package. They are now available in legion package.
+
+Bugfixes:
+* Bugfix in the initialisation of ARIMA on small samples.
+* Bugfix in ETSX(A,*,*){D}, which previously had the wrong persistence element.
+* A fix in coefbootstrap and lags variable, when M3 data is used.
+
+
+smooth v3.0.2 (Release data: 2021-01-27)
+=======
+
+Changes:
+* plot.smooth, 7 now will include the holdout.
+* plot.adam.forecast now produces mean forecast in case of cumulative.
+* Let ADAM speak for himself - all warnings are now "I cannot do this and that".
+* warning in case of bounds="none".
+* outliers and level are now also available in adam() - no need to use auto.adam() for that.
+* coefbootstrap() for adam. And support for bootstrap in vcov, confint and summary. This now works with auto.adam() as well.
+* Change origin in coefbootstrap() if initial="backcasting".
+* We now only take the needed values of B if a longer vector is provided.
+* Removed checks of obsolete parameters in ves().
+* Scale the MSE part of LASSO and RIDGE in adam() by the sd(diff(y)).
+
+Bugfixes:
+* A fix for "YYY" and non-positive data in adam().
+* A fix for the selection between "ANN" and "ANA" on some data in adam().
+* adam() would not work with provided occurrence.
+* A fix for sigma.adam() from the model with NAs (returned NA instead of the number).
+* A fix in vcov.adam() for the data with NAs.
+* outliers="select" would not work with zoo objects.
+* A bugfix for orders=list(select=TRUE) without providing ar i ma orders.
+* A bugfix for outlier!="ignore" and data.frame as a data.
+* A bugfix in auto.adam() with outliers. We use call now.
+* A bugfix for vcov.adam() in case of regression and is.matrix(data).
+
+
 smooth v3.0.1 (Release data: 2021-01-12)
 =======
 

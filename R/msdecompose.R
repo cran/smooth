@@ -3,7 +3,7 @@
 #' Function decomposes multiple seasonal time series into components using
 #' the principles of classical decomposition.
 #'
-#' The function applies centred moving averages based on \link[forecast]{ma}
+#' The function applies centred moving averages based on \link[stats]{filter}
 #' function and order specified in \code{lags} variable in order to smooth the
 #' original series and obtain level, trend and seasonal components of the series.
 #'
@@ -26,7 +26,7 @@
 #' \item \code{yName} - the name of the provided data.
 #' }
 #'
-#' @seealso \code{\link[forecast]{ma}}
+#' @seealso \code{\link[stats]{filter}}
 #'
 #' @examples
 #'
@@ -37,29 +37,47 @@
 #' plot(ourModel)
 #' plot(forecast(ourModel, model="AAN", h=12))
 #'
-#' @importFrom forecast ma
+#' @importFrom stats filter poly .lm.fit
 #' @export msdecompose
 msdecompose <- function(y, lags=c(12), type=c("additive","multiplicative")){
     # Function decomposes time series, assuming multiple frequencies provided in lags
     type <- match.arg(type);
+
+    ma <- function(y, order){
+        if (order%%2 == 0){
+            weigths <- c(0.5, rep(1, order - 1), 0.5) / order;
+        }
+        else {
+            weigths <- rep(1, order) / order;
+        }
+        return(filter(y, weigths))
+    }
+
+    obsInSample <- length(y);
+    yNAValues <- is.na(y);
+
+    # Transform the data if needed and split the sample
     if(type=="multiplicative"){
         shiftedData <- FALSE;
-        # If there are negative values, stop
-        if(any(y<0)){
-            stop("Multiplicative decomposition is not available for the data with negative values.",
-                 call.=FALSE);
+        # If there are non-positive values
+        if(any(y[!yNAValues]<=0)){
+            yNAValues[] <- yNAValues | y<=0;
         }
-        # If there are zeroes, shift the variable up.
-        # In the perfect world, we would need to interpolate and repeate seasonal patterns.
-        else if(any(y==0)){
-            shiftedData[] <- TRUE;
-            y[] <- y + 1;
-        }
-        yInsample <- log(y);
+        yInsample <- suppressWarnings(log(y));
     }
     else{
         yInsample <- y;
     }
+
+    # Treat the missing values
+    if(any(yNAValues)){
+        X <- cbind(1,poly(c(1:obsInSample),degree=min(max(trunc(obsInSample/10),1),5)),
+                   sinpi(matrix(c(1:obsInSample)*rep(c(1:max(lags)),each=obsInSample)/max(lags), ncol=max(lags))));
+        lmFit <- .lm.fit(X[!yNAValues,,drop=FALSE], matrix(yInsample[!yNAValues],ncol=1));
+        yInsample[yNAValues] <- (X %*% coef(lmFit))[yNAValues];
+        rm(X)
+    }
+
     # paste0() is needed in order to avoid line breaks in the name
     yName <- paste0(deparse(substitute(y)),collapse="");
 
@@ -74,7 +92,7 @@ msdecompose <- function(y, lags=c(12), type=c("additive","multiplicative")){
     yClear <- vector("list",lagsLength);
     # Smooth time series with different lags
     for(i in 1:lagsLength){
-        ySmooth[[i+1]] <- ma(yInsample,lags[i],centre=TRUE);
+        ySmooth[[i+1]] <- ma(yInsample,lags[i]);
     }
     trend <- ySmooth[[lagsLength+1]];
 
