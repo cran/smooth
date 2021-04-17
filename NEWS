@@ -1,3 +1,35 @@
+smooth v3.1.1 (Release data: 2021-04-16)
+=======
+
+Changes:
+* Kick off redundant d and q in ETS+ARIMA, when ARIMA is selected automatically.
+* A fix in auto.adam() in case of ETS + ARIMA + Regression and automatic selection. The code is slower but more accurate now.
+* Speed up regression estimation in case of is.matrix(data) and no formula.
+* I minor improvement, when calling forecast() from adam() - don't ask for interval to speed things up.
+* Further optimised adam() code with regressors, in case of regressors="select", removing unnecessary steps.
+* Return distribution="plogis" in oes() and oesg().
+* Select regressors on the model with alpha=0.01, so that it does not overfit the data.
+* Minor optimisations in adam() for RAM consumption in case of explanatory variables and / or backcasting.
+* forecast.adam() now produces point forecasts (not conditional means) if interval=c("nonparametric","semiparametric","approximate").
+* Do Garbage Collection for ADAMX if the sample is bigger than 10k observations. We need to preserve memory in this case.
+
+Bugfixes:
+* Fix for forecast.adam() and factor variables in newdata.
+* Fix for Mcomp data and outliers detection mechanism loosing lags.
+* A fix for ADAM ETSX / ARIMAX in cases of no variability in explanatory variables.
+* And another one for coefbootstrap() in case of regressors="select".
+* A fix for likelihood calculation for occurrence model and distribution="dgamma".
+* confint() now returns proper intervals for parameters of adam(), not intervals around zero.
+* Fix in forecast.adam() for iETS models and different objects used in oes() and adam().
+* A fix for provided smoothing parameters in case of estimated deltas in adam().
+* Fix for factors in adam().
+* A fix for the previous fix of factors.
+* A fix for iETS in forecast.adam() for cases of zero mean and zeroes in quantiles.
+* Fixed a funny bug in adam() with data.table and cbind.
+* A fix for the case of data.frame() and is.zoo(y).
+* A fix for vcov.adam() in case, when Fisher Information contains NaNs.
+
+
 smooth v3.1.0 (Release data: 2021-02-19)
 =======
 

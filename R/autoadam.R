@@ -340,6 +340,9 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
             }
         }
     }
+    else{
+        cluster <- NULL;
+    }
 
     if(!silent){
         if(!parallel){
@@ -429,34 +432,6 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
             arma <- NULL;
         }
 
-        #### Function corrects IC taking number of parameters on previous step ####
-        icCorrector <- function(llikelihood, ic, nParam, obsNonzero){
-            if(ic=="AIC"){
-                correction <- 2*nParam - 2*llikelihood;
-            }
-            else if(ic=="AICc"){
-                if(nParam>=obsNonzero-1){
-                    correction <- Inf;
-                }
-                else{
-                    correction <- 2*nParam*obsNonzero/(obsNonzero-nParam-1) - 2*llikelihood;
-                }
-            }
-            else if(ic=="BIC"){
-                correction <- nParam*log(obsNonzero) - 2*llikelihood;
-            }
-            else if(ic=="BICc"){
-                if(nParam>=obsNonzero-1){
-                    correction <- Inf;
-                }
-                else{
-                    correction <- (nParam*log(obsNonzero)*obsNonzero)/(obsNonzero-nParam-1) - 2*llikelihood;
-                }
-            }
-
-            return(correction);
-        }
-
         #### The function that selects ARIMA orders for the provided data ####
         arimaSelector <- function(data, model, lags, arMax, iMax, maMax,
                                   distribution, h, holdout,
@@ -473,14 +448,13 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
             phiOriginal <- phi;
             holdoutOriginal <- holdout;
 
+            etsModelType <- model;
+
             # If the ETS model was done before this, then extract residuals
             if(is.adam(testModelETS)){
-                dataAR <- dataI <- dataMA <- yInSample <- residuals(testModelETS);
-                model <- "NNN";
-                occurrence <- "none"
-                persistence <- NULL;
-                phi <- NULL;
-                holdout <- FALSE;
+                yInSample <- data;
+                model <- etsModelType <- modelType(testModelETS);
+                ICOriginal <- IC(testModelETS);
             }
             else{
                 yInSample <- data;
@@ -488,6 +462,22 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
 
             if(!silent){
                 cat(" Selecting ARIMA orders... ");
+            }
+
+            ### Kick off IMA elements if ETS was fitted
+            # Remove non-seasonal d and q
+            if(any(substr(etsModelType,1,1) %in% c("A","M"))){
+                iMax[lags==1] <- 0;
+                maMax[lags==1] <- 0;
+            }
+            # Remove AR if dampening parameter is used
+            if(any(substr(etsModelType,3,3)=="d")){
+                arMax[lags==1] <- 0;
+            }
+            # Remove the seasonal D_j and Q_j
+            if(any(substr(etsModelType,nchar(etsModelType),nchar(etsModelType)) %in% c("A","M"))){
+                iMax[lags!=1] <- 0;
+                maMax[lags!=1] <- 0;
             }
 
             # 1 stands for constant/no constant, another one stands for ARIMA(0,0,0)
@@ -730,6 +720,11 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                                   persistence=persistenceOriginal, phi=phiOriginal, initial=initial,
                                   occurrence=occurrenceOriginal, ic=ic, bounds=bounds,
                                   regressors=regressors, silent=TRUE, ...);
+
+                # If this is not better than just ETS, use ETS
+                if(IC(bestModel) >= ICOriginal){
+                    bestModel <- testModelETS;
+                }
             }
 
             return(bestModel);
@@ -824,6 +819,7 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
                 # These two are needed for cases with Mcomp data
                 newCall$holdout <- holdout;
                 newCall$h <- h;
+                newCall$lags <- lags;
                 adamModel <- eval(newCall);
             }
             else{
@@ -917,6 +913,11 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar
     }
 
     selectedModels[[which.min(ICValues)]]$call <- cl;
+
+    # Check if the clusters have been made
+    if(!is.null(cluster)){
+        parallel::stopCluster(cluster);
+    }
 
     return(selectedModels[[which.min(ICValues)]]);
 }
