@@ -189,7 +189,9 @@ If a previous model was reused, then its initials are reused and the number of
 provided parameters will take this into account.
 \item \code{fitted} - fitted values of ETS. In case of the intermittent model, the
 fitted are multiplied by the probability of occurrence.
-\item \code{forecast} - point forecast of ETS.
+\item \code{forecast} - the point forecast for h steps ahead (by default NA is returned). NOTE
+that these do not always correspond to the conditional expectations. See ADAM
+textbook, Section 4.4. for details (\url{https://openforecast.org/adam/ETSTaxonomyMaths.html}),
 \item \code{lower} - lower bound of prediction interval. When \code{interval="none"}
 then NA is returned.
 \item \code{upper} - higher bound of prediction interval. When \code{interval="none"}
@@ -286,20 +288,20 @@ underlying models and how to use the functions.
 
 # See how holdout and trace parameters influence the forecast
 es(Mcomp::M3$N1245$x,model="AAdN",h=8,holdout=FALSE,loss="MSE")
-\dontrun{es(Mcomp::M3$N2568$x,model="MAM",h=18,holdout=TRUE,loss="TMSE")}
+\donttest{es(Mcomp::M3$N2568$x,model="MAM",h=18,holdout=TRUE,loss="TMSE")}
 
 # Model selection example
 es(Mcomp::M3$N1245$x,model="ZZN",ic="AIC",h=8,holdout=FALSE,bounds="a")
 
 # Model selection. Compare AICc of these two models:
-\dontrun{es(Mcomp::M3$N1683$x,"ZZZ",h=10,holdout=TRUE)
+\donttest{es(Mcomp::M3$N1683$x,"ZZZ",h=10,holdout=TRUE)
 es(Mcomp::M3$N1683$x,"MAdM",h=10,holdout=TRUE)}
 
 # Model selection, excluding multiplicative trend
-\dontrun{es(Mcomp::M3$N1245$x,model="ZXZ",h=8,holdout=TRUE)}
+\donttest{es(Mcomp::M3$N1245$x,model="ZXZ",h=8,holdout=TRUE)}
 
 # Combination example
-\dontrun{es(Mcomp::M3$N1245$x,model="CCN",h=8,holdout=TRUE)}
+\donttest{es(Mcomp::M3$N1245$x,model="CCN",h=8,holdout=TRUE)}
 
 # Model selection using a specified pool of models
 ourModel <- es(Mcomp::M3$N1587$x,model=c("ANN","AAM","AMdA"),h=18)
@@ -308,10 +310,10 @@ ourModel <- es(Mcomp::M3$N1587$x,model=c("ANN","AAM","AMdA"),h=18)
 es(Mcomp::M3$N1587$x,model=ourModel,h=18,interval="p")
 
 # Semiparametric interval example
-\dontrun{es(Mcomp::M3$N1587$x,h=18,holdout=TRUE,interval="sp")}
+\donttest{es(Mcomp::M3$N1587$x,h=18,holdout=TRUE,interval="sp")}
 
 # This will be the same model as in previous line but estimated on new portion of data
-\dontrun{es(Mcomp::M3[[1457]],model=ourModel,h=18,holdout=FALSE)}
+\donttest{es(Mcomp::M3[[1457]],model=ourModel,h=18,holdout=FALSE)}
 
 }
 \references{

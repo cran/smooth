@@ -236,8 +236,9 @@ to the number of parameters to estimate in the following order:
 You can also pass parameters to the optimiser in order to fine tune its work:
 \itemize{
 \item \code{maxeval} - maximum number of evaluations to carry out. The default is 40 per
-estimated parameter for ETS and / or ARIMA and at least 500 if explanatory variables
-are introduced in the model;
+estimated parameter for ETS and / or ARIMA and at least 1000 if explanatory variables
+are introduced in the model (100 per parameter for explanatory variables, but not less
+than 1000);
 \item \code{maxtime} - stop, when the optimisation time (in seconds) exceeds this;
 \item \code{xtol_rel} - the relative precision of the optimiser (the default is 1E-6);
 \item \code{xtol_abs} - the absolute precision of the optimiser (the default is 1E-8);
@@ -272,7 +273,9 @@ the actual values in the first column,
 \item \code{holdout} - the holdout part of the data, excluded for purposes of model evaluation,
 \item \code{fitted} - the vector of fitted values,
 \item \code{residuals} - the vector of residuals,
-\item \code{forecast} - the point forecast for h steps ahead (by default NA is returned),
+\item \code{forecast} - the point forecast for h steps ahead (by default NA is returned). NOTE
+that these do not always correspond to the conditional expectations for ETS models. See ADAM
+textbook, Section 4.4. for details (\url{https://openforecast.org/adam/ETSTaxonomyMaths.html}),
 \item \code{states} - the matrix of states with observations in rows and states in columns,
 \item \code{persisten} - the vector of smoothing parameters,
 \item \code{phi} - the value of damping parameter,
@@ -333,7 +336,7 @@ The error term \eqn{\epsilon_t} can follow different distributions, which
 are regulated via the \code{distribution} parameter. This includes:
 \enumerate{
 \item \code{default} - Normal distribution is used for the Additive error models,
-Inverse Gaussian is used for the Multiplicative error models.
+Gamma is used for the Multiplicative error models.
 \item dnorm - \link[stats]{Normal} distribution,
 \item \link[greybox]{dlaplace} - Laplace distribution,
 \item \link[greybox]{ds} - S distribution,
@@ -345,7 +348,7 @@ Inverse Gaussian is used for the Multiplicative error models.
 
 For some more information about the model and its implementation, see the
 vignette: \code{vignette("adam","smooth")}. The more detailed explanation
-of ADAM is provided by Svetunkov (2020).
+of ADAM is provided by Svetunkov (2021).
 
 The function \code{auto.adam()} tries out models with the specified
 distributions and returns the one with the most suitable one based on selected
@@ -365,20 +368,20 @@ par(mfcol=c(3,4))
 plot(ourModel, c(1:11))
 
 # Model combination using a specified pool
-\dontrun{ourModel <- adam(rnorm(100,100,10), model=c("ANN","AAN","MNN","CCC"),
+\donttest{ourModel <- adam(rnorm(100,100,10), model=c("ANN","AAN","MNN","CCC"),
                           lags=c(5,10))}
 
 # ADAM ARIMA
-\dontrun{ourModel <- adam(rnorm(100,100,10), model="NNN",
+\donttest{ourModel <- adam(rnorm(100,100,10), model="NNN",
                           lags=c(1,4), orders=list(ar=c(1,0),i=c(1,0),ma=c(1,1)))}
 
-\dontrun{ourModel <- auto.adam(rnorm(100,100,10), model="ZZN", lags=c(1,4),
+\donttest{ourModel <- auto.adam(rnorm(100,100,10), model="ZZN", lags=c(1,4),
                       orders=list(ar=c(2,2),ma=c(2,2),select=TRUE))}
 
 }
 \references{
 \itemize{
-\item Svetunkov, I. (2020) Time Series Analysis and Forecasting with ADAM:
+\item Svetunkov, I. (2021) Time Series Analysis and Forecasting with ADAM:
 Lancaster, UK. \url{https://openforecast.org/adam/}.
 }
 

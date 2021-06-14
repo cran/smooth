@@ -44,7 +44,7 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 #' are regulated via the \code{distribution} parameter. This includes:
 #' \enumerate{
 #' \item \code{default} - Normal distribution is used for the Additive error models,
-#' Inverse Gaussian is used for the Multiplicative error models.
+#' Gamma is used for the Multiplicative error models.
 #' \item dnorm - \link[stats]{Normal} distribution,
 #' \item \link[greybox]{dlaplace} - Laplace distribution,
 #' \item \link[greybox]{ds} - S distribution,
@@ -63,7 +63,7 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 #'
 #' For some more information about the model and its implementation, see the
 #' vignette: \code{vignette("adam","smooth")}. The more detailed explanation
-#' of ADAM is provided by Svetunkov (2020).
+#' of ADAM is provided by Svetunkov (2021).
 #'
 #' The function \code{auto.adam()} tries out models with the specified
 #' distributions and returns the one with the most suitable one based on selected
@@ -259,8 +259,9 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 #' You can also pass parameters to the optimiser in order to fine tune its work:
 #' \itemize{
 #' \item \code{maxeval} - maximum number of evaluations to carry out. The default is 40 per
-#' estimated parameter for ETS and / or ARIMA and at least 500 if explanatory variables
-#' are introduced in the model;
+#' estimated parameter for ETS and / or ARIMA and at least 1000 if explanatory variables
+#' are introduced in the model (100 per parameter for explanatory variables, but not less
+#' than 1000);
 #' \item \code{maxtime} - stop, when the optimisation time (in seconds) exceeds this;
 #' \item \code{xtol_rel} - the relative precision of the optimiser (the default is 1E-6);
 #' \item \code{xtol_abs} - the absolute precision of the optimiser (the default is 1E-8);
@@ -289,7 +290,9 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 #' \item \code{holdout} - the holdout part of the data, excluded for purposes of model evaluation,
 #' \item \code{fitted} - the vector of fitted values,
 #' \item \code{residuals} - the vector of residuals,
-#' \item \code{forecast} - the point forecast for h steps ahead (by default NA is returned),
+#' \item \code{forecast} - the point forecast for h steps ahead (by default NA is returned). NOTE
+#' that these do not always correspond to the conditional expectations for ETS models. See ADAM
+#' textbook, Section 4.4. for details (\url{https://openforecast.org/adam/ETSTaxonomyMaths.html}),
 #' \item \code{states} - the matrix of states with observations in rows and states in columns,
 #' \item \code{persisten} - the vector of smoothing parameters,
 #' \item \code{phi} - the value of damping parameter,
@@ -339,11 +342,11 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 #' plot(ourModel, c(1:11))
 #'
 #' # Model combination using a specified pool
-#' \dontrun{ourModel <- adam(rnorm(100,100,10), model=c("ANN","AAN","MNN","CCC"),
+#' \donttest{ourModel <- adam(rnorm(100,100,10), model=c("ANN","AAN","MNN","CCC"),
 #'                           lags=c(5,10))}
 #'
 #' # ADAM ARIMA
-#' \dontrun{ourModel <- adam(rnorm(100,100,10), model="NNN",
+#' \donttest{ourModel <- adam(rnorm(100,100,10), model="NNN",
 #'                           lags=c(1,4), orders=list(ar=c(1,0),i=c(1,0),ma=c(1,1)))}
 #'
 #' @importFrom greybox dlaplace dalaplace ds dgnorm
@@ -574,8 +577,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         }
         else{
             yFrequency <- frequency(y);
-            modelReturned$data <- data[1:obsInSample,,drop=FALSE]
-            modelReturned$data[,responseName] <- ts(modelReturned$data[,responseName], start=yIndex[1], frequency=yFrequency);
+            modelReturned$data <- ts(data[1:obsInSample,,drop=FALSE], start=yIndex[1], frequency=yFrequency);
             modelReturned$fitted <- ts(fitted(checkerReturn), start=yIndex[1], frequency=yFrequency);
             modelReturned$residuals <- ts(residuals(checkerReturn), start=yIndex[1], frequency=yFrequency);
             if(h>0){
@@ -584,8 +586,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                                                  start=yIndex[obsInSample+1], frequency=yFrequency);
                 }
                 else{
-                    modelReturned$forecast <- zoo(forecast(checkerReturn,h=h,interval="none")$mean,
-                                                  order.by=yIndex[obsInSample]+diff(yIndex[1:2])*c(1:h));
+                    modelReturned$forecast <- ts(as.numeric(forecast(checkerReturn,h=h,interval="none")$mean),
+                                                 start=yIndex[obsInSample]+diff(yIndex[1:2]), frequency=yFrequency);
                 }
             }
             else{
@@ -593,7 +595,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             }
             modelReturned$states <- ts(matrix(coef(checkerReturn), obsInSample+1, nParam, byrow=TRUE,
                                            dimnames=list(NULL, names(coef(checkerReturn)))),
-                                       start=yIndex-diff(yIndex[1:2]), frequency=yFrequency);
+                                       start=yIndex[1]-diff(yIndex[1:2]), frequency=yFrequency);
         }
         modelReturned$persistence <- rep(0, nParam);
         names(modelReturned$persistence) <- paste0("delta",c(1:nParam));
@@ -1599,8 +1601,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         if(arimaModel){
             # These are filled in lags-wise
             if(any(c(arEstimate,maEstimate))){
-                acfValues <- rep(0.1, maOrders %*% lags);
-                pacfValues <- rep(-0.1, arOrders %*% lags);
+                acfValues <- rep(-0.1, maOrders %*% lags);
+                pacfValues <- rep(0.1, arOrders %*% lags);
                 # If this is ETS + ARIMA model or no differences model, then don't bother with initials
                 # The latter does not make sense because of non-stationarity in ACF / PACF
                 # Otherwise use ACF / PACF values as starting parameters for ARIMA
@@ -1677,7 +1679,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                 }
                 else{
                     Bl[j] <- 0;
-                    Bu[j] <- Inf;
+                    # 2 is already too much for the multiplicative model
+                    Bu[j] <- 2;
                 }
             }
             if(modelIsSeasonal && any(initialSeasonalEstimate)){
@@ -1755,7 +1758,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             j[] <- j+1;
             B[j] <- matVt[componentsNumberETS+componentsNumberARIMA+xregNumber+1,1];
             names(B)[j] <- constantName;
-            Bu[j] <- max(abs(yInSample));
+            # B[j]*1.01 is needed to make sure that the bounds cover the initial value
+            Bu[j] <- max(abs(yInSample),B[j]*1.01);
             Bl[j] <- -Bu[j];
         }
 
@@ -2164,11 +2168,6 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                                           componentsNumberARIMA, xregNumber, constantRequired, h,
                                           yInSample, ot);
 
-            # This is a fix for the multistep in case of Etype=="M", assuming logN
-            if(Etype=="M"){
-                adamErrors[] <- log(1+adamErrors);
-            }
-
             # Not done yet: "aMSEh","aTMSE","aGTMSE","aMSCE","aGPL"
             CFValue <- switch(loss,
                               "MSEh"=sum(adamErrors[,h]^2)/(obsInSample-h),
@@ -2562,7 +2561,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         # If the distribution is default, change it according to the error term
         if(distribution=="default"){
             distributionNew <- switch(loss,
-                                      "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dinvgauss"),
+                                      "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dgamma"),
                                       "MAEh"=, "MACE"=, "MAE"= "dlaplace",
                                       "HAMh"=, "CHAM"=, "HAM"= "ds",
                                       "MSEh"=, "MSCE"=, "MSE"=, "GPL"=, "dnorm");
@@ -2578,6 +2577,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
 
         print_level_hidden <- print_level;
         if(print_level==41){
+            cat("Initial parameters:",B,"\n");
             print_level[] <- 0;
         }
 
@@ -2591,7 +2591,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             # # If it is xregModel, do at least 500 iterations
             # else
             if(xregModel){
-                maxevalUsed <- max(500,maxevalUsed);
+                maxevalUsed[] <- length(B) * 100;
+                maxevalUsed[] <- max(1000,maxevalUsed);
             }
         }
 
@@ -2800,7 +2801,10 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
 
             # Call the xregSelector providing the original matrix with the data
             xregIndex[] <- switch(Etype,"A"=1,"M"=2);
-            xregModelInitials[[xregIndex]] <- xregSelector(errors=errors, xregData=data[,colnames(data)!=responseName,drop=FALSE],
+            xregModelInitials[[xregIndex]] <- xregSelector(errors=errors,
+                                                           xregData=xregDataOriginal[1:obsInSample,
+                                                                                     colnames(xregDataOriginal)!=responseName,
+                                                                                     drop=FALSE],
                                                            ic=ic,
                                                            df=df, distribution=distributionNew, occurrence=oesModel,
                                                            other=other);
@@ -2830,12 +2834,36 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                 # Fix the name of the response variable
                 xregModelInitials[[xregIndex]]$formula[[2]] <- as.name(responseName);
                 formula <- xregModelInitials[[xregIndex]]$formula;
-                xregModelInitials[[which(c(1,2)!=xregIndex)]]$formula <- formula;
+                xregModelInitials[[which(c(1,2)!=xregIndex)]]$formula <- formulaToUse <- formula;
+
+                # Fix formula if dnorm / dlaplace / ds etc are used for Etype=="M"
+                trendIncluded <- any(all.vars(formulaToUse)[-1]=="trend");
+                if((length(formulaToUse[[2]])==1 ||
+                    (length(formulaToUse[[2]])>1 & !any(as.character(formulaToUse[[2]])=="log"))) &&
+                   (Etype=="M" && any(distribution==c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace")))){
+                    if(trendIncluded){
+                        formulaToUse <- update(formulaToUse,log(.)~.);
+                    }
+                    else{
+                        formulaToUse <- update(formulaToUse,log(.)~.+trend);
+                    }
+                }
+                else{
+                    if(!trendIncluded){
+                        formulaToUse <- update(formulaToUse,.~.+trend);
+                    }
+                }
 
                 # Estimate alm again in order to get proper initials
-                almModel <- do.call(alm,list(formula=formula,
+                almModel <- do.call(alm,list(formula=formulaToUse,
                                              data=data[1:obsInSample,,drop=FALSE],
                                              distribution=distributionNew, loss=lossNew, occurrence=oesModel));
+
+                # Remove trend
+                if(!trendIncluded){
+                    almModel$coefficients <- almModel$coefficients[names(almModel$coefficients)!="trend"];
+                    almModel$data <- almModel$data[,colnames(almModel$data)!="trend",drop=FALSE];
+                }
                 almIntercept <- almModel$coefficients["(Intercept)"];
                 xregModelInitials[[xregIndex]]$initialXreg <- coef(almModel)[-1];
 
@@ -3440,7 +3468,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
 
             # Amend forecasts, multiplying by probability
             if(occurrenceModel && !occurrenceModelProvided){
-                yForecast[] <- yForecast * c(forecast(oesModel, h=h, interval="none")$mean);
+                yForecast[] <- yForecast * c(suppressWarnings(forecast(oesModel, h=h, interval="none"))$mean);
             }
             else if(occurrenceModel && occurrenceModelProvided){
                 yForecast[] <- yForecast * pForecast;
@@ -3458,7 +3486,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         # If the distribution is default, change it according to the error term
         if(distribution=="default"){
             distribution[] <- switch(loss,
-                                     "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dinvgauss"),
+                                     "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dgamma"),
                                      "MAEh"=, "MACE"=, "MAE"= "dlaplace",
                                      "HAMh"=, "CHAM"=, "HAM"= "ds",
                                      "MSEh"=, "MSCE"=, "MSE"=, "GPL"=, "dnorm");
@@ -4021,7 +4049,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         # If the distribution is default, change it according to the error term
         if(distribution=="default"){
             distributionNew <- switch(loss,
-                                      "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dinvgauss"),
+                                      "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dgamma"),
                                       "MAEh"=, "MACE"=, "MAE"= "dlaplace",
                                       "HAMh"=, "CHAM"=, "HAM"= "ds",
                                       "MSEh"=, "MSCE"=, "MSE"=, "GPL"=, "dnorm");
@@ -4366,9 +4394,15 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             }
         }
         if(all(occurrence!=c("n","none"))){
-            modelName[] <- paste0("i",modelName);
+            modelName[] <- paste0("i",modelName,
+                                  switch(occurrence,
+                                         "f"=,"fixed"="[F]",
+                                         "d"=,"direct"="[D]",
+                                         "o"=,"odds-ratio"="[O]",
+                                         "i"=,"invese-odds-ratio"="[I]",
+                                         "g"=,"general"="[G]",
+                                         ""));
         }
-
 
         modelReturned$model <- modelName;
         modelReturned$timeElapsed <- Sys.time()-startTime;
@@ -4972,15 +5006,14 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
         # Get the IDs of outliers and statistic
         outliers <- outlierdummy(x, level=level, type=type);
-        outliersID <- outliers$id;
         statistic <- outliers$statistic;
 
         # Analyse stuff in logarithms if the error is multiplicative
-        if(any(x$distribution==c("dinvgauss","dgamma","dlnorm"))){
+        if(any(x$distribution==c("dinvgauss","dgamma"))){
             ellipsis$y[] <- log(ellipsis$y);
             statistic <- log(statistic);
         }
-        else if(any(x$distribution==c("dllaplace","dls","dlgnorm"))){
+        else if(any(x$distribution==c("dlnorm","dllaplace","dls","dlgnorm"))){
             ellipsis$y[] <- log(ellipsis$y);
         }
         outliers <- which(ellipsis$y >statistic[2] | ellipsis$y <statistic[1]);
@@ -5276,12 +5309,19 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             yName <- "Studentised";
         }
 
+        # If there is occurrence part, substitute zeroes with NAs
         if(is.occurrence(x$occurrence)){
-            ellipsis$x <- ellipsis$x[actuals(x$occurrence)!=0];
+            ellipsis$x[actuals(x$occurrence)==0] <- NA;
         }
 
+        # Main, labs etc
         if(!any(names(ellipsis)=="main")){
-            ellipsis$main <- paste0(yName," Residuals vs Time");
+            if(any(x$distribution==c("dinvgauss","dgamma","dlnorm","dllaplace","dls","dlgnorm"))){
+                ellipsis$main <- paste0("log(",yName," Residuals) vs Time");
+            }
+            else{
+                ellipsis$main <- paste0(yName," Residuals vs Time");
+            }
         }
 
         if(!any(names(ellipsis)=="xlab")){
@@ -5298,22 +5338,22 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
         # Get the IDs of outliers and statistic
         outliers <- outlierdummy(x, level=level, type=type);
-        outliersID <- outliers$id;
         statistic <- outliers$statistic;
 
         # Analyse stuff in logarithms if the error is multiplicative
-        if(any(x$distribution==c("dinvgauss","dgamma","dlnorm"))){
+        if(any(x$distribution==c("dinvgauss","dgamma"))){
             ellipsis$x[] <- log(ellipsis$x);
             statistic <- log(statistic);
         }
-        else if(any(x$distribution==c("dllaplace","dls","dlgnorm"))){
+        else if(any(x$distribution==c("dlnorm","dllaplace","dls","dlgnorm"))){
             ellipsis$x[] <- log(ellipsis$x);
         }
         outliers <- which(ellipsis$x >statistic[2] | ellipsis$x <statistic[1]);
 
 
         if(!any(names(ellipsis)=="ylim")){
-            ellipsis$ylim <- c(-max(abs(ellipsis$x)),max(abs(ellipsis$x)))*1.2;
+            ellipsis$ylim <- c(-max(abs(ellipsis$x),na.rm=TRUE),
+                               max(abs(ellipsis$x),na.rm=TRUE))*1.2;
         }
 
         if(legend){
@@ -5328,7 +5368,15 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             points(time(ellipsis$x)[outliers], ellipsis$x[outliers], pch=16);
             text(time(ellipsis$x)[outliers], ellipsis$x[outliers], labels=outliers, pos=(ellipsis$x[outliers]>0)*2+1);
         }
+        # If there is occurrence model, plot points to fill in breaks
+        if(is.occurrence(x$occurrence)){
+            points(time(ellipsis$x), ellipsis$x);
+        }
         if(lowess){
+            # Substitute NAs with the mean
+            if(any(is.na(ellipsis$x))){
+                ellipsis$x[is.na(ellipsis$x)] <- mean(ellipsis$x, na.rm=TRUE);
+            }
             lines(lowess(c(1:length(ellipsis$x)),ellipsis$x), col="red");
         }
         abline(h=0, col="grey", lty=2);
@@ -5396,6 +5444,7 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     # 12. Plot of states
     plot8 <- function(x, ...){
         parDefault <- par(no.readonly = TRUE);
+        on.exit(par(parDefault));
         if(any(unlist(gregexpr("C",x$model))==-1)){
             statesNames <- c("actuals",colnames(x$states),"residuals");
             x$states <- cbind(actuals(x),x$states,residuals(x));
@@ -5432,7 +5481,80 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             # If we did combinations, we cannot return anything
             message("Combination of models was done. Sorry, but there is nothing to plot.");
         }
-        par(parDefault);
+    }
+
+    # 13 and 14. Fitted vs (std. Residuals)^2 or Fitted vs |std. Residuals|
+    plot9 <- function(x, type="abs", ...){
+        ellipsis <- list(...);
+
+        ellipsis$x <- as.vector(fitted(x));
+        ellipsis$y <- as.vector(rstandard(x));
+        if(any(x$distribution==c("dinvgauss","dgamma"))){
+            ellipsis$y[] <- log(ellipsis$y);
+        }
+        if(type=="abs"){
+            ellipsis$y[] <- abs(ellipsis$y);
+        }
+        else{
+            ellipsis$y[] <- ellipsis$y^2;
+        }
+
+        if(is.occurrence(x$occurrence)){
+            ellipsis$x <- ellipsis$x[actuals(x$occurrence)!=0];
+            ellipsis$y <- ellipsis$y[actuals(x$occurrence)!=0];
+        }
+        # Remove NAs
+        if(any(is.na(ellipsis$x))){
+            ellipsis$x <- ellipsis$x[!is.na(ellipsis$x)];
+            ellipsis$y <- ellipsis$y[!is.na(ellipsis$y)];
+        }
+
+        if(!any(names(ellipsis)=="main")){
+            if(type=="abs"){
+                if(any(x$distribution==c("dinvgauss","dgamma","dlnorm","dllaplace","dls","dlgnorm"))){
+                    ellipsis$main <- paste0("|log(Standardised Residuals)| vs Fitted");
+                }
+                else{
+                    ellipsis$main <- "|Standardised Residuals| vs Fitted";
+                }
+            }
+            else{
+                if(any(x$distribution==c("dinvgauss","dgamma","dlnorm","dllaplace","dls","dlgnorm"))){
+                    ellipsis$main <- paste0("log(Standardised Residuals)^2 vs Fitted");
+                }
+                else{
+                    ellipsis$main <- "Standardised Residuals^2 vs Fitted";
+                }
+            }
+        }
+
+        if(!any(names(ellipsis)=="xlab")){
+            ellipsis$xlab <- "Fitted";
+        }
+        if(!any(names(ellipsis)=="ylab")){
+            if(type=="abs"){
+                if(any(x$distribution==c("dinvgauss","dgamma","dlnorm","dllaplace","dls","dlgnorm"))){
+                    ellipsis$ylab <- "|log(Standardised Residuals)|";
+                }
+                else{
+                    ellipsis$ylab <- "|Standardised Residuals|";
+                }
+            }
+            else{
+                if(any(x$distribution==c("dinvgauss","dgamma","dlnorm","dllaplace","dls","dlgnorm"))){
+                    ellipsis$ylab <- "log(Standardised Residuals)^2";
+                }
+                else{
+                    ellipsis$ylab <- "Standardised Residuals^2";
+                }
+            }
+        }
+
+        do.call(plot,ellipsis);
+        abline(h=0, col="grey", lty=2);
+        if(lowess){
+            lines(lowess(ellipsis$x[!is.na(ellipsis$y)], ellipsis$y[!is.na(ellipsis$y)]), col="red");
+        }
     }
 
     # Do plots
@@ -5482,6 +5604,14 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
     if(any(which==12)){
         plot8(x, ...);
+    }
+
+    if(any(which==13)){
+        plot9(x, ...);
+    }
+
+    if(any(which==14)){
+        plot9(x, type="squared", ...);
     }
 }
 
@@ -6598,7 +6728,7 @@ rstandard.adam <- function(model, ...){
     }
     else if(model$distribution=="dlnorm"){
         # Debias the residuals
-        errors[] <- log(errors) - model$scale^2/2;
+        errors[] <- log(errors) + model$scale^2/2;
         return(exp((errors - mean(errors[residsToGo])) / sqrt(model$scale^2 * obs / df)));
     }
     else if(model$distribution=="dllaplace"){
@@ -6725,7 +6855,7 @@ outlierdummy.adam <- function(object, level=0.999, type=c("rstandard","rstudent"
     outliersNumber <- length(outliersID);
     if(outliersNumber>0){
         outliers <- matrix(0, nobs(object), outliersNumber,
-                           dimnames=list(rownames(object$data),
+                           dimnames=list(rownames(actuals(object)),
                                          paste0("outlier",c(1:outliersNumber))));
         outliers[cbind(outliersID,c(1:outliersNumber))] <- 1;
     }
@@ -7094,6 +7224,9 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
     Ttype <- substr(model,2,2);
     Stype <- substr(model,nchar(model),nchar(model));
 
+    etsModel <- any(unlist(gregexpr("ETS",object$model))!=-1);
+    arimaModel <- any(unlist(gregexpr("ARIMA",object$model))!=-1);
+
     # Technical parameters
     lagsModelAll <- modelLags(object);
     lagsModelMax <- max(lagsModelAll);
@@ -7106,7 +7239,6 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
         lagsModelMin <- min(lagsModelMin);
     }
     profilesRecentTable <- object$profile;
-    yClasses <- class(actuals(object));
 
     if(!is.null(object$initial$seasonal)){
         if(is.list(object$initial$seasonal)){
@@ -7126,28 +7258,24 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
     obsInSample <- nobs(object);
 
     yIndex <- time(actuals(object));
+    yClasses <- class(actuals(object));
     # Create indices for the future
-    if(any(yClasses=="ts")){
-        yForecastIndex <- yIndex[obsInSample]+as.numeric(diff(tail(yIndex,2)))*c(1:h);
-    }
-    else{
-        yForecastIndex <- yIndex[obsInSample]+diff(tail(yIndex,2))*c(1:h);
-    }
-    # Get the observed profiles
-    profilesObservedTable <- adamProfileCreator(lagsModelAll, lagsModelMax, obsInSample+h,
-                                                lags(object), c(yIndex,yForecastIndex),
-                                                yClasses)$observed[,-c(1:(obsInSample+lagsModelMax)),drop=FALSE];
-
     if(any(yClasses=="ts")){
         # ts structure
         yForecastStart <- time(actuals(object))[obsInSample]+deltat(actuals(object));
         yFrequency <- frequency(actuals(object));
+        yForecastIndex <- yIndex[obsInSample]+as.numeric(diff(tail(yIndex,2)))*c(1:h);
     }
     else{
-        # zoo thingy
+        # zoo
         yIndex <- time(actuals(object));
         yForecastIndex <- yIndex[obsInSample]+diff(tail(yIndex,2))*c(1:h);
     }
+
+    # Get the observed profiles
+    profilesObservedTable <- adamProfileCreator(lagsModelAll, lagsModelMax, obsInSample+h,
+                                                lags(object), c(yIndex,yForecastIndex),
+                                                yClasses)$observed[,-c(1:(obsInSample+lagsModelMax)),drop=FALSE];
 
     # All the important matrices
     matVt <- t(object$states[obsStates-(lagsModelMax:1)+1,,drop=FALSE]);
@@ -7224,7 +7352,7 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
         }
 
         # If the names are wrong, transform to data frame and expand
-        if(!all(xregNames %in% colnames(xreg))){
+        if(!all(xregNames %in% colnames(xreg)) && !is.data.frame(xreg)){
             xreg <- as.data.frame(xreg);
         }
 
@@ -7246,6 +7374,7 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
             else{
                 xregModelMatrix <- model.matrix(xregData,data=xregData);
             }
+            xregNames[] <- make.names(xregNames, unique=TRUE);
             colnames(xregModelMatrix) <- make.names(colnames(xregModelMatrix), unique=TRUE);
             newdata <- as.matrix(xregModelMatrix)[,xregNames,drop=FALSE];
             rm(xregData,xregModelMatrix);
@@ -7256,10 +7385,6 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
         rm(xreg);
 
         matWt[,componentsNumberETS+componentsNumberARIMA+c(1:xregNumber)] <- newdata;
-        # If this is not "adapt", then fill in the matrix with zeroes
-        # if(object$regressors!="adapt"){
-        #     vecG <- matrix(c(vecG,rep(0,xregNumber)),ncol=1);
-        # }
     }
     else{
         xregNumber <- 0;
@@ -7274,8 +7399,7 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
     # If this is "prediction", do simulations for multiplicative components
     if(interval=="prediction"){
         # Simulate stuff for the ETS only
-        if((any(c(Etype,Ttype,Stype)=="M") && modelType(object)!="NNN") || xregNumber>0 ||
-           any(object$distribution==c("dinvgauss","dgamma","dlnorm"))){
+        if(etsModel || xregNumber>0){
             interval <- "simulated";
         }
         else{
@@ -7501,7 +7625,7 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
         if(any(interval==c("approximate","confidence"))){
             s2 <- sigma(object)^2;
             # IG and Lnorm can use approximations from the multiplications
-            if(any(object$distribution==c("dinvgauss","dgamma","dlnorm","dllaplace","dls","dlgnorm")) && Etype=="M"){
+            if(etsModel && any(object$distribution==c("dinvgauss","dgamma","dlnorm","dllaplace","dls","dlgnorm")) && Etype=="M"){
                 vcovMulti <- adamVarAnal(lagsModelAll, h, matWt[1,,drop=FALSE], matF, vecG, s2);
                 if(any(object$distribution==c("dlnorm","dls","dllaplace","dlgnorm"))){
                     vcovMulti[] <- log(1+vcovMulti);
@@ -7650,10 +7774,8 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
                 }
             }
             else if(object$distribution=="dlnorm"){
-                yLower[] <- qlnorm(levelLow, Re(1-sqrt(abs(1-vcovMulti))),
-                                   sqrt(2*Re(1-sqrt(abs(1-vcovMulti)))));
-                yUpper[] <- qlnorm(levelUp, Re(1-sqrt(abs(1-vcovMulti))),
-                                   sqrt(2*Re(1-sqrt(abs(1-vcovMulti)))));
+                yLower[] <- qlnorm(levelLow, sqrt(abs(1-vcovMulti))-1, sqrt(vcovMulti));
+                yUpper[] <- qlnorm(levelUp, sqrt(abs(1-vcovMulti))-1, sqrt(vcovMulti));
                 if(Etype=="A"){
                     yLower[] <- (yLower-1)*yForecast;
                     yUpper[] <-(yUpper-1)*yForecast;
@@ -7679,6 +7801,10 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
                 scale <- sqrt(vcovMulti*(gamma(1/object$other$shape)/gamma(3/object$other$shape)));
                 yLower[] <- suppressWarnings(exp(qgnorm(levelLow, 0, scale, object$other$shape)));
                 yUpper[] <- suppressWarnings(exp(qgnorm(levelUp, 0, scale, object$other$shape)));
+                if(Etype=="A"){
+                    yLower[] <- (yLower-1)*yForecast;
+                    yUpper[] <-(yUpper-1)*yForecast;
+                }
             }
             else if(object$distribution=="dinvgauss"){
                 yLower[] <- qinvgauss(levelLow, 1, dispersion=vcovMulti);
