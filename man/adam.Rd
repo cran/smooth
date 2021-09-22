@@ -275,7 +275,7 @@ the actual values in the first column,
 \item \code{residuals} - the vector of residuals,
 \item \code{forecast} - the point forecast for h steps ahead (by default NA is returned). NOTE
 that these do not always correspond to the conditional expectations for ETS models. See ADAM
-textbook, Section 4.4. for details (\url{https://openforecast.org/adam/ETSTaxonomyMaths.html}),
+textbook, Section 6.4. for details (\url{https://openforecast.org/adam/ETSTaxonomyMaths.html}),
 \item \code{states} - the matrix of states with observations in rows and states in columns,
 \item \code{persisten} - the vector of smoothing parameters,
 \item \code{phi} - the value of damping parameter,
@@ -303,6 +303,7 @@ the model,
 \item \code{lags} - the vector of lags used in the model construction,
 \item \code{lagsAll} - the vector of the internal lags used in the model,
 \item \code{profile} - the matrix with the profile used in the construction of the model,
+\item \code{profileInitial} - the matrix with the initial profile (for the before the sample values),
 \item \code{call} - the call used in the evaluation,
 \item \code{bounds} - the type of bounds used in the process,
 \item \code{other} - the list with other parameters, such as shape for distributions or ARIMA

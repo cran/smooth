@@ -12,9 +12,9 @@ knitr::opts_chunk$set(
 )
 
 ## ----load_libraries, message=FALSE, warning=FALSE-----------------------------
-require(Mcomp)
 require(greybox)
 require(smooth)
+require(Mcomp)
 
 ## -----------------------------------------------------------------------------
 testModel <- adam(M3[[2568]], "MMM", lags=c(1,12), distribution="dnorm")

@@ -1,7 +1,7 @@
 parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=FALSE, arma,
                               outliers=c("ignore","use","select"), level=0.99,
                               persistence, phi, initial,
-                              distribution=c("default","dnorm","dlaplace","ds","dgnorm",
+                              distribution=c("default","dnorm","dlaplace","dalaplace","ds","dgnorm",
                                              "dlnorm","dinvgauss","dgamma"),
                               loss, h, holdout,occurrence,
                               ic=c("AICc","AIC","BIC","BICc"), bounds=c("traditional","usual","admissible","none"),
@@ -418,6 +418,14 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     # Add one for the level
     lags <- c(1,unique(lags[lags>1]));
 
+    # Warning if the lags length is higher than the sample size
+    if(max(lags) >= obsInSample){
+        warning("The maximum lags value is ", max(lags),
+                ", while the sample size is ", obsInSample,
+                ". I cannot guarantee that I'll be able to fit the model.",
+                call.=FALSE);
+    }
+
     #### ARIMA term ####
     # This should be available for pure models only
     if(is.list(orders)){
@@ -667,7 +675,8 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
 
     if(!fast){
         #### Distribution selected ####
-        distribution <- match.arg(distribution);
+        distribution <- match.arg(distribution[1], c("default","dnorm","dlaplace","dalaplace","ds","dgnorm",
+                                                  "dlnorm","dinvgauss","dgamma"));
     }
 
     if(select){
@@ -823,9 +832,9 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                             names(persistenceTrend) <- "beta";
                         }
                         if(Stype!="N" && length(persistence)>j){
-                            j <- j+1;
-                            persistenceSeasonal <- as.vector(persistence)[j];
+                            persistenceSeasonal <- as.vector(persistence)[j+c(1:length(lagsModelSeasonal))];
                             names(persistenceSeasonal) <- paste0("gamma",c(1:length(persistenceSeasonal)));
+                            j <- j+length(lagsModelSeasonal);
                         }
                     }
                     if(xregModel && length(persistence)>j){
@@ -938,11 +947,11 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     #### This needs to be amended after developing the first prototype! ####
     # If we have the zoo class and weird lags, amend profiles
     # Weird lags (dst and fractional): 24, 24*2 (half hour), 52, 24*4 (15 minutes), 7*24, 7*48, 365, 24*52, 24*365
-    if(any(yClasses=="zoo") && any(lags %in% c(24, 48, 52, 96, 168, 336, 365, 1248, 8760))){
+    # if(any(yClasses=="zoo") && any(lags %in% c(24, 48, 52, 96, 168, 336, 365, 1248, 8760))){
         # For hourly, half-hourly and quarter hour data, just amend the profiles for DST.
         # For daily, repeat profile of 28th on 29th February.
         # For weekly, repeat the last week, when we have 53 instead of 52.
-    }
+    # }
 
     #### Occurrence variable ####
     if(is.occurrence(occurrence)){
@@ -1080,6 +1089,10 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
             Stype[] <- switch(Stype,"Y"=,"Z"=,"P"=,"F"="X",Stype);
             modelsPool <- NULL;
             warning("Only additive models are allowed for your data. Changing the selection mechanism.",
+                    call.=FALSE);
+        }
+        else if(!allowMultiplicative && any(c(Etype,Ttype,Stype)=="M")){
+            warning("Your data contains non-positive values, so the ETS(",model,") might break down.",
                     call.=FALSE);
         }
         else if(any(model==c("PPP","FFF")) && allowMultiplicative){
@@ -2452,31 +2465,48 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                 }
                 # We have enough observations for trend model
                 if(obsNonzero > (5 + nParamExo)){
-                    modelsPool <- c(modelsPool,"AAN");
-                    if(allowMultiplicative){
+                    if(any(Ttype==c("Z","X","A"))){
+                        modelsPool <- c(modelsPool,"AAN");
+                    }
+                    if(allowMultiplicative && any(Ttype==c("Z","Y","M"))){
                         modelsPool <- c(modelsPool,"AMN","MAN","MMN");
                     }
                 }
                 # We have enough observations for damped trend model
                 if(obsNonzero > (6 + nParamExo)){
-                    modelsPool <- c(modelsPool,"AAdN");
-                    if(allowMultiplicative){
+                    if(any(Ttype==c("Z","X","A"))){
+                        modelsPool <- c(modelsPool,"AAdN");
+                    }
+                    if(allowMultiplicative && any(Ttype==c("Z","Y","M"))){
                         modelsPool <- c(modelsPool,"AMdN","MAdN","MMdN");
                     }
                 }
                 # We have enough observations for seasonal model
                 if((obsNonzero > (2*lagsModelMax)) && lagsModelMax!=1){
-                    modelsPool <- c(modelsPool,"ANA");
-                    if(allowMultiplicative){
+                    if(any(Stype==c("Z","X","A"))){
+                        modelsPool <- c(modelsPool,"ANA");
+                    }
+                    if(allowMultiplicative && any(Stype==c("Z","Y","M"))){
                         modelsPool <- c(modelsPool,"ANM","MNA","MNM");
                     }
                 }
                 # We have enough observations for seasonal model with trend
                 if((obsNonzero > (6 + lagsModelMax + nParamExo)) &&
                    (obsNonzero > 2*lagsModelMax) && lagsModelMax!=1){
-                    modelsPool <- c(modelsPool,"AAA");
-                    if(allowMultiplicative){
-                        modelsPool <- c(modelsPool,"AAM","AMA","AMM","MAA","MAM","MMA","MMM");
+                    if(any(Ttype==c("Z","X","A")) && any(Stype==c("Z","X","A"))){
+                        modelsPool <- c(modelsPool,"AAA");
+                    }
+                    if(allowMultiplicative && any(Ttype==c("Z","X","A")) && any(Stype==c("Z","Y","A"))){
+                        modelsPool <- c(modelsPool,"MAA");
+                    }
+                    if(allowMultiplicative && any(Ttype==c("Z","X","A")) && any(Stype==c("Z","Y","M"))){
+                        modelsPool <- c(modelsPool,"AAM","MAM");
+                    }
+                    if(allowMultiplicative && any(Ttype==c("Z","Y","M")) && any(Stype==c("Z","X","A"))){
+                        modelsPool <- c(modelsPool,"AMA","MMA");
+                    }
+                    if(allowMultiplicative && any(Ttype==c("Z","Y","M")) && any(Stype==c("Z","Y","M"))){
+                        modelsPool <- c(modelsPool,"AMM","MMM");
                     }
                 }
 

@@ -3,9 +3,9 @@ knitr::opts_chunk$set(fig.width=6, fig.height=4, fig.path='Figs/', fig.show='hol
                       warning=FALSE, message=FALSE)
 
 ## ----load_libraries, message=FALSE, warning=FALSE-----------------------------
-require(Mcomp)
 require(smooth)
 require(greybox)
+require(Mcomp)
 
 ## ----es_N2457-----------------------------------------------------------------
 es(M3$N2457$x, h=18, holdout=TRUE, silent=FALSE)

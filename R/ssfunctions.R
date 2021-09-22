@@ -529,6 +529,11 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
         nParamMax <- 0;
     }
 
+    # Make sure that y is ts
+    if(!is.ts(y)){
+        y <- ts(y);
+    }
+
     ##### Lags and components for GUM #####
     if(smoothType=="gum"){
         if(any(is.complex(c(orders,lags)))){
@@ -1231,11 +1236,11 @@ ssInput <- function(smoothType=c("es","gum","ces","ssarima","smoothC"),...){
         }
 
         # Check the length of the provided data. Say bad words if:
-        # 1. Seasonal model, <=2 seasons of data and no initial seasonals.
-        # 2. Seasonal model, <=1 season of data, no initial seasonals and no persistence.
+        # 1. Seasonal model, <2 seasons of data and no initial seasonals.
+        # 2. Seasonal model, <1 season of data, no initial seasonals and no persistence.
         if(is.null(modelsPool)){
-            if((modelIsSeasonal & (obsInSample <= 2*dataFreq) & is.null(initialSeason)) |
-               (modelIsSeasonal & (obsInSample <= dataFreq) & is.null(initialSeason) & is.null(persistence))){
+            if((modelIsSeasonal & (obsInSample < 2*dataFreq) & is.null(initialSeason)) |
+               (modelIsSeasonal & (obsInSample < dataFreq) & is.null(initialSeason) & is.null(persistence))){
                 if(is.null(initialSeason)){
                     warning(paste0("Sorry, but we don't have enough observations for the seasonal model!\n",
                                    "Switching to non-seasonal."),call.=FALSE);
@@ -3430,7 +3435,7 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
         if(any(occurrence==c("none","n"))){
             cat(paste(paste0("MPE: ",round(errormeasures["MPE"],3)*100,"%"),
                       paste0("sCE: ",round(errormeasures["sCE"],3)*100,"%"),
-                      paste0("Bias: ",round(errormeasures["cbias"],3)*100,"%"),
+                      paste0("Asymmetry: ",round(errormeasures["asymmetry"],3)*100,"%"),
                       paste0("MAPE: ",round(errormeasures["MAPE"],3)*100,"%\n"),sep="; "));
             cat(paste(paste0("MASE: ",round(errormeasures["MASE"],3)),
                       paste0("sMAE: ",round(errormeasures["sMAE"],3)*100,"%"),
@@ -3439,7 +3444,7 @@ ssOutput <- function(timeelapsed, modelname, persistence=NULL, transition=NULL, 
                       paste0("rRMSE: ",round(errormeasures["rRMSE"],3),"\n"),sep="; "));
         }
         else{
-            cat(paste(paste0("Bias: ",round(errormeasures["cbias"],3)*100,"%"),
+            cat(paste(paste0("Asymmetry: ",round(errormeasures["asymmetry"],3)*100,"%"),
                       paste0("sMSE: ",round(errormeasures["sMSE"],3)*100,"%"),
                       paste0("rRMSE: ",round(errormeasures["rRMSE"],3)),
                       paste0("sPIS: ",round(errormeasures["sPIS"],3)*100,"%"),
