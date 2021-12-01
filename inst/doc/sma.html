@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2021-09-22" />
+<meta name="date" content="2021-12-01" />
 
 <title>sma() - Simple Moving Average</title>
 
@@ -141,7 +141,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 <h1 class="title toc-ignore">sma() - Simple Moving Average</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2021-09-22</h4>
+<h4 class="date">2021-12-01</h4>
 
 
 
@@ -169,7 +169,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <p>It appears that SMA(13) is the optimal model for this time series, which is not obvious. Note also that the forecast trajectory of SMA(13) is not just a straight line. This is because the actual values are used in construction of point forecasts up to h=13.</p>
 <p>If we try selecting SMA order for data without substantial trend, then we will end up with some other order. For example, let’s consider a seasonal time series N2568:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sma</span>(M3<span class="sc">$</span>N2568<span class="sc">$</span>x, <span class="at">h=</span><span class="dv">18</span>, <span class="at">interval=</span><span class="cn">TRUE</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.18 seconds
+<pre><code>## Time elapsed: 0.1 seconds
 ## Model estimated: SMA(12)
 ## Initial values were produced using backcasting.
 ## 

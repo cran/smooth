@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2021-09-22" />
+<meta name="date" content="2021-12-01" />
 
 <title>ces() - Complex Exponential Smoothing</title>
 
@@ -141,7 +141,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 <h1 class="title toc-ignore">ces() - Complex Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2021-09-22</h4>
+<h4 class="date">2021-12-01</h4>
 
 
 
@@ -175,7 +175,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">auto.ces</span>(M3<span class="sc">$</span>N2457<span class="sc">$</span>x, <span class="at">h=</span><span class="dv">18</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">interval=</span><span class="st">&quot;p&quot;</span>, <span class="at">silent=</span><span class="cn">FALSE</span>)</span></code></pre></div>
 <pre><code>## Estimating CES with seasonality: &quot;n&quot; &quot;s&quot; &quot;f&quot;  
 ## The best model is with seasonality = &quot;f&quot;</code></pre>
-<pre><code>## Time elapsed: 0.16 seconds
+<pre><code>## Time elapsed: 0.15 seconds
 ## Model estimated: CES(f)
 ## a0 + ia1: 1.1276+1.0135i
 ## b0 + ib1: 0.9944+1.0005i
@@ -222,26 +222,27 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">cbind</span>(<span class="fu">rnorm</span>(<span class="fu">length</span>(M3<span class="sc">$</span>N2457<span class="sc">$</span>x),<span class="dv">50</span>,<span class="dv">3</span>),<span class="fu">rnorm</span>(<span class="fu">length</span>(M3<span class="sc">$</span>N2457<span class="sc">$</span>x),<span class="dv">100</span>,<span class="dv">7</span>))</span></code></pre></div>
 <p><code>ces()</code> allows using exogenous variables and different types of prediction interval in exactly the same manner as <code>es()</code>:</p>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">auto.ces</span>(M3<span class="sc">$</span>N2457<span class="sc">$</span>x, <span class="at">h=</span><span class="dv">18</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">xreg=</span>x, <span class="at">xregDo=</span><span class="st">&quot;select&quot;</span>, <span class="at">interval=</span><span class="st">&quot;p&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.51 seconds
-## Model estimated: CES(f)
-## a0 + ia1: 1.1276+1.0135i
-## b0 + ib1: 0.9944+1.0005i
+<pre><code>## Time elapsed: 0.76 seconds
+## Model estimated: CESX(f)
+## a0 + ia1: 1.1191+1.0059i
+## b0 + ib1: 1.0176+0.9992i
 ## Initial values were produced using backcasting.
+## Xreg coefficients were estimated in a normal style
 ## 
-## Loss function type: likelihood; Loss function value: 834.4209
-## Error standard deviation: 1355.883
+## Loss function type: likelihood; Loss function value: 831.8025
+## Error standard deviation: 1323.812
 ## Sample size: 97
-## Number of estimated parameters: 5
-## Number of degrees of freedom: 92
+## Number of estimated parameters: 6
+## Number of degrees of freedom: 91
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
-## 1678.842 1679.501 1691.715 1693.224 
+## 1675.605 1676.538 1691.053 1693.188 
 ## 
 ## 95% parametric prediction interval was constructed
 ## 61% of values are in the prediction interval
 ## Forecast errors:
-## MPE: 9.9%; sCE: 1232.9%; Asymmetry: 66.4%; MAPE: 33.7%
-## MASE: 2.325; sMAE: 94.9%; sMSE: 166.8%; rMAE: 0.993; rRMSE: 1.133</code></pre>
+## MPE: 14.6%; sCE: 1410%; Asymmetry: 76.5%; MAPE: 34.6%
+## MASE: 2.441; sMAE: 99.6%; sMSE: 180.7%; rMAE: 1.043; rRMSE: 1.179</code></pre>
 
 
 

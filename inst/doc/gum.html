@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2021-09-22" />
+<meta name="date" content="2021-12-01" />
 
 <title>gum() - Generalised Univariate Model</title>
 
@@ -141,7 +141,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 <h1 class="title toc-ignore">gum() - Generalised Univariate Model</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2021-09-22</h4>
+<h4 class="date">2021-12-01</h4>
 
 
 
@@ -154,7 +154,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <p>Generalised Exponential Smoothing is a next step from CES. It is a state-space model in which all the matrices and vectors are estimated. It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GUM<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our example with monthly data N2457, we will have GUM<span class="math inline">\((1^1,1^{12})\)</span>:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">gum</span>(M3<span class="sc">$</span>N2457<span class="sc">$</span>x, <span class="at">h=</span><span class="dv">18</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.2 seconds
+<pre><code>## Time elapsed: 0.19 seconds
 ## Model estimated: GUM(1[1],1[12])
 ## Persistence vector g:
 ##        [,1]    [,2]
@@ -211,7 +211,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 ## Searching for appropriate lags:  —\|/—\|/—\|/We found them!
 ## Searching for appropriate orders:  —\|/—\|/—Orders found.
 ## Reestimating the model. Done!</code></pre>
-<pre><code>## Time elapsed: 11.65 seconds
+<pre><code>## Time elapsed: 11.64 seconds
 ## Model estimated: GUM(1[1],1[4])
 ## Persistence vector g:
 ##       [,1]   [,2]

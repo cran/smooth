@@ -1,3 +1,14 @@
+smooth v3.1.4 (Release data: 2021-12-01)
+=======
+
+Changes:
+* Fixed the description of interval option in adam().
+* Renamed refit() into reapply() to avoid conflicts with the generic of the same name from generics package.
+
+Bugfixes:
+* Fixed a bug in the pre-initialisation of parameters of a model with constant.
+
+
 smooth v3.1.3 (Release data: 2021-09-22)
 =======
 
