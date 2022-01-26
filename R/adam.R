@@ -52,10 +52,10 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 # \item \link[stats]{dlogis} - Logistic Distribution,
 # \item \link[stats]{dt} - T distribution,
 # \item \link[greybox]{dalaplace} - Asymmetric Laplace distribution,
-#' \item \link[stats]{dlnorm} - Log normal distribution,
-# \item dllaplace - Log Laplace distribution,
-# \item dls - Log S distribution,
-# \item dlgnorm - Log Generalised Normal distribution,
+#' \item \link[stats]{dlnorm} - Log-Normal distribution,
+# \item dllaplace - Log-Laplace distribution,
+# \item dls - Log-S distribution,
+# \item dlgnorm - Log-Generalised Normal distribution,
 # \item \link[greybox]{dbcnorm} - Box-Cox normal distribution,
 #' \item \link[stats]{dgamma} - Gamma distribution,
 #' \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
@@ -364,11 +364,11 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 #' @export adam
 adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0),i=c(0),ma=c(0),select=FALSE),
                  constant=FALSE, formula=NULL, regressors=c("use","select","adapt"),
-                 outliers=c("ignore","use","select"), level=0.99,
                  occurrence=c("none","auto","fixed","general","odds-ratio","inverse-odds-ratio","direct"),
                  distribution=c("default","dnorm","dlaplace","ds","dgnorm",
                                 "dlnorm","dinvgauss","dgamma"),
                  loss=c("likelihood","MSE","MAE","HAM","LASSO","RIDGE","MSEh","TMSE","GTMSE","MSCE"),
+                 outliers=c("ignore","use","select"), level=0.99,
                  h=0, holdout=FALSE,
                  persistence=NULL, phi=NULL, initial=c("optimal","backcasting"), arma=NULL,
                  ic=c("AICc","AIC","BIC","BICc"), bounds=c("usual","admissible","none"),
@@ -5237,7 +5237,7 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
         else if(any(x$distribution=="dlnorm")){
             if(!any(names(ellipsis)=="main")){
-                ellipsis$main <- "QQ plot of Log Normal distribution";
+                ellipsis$main <- "QQ plot of Log-Normal distribution";
             }
             ellipsis$x <- qlnorm(ppoints(500), meanlog=0, sdlog=x$scale);
 
@@ -5255,7 +5255,7 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
         else if(x$distribution=="dllaplace"){
             if(!any(names(ellipsis)=="main")){
-                ellipsis$main <- "QQ-plot of Log Laplace distribution";
+                ellipsis$main <- "QQ-plot of Log-Laplace distribution";
             }
             ellipsis$x <- exp(qlaplace(ppoints(500), mu=0, scale=x$scale));
 
@@ -5273,7 +5273,7 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
         else if(x$distribution=="dls"){
             if(!any(names(ellipsis)=="main")){
-                ellipsis$main <- "QQ-plot of Log S distribution";
+                ellipsis$main <- "QQ-plot of Log-S distribution";
             }
             ellipsis$x <- exp(qs(ppoints(500), mu=0, scale=x$scale));
 
@@ -5291,7 +5291,7 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
         else if(x$distribution=="dlgnorm"){
             if(!any(names(ellipsis)=="main")){
-                ellipsis$main <- paste0("QQ-plot of Log Generalised Normal distribution with shape=",round(x$other$shape,3));
+                ellipsis$main <- paste0("QQ-plot of Log-Generalised Normal distribution with shape=",round(x$other$shape,3));
             }
             ellipsis$x <- exp(qgnorm(ppoints(500), mu=0, scale=x$scale, shape=x$other$shape));
 
@@ -5734,10 +5734,10 @@ print.adam <- function(x, digits=4, ...){
                       "dlogis" = "Logistic",
                       "dt" = paste0("Student t with nu=",round(x$other$nu, digits)),
                       "dalaplace" = paste0("Asymmetric Laplace with alpha=",round(x$other$alpha,digits)),
-                      "dlnorm" = "Log Normal",
-                      "dllaplace" = "Log Laplace",
-                      "dls" = "Log S",
-                      "dlgnorm" = paste0("Log Generalised Normal with shape=",round(x$other$shape, digits)),
+                      "dlnorm" = "Log-Normal",
+                      "dllaplace" = "Log-Laplace",
+                      "dls" = "Log-S",
+                      "dlgnorm" = paste0("Log-Generalised Normal with shape=",round(x$other$shape, digits)),
                       # "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambda,2)),
                       "dinvgauss" = "Inverse Gaussian",
                       "dgamma" = "Gamma"
@@ -6253,6 +6253,7 @@ summary.adam <- function(object, level=0.95, bootstrap=FALSE, ...){
     ourReturn$nParam <- object$nParam;
     ourReturn$call <- object$call;
     ourReturn$other <- object$other;
+    ourReturn$sigma <- sigma(object);
 
     if(object$loss=="likelihood" ||
        (any(object$loss==c("MSE","MSEh","MSCE")) & (object$distribution=="dnorm")) ||
@@ -6302,10 +6303,10 @@ print.summary.adam <- function(x, ...){
                       "dlogis" = "Logistic",
                       "dt" = paste0("Student t with nu=",round(x$other$nu, digits)),
                       "dalaplace" = paste0("Asymmetric Laplace with alpha=",round(x$other$alpha,digits)),
-                      "dlnorm" = "Log Normal",
-                      "dllaplace" = "Log Laplace",
-                      "dls" = "Log S",
-                      "dlgnorm" = paste0("Log Generalised Normal with shape=",round(x$other$shape,digits)),
+                      "dlnorm" = "Log-Normal",
+                      "dllaplace" = "Log-Laplace",
+                      "dls" = "Log-S",
+                      "dlgnorm" = paste0("Log-Generalised Normal with shape=",round(x$other$shape,digits)),
                       # "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambda,2)),
                       "dinvgauss" = "Inverse Gaussian",
                       "dgamma" = "Gamma"
@@ -6339,6 +6340,7 @@ print.summary.adam <- function(x, ...){
         cat("\nAll coefficients were provided");
     }
 
+    cat("\nError standard deviation:", round(x$sigma,digits));
     cat("\nSample size:", x$nobs);
     cat("\nNumber of estimated parameters:", x$nparam);
     cat("\nNumber of degrees of freedom:", x$nobs-x$nparam);
@@ -7248,7 +7250,11 @@ plot.adam.predict <- function(x, ...){
 
 # Work in progress...
 #' @param newdata The new data needed in order to produce forecasts.
-#' @param nsim Number of iterations to do in case of \code{interval="simulated"}.
+#' @param nsim Number of iterations to do in cases of \code{interval="simulated"},
+#' \code{interval="prediction"} (for mixed and multiplicative model),
+#' \code{interval="confidence"} and \code{interval="complete"}.
+#' The default value for the prediction / simulated interval is 1000. In case of
+#' confidence or complete intervals, this is set to 100.
 #' @param interval What type of mechanism to use for interval construction.
 #' For ADAM: the
 #' recommended option is \code{interval="prediction"}, which will use analytical
@@ -8218,10 +8224,10 @@ plot.adam.forecast <- function(x, ...){
                           "dgnorm" = paste0("Generalised Normal with shape=",round(x$model$other$shape,digits)),
                           "dalaplace" = paste0("Asymmetric Laplace with alpha=",round(x$model$other$alpha,digits)),
                           "dt" = paste0("Student t with nu=",round(x$model$other$nu, digits)),
-                          "dlnorm" = "Log Normal",
-                          "dllaplace" = "Log Laplace",
-                          "dls" = "Log S",
-                          "dgnorm" = paste0("Log Generalised Normal with shape=",round(x$model$other$shape,digits)),
+                          "dlnorm" = "Log-Normal",
+                          "dllaplace" = "Log-Laplace",
+                          "dls" = "Log-S",
+                          "dgnorm" = paste0("Log-Generalised Normal with shape=",round(x$model$other$shape,digits)),
                           # "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambda,2)),
                           "dinvgauss" = "Inverse Gaussian",
                           "dgamma" = "Gamma",

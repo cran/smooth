@@ -4,20 +4,19 @@ knitr::opts_chunk$set(fig.width=6, fig.height=4, fig.path='Figs/', fig.show='hol
 
 ## ----load_libraries, message=FALSE, warning=FALSE-----------------------------
 require(smooth)
-require(Mcomp)
 
 ## ----ces_N2457----------------------------------------------------------------
-ces(M3$N2457$x, h=18, holdout=TRUE, silent=FALSE)
+ces(BJsales, h=12, holdout=TRUE, silent=FALSE)
 
 ## ----auto_ces_N2457-----------------------------------------------------------
-auto.ces(M3$N2457$x, h=18, holdout=TRUE, interval="p", silent=FALSE)
+auto.ces(BJsales, h=12, holdout=TRUE, interval="p", silent=FALSE)
 
 ## ----auto_ces_N2457_optimal---------------------------------------------------
-auto.ces(M3$N2457$x, h=18, holdout=TRUE, initial="o", interval="sp")
+auto.ces(BJsales, h=12, holdout=TRUE, initial="o", interval="sp")
 
 ## ----es_N2457_xreg_create-----------------------------------------------------
-x <- cbind(rnorm(length(M3$N2457$x),50,3),rnorm(length(M3$N2457$x),100,7))
+x <- cbind(rnorm(length(BJsales),50,3),rnorm(length(BJsales),100,7))
 
 ## ----auto_ces_N2457_xreg_simple-----------------------------------------------
-auto.ces(M3$N2457$x, h=18, holdout=TRUE, xreg=x, xregDo="select", interval="p")
+auto.ces(BJsales, h=12, holdout=TRUE, xreg=x, xregDo="select", interval="p")
 

@@ -14,12 +14,12 @@ knitr::opts_chunk$set(
 ## ----load_libraries, message=FALSE, warning=FALSE-----------------------------
 require(greybox)
 require(smooth)
-require(Mcomp)
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[2568]], "MMM", lags=c(1,12), distribution="dnorm")
+testModel <- adam(AirPassengers, "MMM", lags=c(1,12), distribution="dnorm",
+                  h=12, holdout=TRUE)
 summary(testModel)
-plot(forecast(testModel,h=18,interval="prediction"))
+plot(forecast(testModel,h=12,interval="prediction"))
 
 ## -----------------------------------------------------------------------------
 testModel
@@ -37,18 +37,22 @@ plot(testModel,which=12)
 lossFunction <- function(actual, fitted, B){
   return(sum(abs(actual-fitted)^3))
 }
-testModel <- adam(M3[[1234]], "AAN", silent=FALSE, loss=lossFunction)
+testModel <- adam(BJsales, "AAN", silent=FALSE, loss=lossFunction,
+                  h=12, holdout=TRUE)
 testModel
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[1234]], "MMN", silent=FALSE, distribution="dgnorm", shape=3)
+testModel <- adam(BJsales, "MMN", silent=FALSE, distribution="dgnorm", shape=3,
+                  h=12, holdout=TRUE)
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[2568]], "ZXZ", lags=c(1,12), silent=FALSE)
+testModel <- adam(AirPassengers, "ZXZ", lags=c(1,12), silent=FALSE,
+                  h=12, holdout=TRUE)
 testModel
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[2568]], "CXC", lags=c(1,12))
+testModel <- adam(AirPassengers, "CXC", lags=c(1,12),
+                  h=12, holdout=TRUE)
 testForecast <- forecast(testModel,h=18,interval="semiparametric", level=c(0.9,0.95))
 testForecast
 plot(testForecast)
@@ -141,37 +145,44 @@ testModel <- adam(rpois(120,0.5), "MNN", silent=FALSE, h=12, holdout=TRUE,
 testModel
 
 ## -----------------------------------------------------------------------------
-adamModel <- adam(M3[[2568]], "CCC")
-esModel <- es(M3[[2568]], "CCC")
+adamModel <- adam(AirPassengers, "CCC",
+                  h=12, holdout=TRUE)
+esModel <- es(AirPassengers, "CCC",
+              h=12, holdout=TRUE)
 "adam:"
 adamModel
 "es():"
 esModel
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[1234]], "NNN", silent=FALSE, orders=c(0,2,2))
+testModel <- adam(BJsales, "NNN", silent=FALSE, orders=c(0,2,2),
+                  h=12, holdout=TRUE)
 testModel
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[2568]], "NNN", silent=FALSE, lags=c(1,12),
-                  orders=list(ar=c(1,1),i=c(1,1),ma=c(2,2)), distribution="dlnorm")
+testModel <- adam(AirPassengers, "NNN", silent=FALSE, lags=c(1,12),
+                  orders=list(ar=c(1,1),i=c(1,1),ma=c(2,2)), distribution="dlnorm",
+                  h=12, holdout=TRUE)
 testModel
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[2568]], "NNN", silent=FALSE, lags=c(1,12), constant=TRUE,
-                  orders=list(ar=c(1,1),i=c(1,1),ma=c(2,2)), distribution="dnorm")
-testModel
-
-## -----------------------------------------------------------------------------
-testModel <- adam(M3[[2568]], "NNN", silent=FALSE, lags=c(1,12),
+testModel <- adam(AirPassengers, "NNN", silent=FALSE, lags=c(1,12), constant=TRUE,
                   orders=list(ar=c(1,1),i=c(1,1),ma=c(2,2)), distribution="dnorm",
-                  arma=list(ar=c(0.1,0.1), ma=c(-0.96, 0.03, -0.12, 0.03)))
+                  h=12, holdout=TRUE)
 testModel
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(M3[[2568]], "NNN", silent=FALSE, lags=c(1,12),
+testModel <- adam(AirPassengers, "NNN", silent=FALSE, lags=c(1,12),
+                  orders=list(ar=c(1,1),i=c(1,1),ma=c(2,2)), distribution="dnorm",
+                  arma=list(ar=c(0.1,0.1), ma=c(-0.96, 0.03, -0.12, 0.03)),
+                  h=12, holdout=TRUE)
+testModel
+
+## -----------------------------------------------------------------------------
+testModel <- adam(AirPassengers, "NNN", silent=FALSE, lags=c(1,12),
                   orders=list(ar=c(1,1),i=c(1,1),ma=c(2,0)), distribution="dnorm",
-                  initial=list(arima=M3[[2568]]$x[1:24]))
+                  initial=list(arima=AirPassengers[1:24]),
+                  h=12, holdout=TRUE)
 testModel
 
 ## -----------------------------------------------------------------------------
@@ -209,25 +220,30 @@ testModel <- adam(BJData, "AAN", h=18, silent=FALSE, holdout=TRUE, orders=c(1,0,
 summary(testModel)
 
 ## -----------------------------------------------------------------------------
-testModel <- auto.adam(M3[[1234]], "XXX", silent=FALSE,
-                       distribution=c("dnorm","dlaplace","ds"))
+testModel <- auto.adam(BJsales, "XXX", silent=FALSE,
+                       distribution=c("dnorm","dlaplace","ds"),
+                       h=12, holdout=TRUE)
 testModel
 
 ## ----eval=FALSE, echo=TRUE----------------------------------------------------
-#  testModel <- auto.adam(M3[[1234]], "ZZZ", silent=FALSE, parallel=TRUE)
+#  testModel <- auto.adam(BJsales, "ZZZ", silent=FALSE, parallel=TRUE,
+#                         h=12, holdout=TRUE)
 
 ## -----------------------------------------------------------------------------
-testModel <- auto.adam(M3[[1234]], "AAN", orders=list(ar=2,i=2,ma=2), silent=TRUE,
-                       distribution=c("dnorm","dlaplace","ds","dgnorm"))
+testModel <- auto.adam(BJsales, "AAN", orders=list(ar=2,i=2,ma=2), silent=TRUE,
+                       distribution=c("dnorm","dlaplace","ds","dgnorm"),
+                       h=12, holdout=TRUE)
 testModel
 
 ## -----------------------------------------------------------------------------
-testModel <- auto.adam(M3[[1234]], "XXN", orders=list(ar=2,i=2,ma=2,select=TRUE),
-                       distribution="default", silent=FALSE)
+testModel <- auto.adam(BJsales, "XXN", orders=list(ar=2,i=2,ma=2,select=TRUE),
+                       distribution="default", silent=FALSE,
+                       h=12, holdout=TRUE)
 testModel
 
 ## -----------------------------------------------------------------------------
-testModel <- auto.adam(Mcomp::M3[[2568]], "PPP", silent=FALSE, outliers="use",
-                       distribution="default")
+testModel <- auto.adam(AirPassengers, "PPP", silent=FALSE, outliers="use",
+                       distribution="default",
+                       h=12, holdout=TRUE)
 testModel
 
