@@ -1,3 +1,27 @@
+smooth v3.1.6 (Release data: 2022-03-30)
+=======
+
+Changes:
+* Renamed nu into df in distribution="dt" of adam() for consistency with alm().
+* We now import forecast from generics package, not from greybox.
+* sm() method for adam. This supports scale model via ETS / ARIMA / Regression.
+* forecast.adam() is now tuned to work with sm.adam() output.
+* forecast.adam() now works properly with object$scale if it is estimated via sm.adam() (i.e. taking the multistep scale into account).
+* implant() method (imported from greybox) to merge adam and the scale model.
+* The default measurement vector in gum() is now unity. This makes model identifiable.
+* Correct number of degrees of freedom in adam-sm model.
+* Fixes for sm() in case of model="NNN".
+* Always record number of estimated parameters for scale in a separate column in adam().
+* plot.adam() now produces diagnostics plots for scale model if it is implanted for which=c(2:6,8,9,13,14).
+* The order in which in plot.smooth() and plot.adam() now matters.
+
+Bugfixes:
+* Fixed a bug in ssGeneral.cpp, which caused ces() to break in the cases of extreme values of smoothing parameters.
+* A fix in forecast.adam(), which would not rbind the rows correctly in cases of nrow(newdata) < h.
+* A fix in ADAMX for exotic cases, where log(y) was used in alm() (for parameters initialisation), when it shouldn't have.
+* A fix in case of rbind() of data.frame, when one of variables is ts.
+
+
 smooth v3.1.5 (Release data: 2022-01-26)
 =======
 

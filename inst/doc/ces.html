@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2022-01-26" />
+<meta name="date" content="2022-03-29" />
 
 <title>ces() - Complex Exponential Smoothing</title>
 
@@ -141,7 +141,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 <h1 class="title toc-ignore">ces() - Complex Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2022-01-26</h4>
+<h4 class="date">2022-03-29</h4>
 
 
 
@@ -151,7 +151,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <p><code>ces()</code> function allows constructing Complex Exponential Smoothing either with no seasonality, or with simple / partial / full seasonality. A simple call for <code>ces()</code> results in estimation of non-seasonal model:</p>
 <p>For the same series from M3 dataset <code>ces()</code> can be constructed using:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ces</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">silent=</span><span class="cn">FALSE</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.09 seconds
+<pre><code>## Time elapsed: 0.05 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.9981+1.0034i
 ## Initial values were produced using backcasting.
@@ -172,7 +172,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <p>This output is very similar to ones printed out by <code>es()</code> function. The only difference is complex smoothing parameter values which are printed out instead of persistence vector in <code>es()</code>.</p>
 <p>If we want automatic model selection, then we use <code>auto.ces()</code> function:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">auto.ces</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">interval=</span><span class="st">&quot;p&quot;</span>, <span class="at">silent=</span><span class="cn">FALSE</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.07 seconds
+<pre><code>## Time elapsed: 0.04 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.9981+1.0034i
 ## Initial values were produced using backcasting.
@@ -195,7 +195,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <p>Note that prediction interval are too narrow and do not include 95% of values. This is because CES is pure additive model and it cannot take into account possible heteroscedasticity.</p>
 <p>If for some reason we want to optimise initial values then we call:</p>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">auto.ces</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">initial=</span><span class="st">&quot;o&quot;</span>, <span class="at">interval=</span><span class="st">&quot;sp&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.11 seconds
+<pre><code>## Time elapsed: 0.1 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 2.007+1.0035i
 ## Initial values were optimised.
@@ -218,7 +218,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">cbind</span>(<span class="fu">rnorm</span>(<span class="fu">length</span>(BJsales),<span class="dv">50</span>,<span class="dv">3</span>),<span class="fu">rnorm</span>(<span class="fu">length</span>(BJsales),<span class="dv">100</span>,<span class="dv">7</span>))</span></code></pre></div>
 <p><code>ces()</code> allows using exogenous variables and different types of prediction interval in exactly the same manner as <code>es()</code>:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">auto.ces</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">xreg=</span>x, <span class="at">xregDo=</span><span class="st">&quot;select&quot;</span>, <span class="at">interval=</span><span class="st">&quot;p&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.2 seconds
+<pre><code>## Time elapsed: 0.12 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.9981+1.0034i
 ## Initial values were produced using backcasting.
