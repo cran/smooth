@@ -18,5 +18,5 @@ auto.ces(BJsales, h=12, holdout=TRUE, initial="o", interval="sp")
 x <- cbind(rnorm(length(BJsales),50,3),rnorm(length(BJsales),100,7))
 
 ## ----auto_ces_N2457_xreg_simple-----------------------------------------------
-auto.ces(BJsales, h=12, holdout=TRUE, xreg=x, xregDo="select", interval="p")
+auto.ces(BJsales, h=12, holdout=TRUE, xreg=x, regressors="select", interval="p")
 

@@ -146,10 +146,13 @@ BICc.smooth <- function(object, ...){
 #' same model is applied to it and then the empirical 1 to h steps ahead forecast
 #' errors are produced;
 #' }
+#' @param h Forecast horizon to use in the calculations.
+#' @param nsim Number of iterations to produce in the simulation. Only needed if
+#' \code{type="simulated"}
 #' @param ... Other parameters passed to simulate function (if \code{type="simulated"}
-#' is used). These are \code{obs}, \code{nsim} and \code{seed}. By default
-#' \code{obs=1000}, \code{nsim=100}. This approach increases the accuracy of
-#' covariance matrix on small samples and intermittent data;
+#' is used). These are \code{obs} and \code{seed}. By default \code{obs=1000}.
+#' This approach increases the accuracy of covariance matrix on small samples
+#' and intermittent data;
 #' @return Scalar in cases of non-smooth functions. (h x h) matrix otherwise.
 #'
 #' @seealso \link[smooth]{orders}
@@ -163,10 +166,12 @@ BICc.smooth <- function(object, ...){
 #'
 #' @rdname multicov
 #' @export multicov
-multicov <-  function(object, type=c("analytical","empirical","simulated"), ...) UseMethod("multicov")
+multicov <-  function(object, type=c("analytical","empirical","simulated"), h=10, nsim=1000,
+                      ...) UseMethod("multicov")
 
 #' @export
-multicov.default <- function(object, type=c("analytical","empirical","simulated"), ...){
+multicov.default <- function(object, type=c("analytical","empirical","simulated"), h=10, nsim=1000,
+                             ...){
     # Function extracts the conditional variances from the model
     return(sigma(object)^2);
 }
@@ -174,7 +179,8 @@ multicov.default <- function(object, type=c("analytical","empirical","simulated"
 #' @aliases multicov.smooth
 #' @rdname multicov
 #' @export
-multicov.smooth <- function(object, type=c("analytical","empirical","simulated"), ...){
+multicov.smooth <- function(object, type=c("analytical","empirical","simulated"), h=10, nsim=1000,
+                            ...){
     # Function extracts the conditional variances from the model
 
     if(is.smoothC(object)){
@@ -201,10 +207,10 @@ multicov.smooth <- function(object, type=c("analytical","empirical","simulated")
     # Empirical covariance matrix
     if(type=="e"){
         if(errorType(object)=="A"){
-            errors <- object$errors;
+            errors <- rmultistep(object, h=h);
         }
         else{
-            errors <- log(1 + object$errors);
+            errors <- log(1 + rmultistep(object, h=h));
         }
         if(!is.null(object$occurrence)){
             obs <- t((errors!=0)*1) %*% (errors!=0)*1;
@@ -229,12 +235,6 @@ multicov.smooth <- function(object, type=c("analytical","empirical","simulated")
         else{
             obs <- length(actuals(object));
         }
-        if(any(names(ellipsis)=="nsim")){
-            nsim <- ellipsis$nsim;
-        }
-        else{
-            nsim <- 1000;
-        }
         if(any(names(ellipsis)=="seed")){
             seed <- ellipsis$seed;
         }
@@ -243,34 +243,35 @@ multicov.smooth <- function(object, type=c("analytical","empirical","simulated")
         }
 
         h <- length(object$forecast);
-        if(smoothType=="ETS"){
-            smoothFunction <- es;
-        }
-        # GUM models
-        else if(smoothType=="GUM"){
-            smoothFunction <- gum;
-        }
-        # SSARIMA models
-        else if(smoothType=="ARIMA"){
-            smoothFunction <- ssarima;
-        }
-        # CES models
-        else if(smoothType=="CES"){
-            smoothFunction <- ces;
-        }
-        # SMA models
-        else if(smoothType=="SMA"){
-            smoothFunction <- sma;
-        }
+        # if(smoothType=="ETS"){
+        #     smoothFunction <- es;
+        # }
+        # # GUM models
+        # else if(smoothType=="GUM"){
+        #     smoothFunction <- gum;
+        # }
+        # # SSARIMA models
+        # else if(smoothType=="ARIMA"){
+        #     smoothFunction <- ssarima;
+        # }
+        # # CES models
+        # else if(smoothType=="CES"){
+        #     smoothFunction <- ces;
+        # }
+        # # SMA models
+        # else if(smoothType=="SMA"){
+        #     smoothFunction <- sma;
+        # }
 
         covarArray <- array(NA,c(h,h,nsim));
 
         newData <- simulate(object, nsim=nsim, obs=obs, seed=seed);
         for(i in 1:nsim){
             # Apply the model to the simulated data
-            smoothModel <- smoothFunction(newData$data[,i], model=object, h=h);
+            # smoothModel <- smoothFunction(newData$data[,i], model=object, h=h);
             # Remove first h-1 and last values.
-            errors <- smoothModel$errors;
+            # errors <- smoothModel$errors;
+            errors <- rmultistep(object, h=h)
 
             # Transform errors if needed
             if(errorType(object)=="M"){
@@ -300,7 +301,7 @@ multicov.smooth <- function(object, type=c("analytical","empirical","simulated")
         else{
             ot <- rep(1,nobs(object));
         }
-        h <- length(object$forecast);
+        # h <- length(object$forecast);
         lagsModel <- modelLags(object);
         s2 <- sigma(object)^2;
         persistence <- matrix(object$persistence,length(object$persistence),1);
@@ -395,7 +396,7 @@ nparam.smooth <- function(object, ...){
 #'
 #' # Generate data, apply es() with the holdout parameter and calculate PLS
 #' x <- rnorm(100,0,1)
-#' ourModel <- es(x, h=10, holdout=TRUE, interval=TRUE)
+#' ourModel <- es(x, h=10, holdout=TRUE)
 #' pls(ourModel, type="a")
 #' pls(ourModel, type="e")
 #' pls(ourModel, type="s", obs=100, nsim=100)
@@ -680,13 +681,12 @@ fitted.smooth.forecast <- function(object, ...){
 
 #' Forecasting time series using smooth functions
 #'
-#' This function is created in order for the package to be compatible with Rob
-#' Hyndman's "forecast" package
+#' Function produces conditional expectation (point forecasts) and prediction
+#' intervals for the estimated model.
 #'
-#' This is not a compulsory function. You can simply use \link[smooth]{es},
-#' \link[smooth]{ces}, \link[smooth]{gum} or \link[smooth]{ssarima} without
-#' \code{forecast.smooth}. But if you are really used to \code{forecast}
-#' function, then go ahead!
+#' By default the function will generate conditional expectations from the
+#' estimated model and will also produce a variety of prediction intervals
+#' based on user preferences.
 #'
 #' @aliases forecast forecast.smooth
 #' @param object Time series model for which forecasts are required.
@@ -707,9 +707,12 @@ fitted.smooth.forecast <- function(object, ...){
 #' \item \code{upper} - upper bound of prediction interval.
 #' \item \code{level} - confidence level.
 #' \item \code{interval} - binary variable (whether interval were produced or not).
+#' \item \code{scenarios} - in case of \code{forecast.adam()} and
+#' \code{interval="simulated"} returns matrix with scenarios (future paths) that were
+#' used in simulations.
 #' }
 #' @template ssAuthor
-#' @seealso \code{\link[greybox]{forecast}}
+#' @seealso \code{\link[generics]{forecast}}
 #' @references Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008)
 #' Forecasting with exponential smoothing: the state space approach,
 #' Springer-Verlag.
@@ -740,7 +743,7 @@ forecast.smooth <- function(object, h=10,
     }
     # Do calculations
     if(smoothType=="ETS"){
-        newModel <- es(actuals(object),model=object,h=h,interval=interval,level=levelNew,silent="all",...);
+        newModel <- es_old(actuals(object),model=object,h=h,interval=interval,level=levelNew,silent="all",...);
     }
     else if(smoothType=="CES"){
         newModel <- ces(actuals(object),model=object,h=h,interval=interval,level=levelNew,silent="all",...);
@@ -789,39 +792,41 @@ forecast.smooth <- function(object, h=10,
 #' @rdname forecast.smooth
 #' @export
 forecast.oes <- function(object, h=10,
-                         interval=c("parametric","semiparametric","nonparametric","none"),
-                         level=0.95, side=c("both","upper","lower"), ...){
-    side <- match.arg(side);
+                         # interval=c("parametric","semiparametric","nonparametric","none"),
+                         # level=0.95, side=c("both","upper","lower"),
+                         ...){
+    # side <- match.arg(side);
     # This correction is needed in order to reduce the level and then just use one bound
-    if(any(side==c("upper","lower"))){
-        levelNew <- level*2-1;
-    }
-    else{
-        levelNew <- level;
-    }
+    # if(any(side==c("upper","lower"))){
+    #     levelNew <- level*2-1;
+    # }
+    # else{
+    #     levelNew <- level;
+    # }
 
     if(is.oesg(object)){
         newModel <- oesg(actuals(object),modelA=object$modelA,modelB=object$modelB,
-                         h=h,interval=interval,level=levelNew,silent="all",...);
+                         h=h,silent="all",...);
     }
     else{
-        newModel <- oes(actuals(object),model=object,
-                        h=h,interval=interval,level=levelNew,silent="all",...);
+        newModel <- oes(actuals(object),model=object,h=h,silent="all",...);
     }
 
     # Remove the redundant values, if they were produced
-    if(side=="upper"){
-        newModel$lower[] <- NA;
-        newModel$level <- level;
-    }
-    else if(side=="lower"){
-        newModel$upper[] <- NA;
-        newModel$level <- level;
-    }
+    # if(side=="upper"){
+    #     newModel$lower[] <- NA;
+    #     newModel$level <- level;
+    # }
+    # else if(side=="lower"){
+    #     newModel$upper[] <- NA;
+    #     newModel$level <- level;
+    # }
 
-    output <- list(model=object,method=object$model,
-                   forecast=newModel$forecast,lower=newModel$lower,upper=newModel$upper,level=levelNew,
-                   interval=interval,mean=newModel$forecast,side=side);
+    output <- list(model=object, method=object$model, mean=newModel$forecast,
+                   forecast=newModel$forecast, interval="none"
+                   # lower=newModel$lower,upper=newModel$upper,level=levelNew,
+                   # interval=interval,side=side
+                   );
 
     return(structure(output,class=c("smooth.forecast","forecast")));
 }
@@ -1260,7 +1265,9 @@ orders.Arima <- function(object, ...){
 #' \item PACF of the residuals;
 #' \item Plot of states of the model;
 #' \item Absolute standardised residuals vs Fitted;
-#' \item Squared standardised residuals vs Fitted.
+#' \item Squared standardised residuals vs Fitted;
+#' \item ACF of the squared residuals;
+#' \item PACF of the squared residuals.
 #' }
 #' @param level Confidence level. Defines width of confidence interval. Used in plots (2), (3), (7), (8),
 #' (9), (10) and (11).
@@ -1648,15 +1655,25 @@ plot.smooth <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     }
 
     # 10 and 11. ACF and PACF
-    plot7 <- function(x, type="acf", ...){
+    plot7 <- function(x, type="acf", squared=FALSE, ...){
         ellipsis <- list(...);
 
         if(!any(names(ellipsis)=="main")){
             if(type=="acf"){
-                ellipsis$main <- "Autocorrelation Function of Residuals";
+                if(squared){
+                    ellipsis$main <- "Autocorrelation Function of Squared Residuals";
+                }
+                else{
+                    ellipsis$main <- "Autocorrelation Function of Residuals";
+                }
             }
             else{
-                ellipsis$main <- "Partial Autocorrelation Function of Residuals";
+                if(squared){
+                    ellipsis$main <- "Partial Autocorrelation Function of Squared Residuals";
+                }
+                else{
+                    ellipsis$main <- "Partial Autocorrelation Function of Residuals";
+                }
             }
         }
 
@@ -1676,11 +1693,21 @@ plot.smooth <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             ellipsis$ylim <- c(-1,1);
         }
 
-        if(type=="acf"){
-            theValues <- acf(as.vector(residuals(x)), plot=FALSE, na.action=na.pass);
+        if(squared){
+            if(type=="acf"){
+                theValues <- acf(as.vector(residuals(x)^2), plot=FALSE, na.action=na.pass)
+            }
+            else{
+                theValues <- pacf(as.vector(residuals(x)^2), plot=FALSE, na.action=na.pass);
+            }
         }
         else{
-            theValues <- pacf(as.vector(residuals(x)), plot=FALSE, na.action=na.pass);
+            if(type=="acf"){
+                theValues <- acf(as.vector(residuals(x)), plot=FALSE, na.action=na.pass)
+            }
+            else{
+                theValues <- pacf(as.vector(residuals(x)), plot=FALSE, na.action=na.pass);
+            }
         }
         ellipsis$x <- theValues$acf[-1];
         statistic <- qnorm(c((1-level)/2, (1+level)/2),0,sqrt(1/nobs(x)));
@@ -1905,6 +1932,12 @@ plot.smooth <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
         else if(any(i==14)){
             plot9(x, type="squared", ...);
+        }
+        else if(any(i==15)){
+            plot7(x, type="acf", squared=TRUE, ...);
+        }
+        else if(any(i==16)){
+            plot7(x, type="pacf", squared=TRUE, ...);
         }
     }
 }
@@ -2400,6 +2433,38 @@ outlierdummy.smooth <- function(object, level=0.999, type=c("rstandard","rstuden
                      class="outlierdummy"));
 }
 
+#' @export
+rmultistep.smooth <- function(object, h=10, ...){
+    yInSample <- actuals(object);
+    model <- modelType(object);
+    Etype <- errorType(object);
+    Ttype <- substr(model,2,2);
+    Stype <- substr(model,nchar(model),nchar(model));
+    lagsModel <- modelLags(object);
+    obsInSample <- nobs(object);
+
+    matxt <- object$xreg;
+    if(is.null(object$xreg)){
+        matxt <- matrix(1,obsInSample,1);
+    }
+    nXreg <- ncol(matxt);
+    if(is.null(object$xreg)){
+        matat <- matrix(1,obsInSample,1);
+    }
+    else{
+        matat <- matrix(object$initialX,obsInSample,nXreg,byrow=TRUE);
+    }
+    matFX <- diag(nXreg);
+    dataStart <- start(yInSample);
+    dataFreq <- frequency(yInSample);
+
+    errors.mat <- ts(errorerwrap(object$states, object$transition, object$measurement, matrix(yInSample,obsInSample,1),
+                                 h, Etype, Ttype, Stype, lagsModel,
+                                 matxt, matat, matFX, matrix(1,obsInSample,1)),
+                     start=dataStart,frequency=dataFreq);
+    colnames(errors.mat) <- paste0("Error",c(1:h));
+    return(errors.mat);
+}
 
 #### Simulate data using provided object ####
 #' @importFrom utils tail
@@ -2451,12 +2516,7 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
         }
     }
     else{
-        if(errorType(object)=="A"){
-            randomizer <- "rnorm";
-        }
-        else{
-            randomizer <- "rlnorm";
-        }
+        randomizer <- "rnorm";
         if(!is.null(ellipsis$mean)){
             args$mean <- ellipsis$mean;
         }
@@ -2477,7 +2537,7 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
     args$nsim <- nsim;
     args$initial <- object$initial;
     # If this is an occurrence model, use the fitted values for the probabilities
-    if(is.list(object$occurrence)){
+    if(is.occurrence(object$occurrence)){
         args$probability <- fitted(object$occurrence);
     }
     else{
@@ -2490,7 +2550,14 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
             args$model <- model;
             args$phi <- object$phi;
             args$persistence <- object$persistence;
-            args$initialSeason <- object$initialSeason;
+            if(is.list(args$initial)){
+                args$initialSeason <- object$initial$seasonal;
+                args$initial <- unlist(args$initial[c("level","trend")]);
+            }
+
+            if(errorType(object)=="M" && args$mean==0){
+                args$mean <- 1;
+            }
 
             simulatedData <- do.call("sim.es",args);
         }
@@ -2531,7 +2598,7 @@ simulate.smooth <- function(object, nsim=1, seed=NULL, obs=NULL, ...){
         simulatedData <- do.call("sim.gum",args);
     }
     else if(smoothType=="SMA"){
-        args$order <- orders(object);
+        args$order <- orders(object)[1];
 
         simulatedData <- do.call("sim.sma",args);
     }

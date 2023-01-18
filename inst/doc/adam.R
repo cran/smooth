@@ -216,7 +216,11 @@ testModel <- adam(BJData, "ANN", h=18, silent=FALSE, holdout=TRUE, regressors="a
 testModel$persistence
 
 ## -----------------------------------------------------------------------------
-testModel <- adam(BJData, "AAN", h=18, silent=FALSE, holdout=TRUE, orders=c(1,0,1))
+testModel <- adam(BJData, "AAN", h=18, silent=FALSE, holdout=TRUE, orders=c(1,0,0))
+summary(testModel)
+
+## -----------------------------------------------------------------------------
+testModel <- adam(BJData, "AAN", h=18, silent=TRUE, holdout=TRUE, initial="backcasting")
 summary(testModel)
 
 ## -----------------------------------------------------------------------------

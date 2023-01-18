@@ -12,27 +12,220 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2022-03-29" />
+<meta name="date" content="2023-01-17" />
 
 <title>smooth: forecasting using state-space models</title>
 
-<script src="data:application/javascript;base64,Ly8gUGFuZG9jIDIuOSBhZGRzIGF0dHJpYnV0ZXMgb24gYm90aCBoZWFkZXIgYW5kIGRpdi4gV2UgcmVtb3ZlIHRoZSBmb3JtZXIgKHRvCi8vIGJlIGNvbXBhdGlibGUgd2l0aCB0aGUgYmVoYXZpb3Igb2YgUGFuZG9jIDwgMi44KS4KZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignRE9NQ29udGVudExvYWRlZCcsIGZ1bmN0aW9uKGUpIHsKICB2YXIgaHMgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yQWxsKCJkaXYuc2VjdGlvbltjbGFzcyo9J2xldmVsJ10gPiA6Zmlyc3QtY2hpbGQiKTsKICB2YXIgaSwgaCwgYTsKICBmb3IgKGkgPSAwOyBpIDwgaHMubGVuZ3RoOyBpKyspIHsKICAgIGggPSBoc1tpXTsKICAgIGlmICghL15oWzEtNl0kL2kudGVzdChoLnRhZ05hbWUpKSBjb250aW51ZTsgIC8vIGl0IHNob3VsZCBiZSBhIGhlYWRlciBoMS1oNgogICAgYSA9IGguYXR0cmlidXRlczsKICAgIHdoaWxlIChhLmxlbmd0aCA+IDApIGgucmVtb3ZlQXR0cmlidXRlKGFbMF0ubmFtZSk7CiAgfQp9KTsK"></script>
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
 
 <style type="text/css">
-  code{white-space: pre-wrap;}
-  span.smallcaps{font-variant: small-caps;}
-  span.underline{text-decoration: underline;}
-  div.column{display: inline-block; vertical-align: top; width: 50%;}
-  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
-  ul.task-list{list-style: none;}
-    </style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
 
 
 
 
 
 
-<link rel="stylesheet" href="data:text/css,body%20%7B%0Abackground%2Dcolor%3A%20%23fff%3B%0Amargin%3A%201em%20auto%3B%0Amax%2Dwidth%3A%20700px%3B%0Aoverflow%3A%20visible%3B%0Apadding%2Dleft%3A%202em%3B%0Apadding%2Dright%3A%202em%3B%0Afont%2Dfamily%3A%20%22Open%20Sans%22%2C%20%22Helvetica%20Neue%22%2C%20Helvetica%2C%20Arial%2C%20sans%2Dserif%3B%0Afont%2Dsize%3A%2014px%3B%0Aline%2Dheight%3A%201%2E35%3B%0A%7D%0A%23TOC%20%7B%0Aclear%3A%20both%3B%0Amargin%3A%200%200%2010px%2010px%3B%0Apadding%3A%204px%3B%0Awidth%3A%20400px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Aborder%2Dradius%3A%205px%3B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Afont%2Dsize%3A%2013px%3B%0Aline%2Dheight%3A%201%2E3%3B%0A%7D%0A%23TOC%20%2Etoctitle%20%7B%0Afont%2Dweight%3A%20bold%3B%0Afont%2Dsize%3A%2015px%3B%0Amargin%2Dleft%3A%205px%3B%0A%7D%0A%23TOC%20ul%20%7B%0Apadding%2Dleft%3A%2040px%3B%0Amargin%2Dleft%3A%20%2D1%2E5em%3B%0Amargin%2Dtop%3A%205px%3B%0Amargin%2Dbottom%3A%205px%3B%0A%7D%0A%23TOC%20ul%20ul%20%7B%0Amargin%2Dleft%3A%20%2D2em%3B%0A%7D%0A%23TOC%20li%20%7B%0Aline%2Dheight%3A%2016px%3B%0A%7D%0Atable%20%7B%0Amargin%3A%201em%20auto%3B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dcolor%3A%20%23DDDDDD%3B%0Aborder%2Dstyle%3A%20outset%3B%0Aborder%2Dcollapse%3A%20collapse%3B%0A%7D%0Atable%20th%20%7B%0Aborder%2Dwidth%3A%202px%3B%0Apadding%3A%205px%3B%0Aborder%2Dstyle%3A%20inset%3B%0A%7D%0Atable%20td%20%7B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dstyle%3A%20inset%3B%0Aline%2Dheight%3A%2018px%3B%0Apadding%3A%205px%205px%3B%0A%7D%0Atable%2C%20table%20th%2C%20table%20td%20%7B%0Aborder%2Dleft%2Dstyle%3A%20none%3B%0Aborder%2Dright%2Dstyle%3A%20none%3B%0A%7D%0Atable%20thead%2C%20table%20tr%2Eeven%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Ap%20%7B%0Amargin%3A%200%2E5em%200%3B%0A%7D%0Ablockquote%20%7B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Apadding%3A%200%2E25em%200%2E75em%3B%0A%7D%0Ahr%20%7B%0Aborder%2Dstyle%3A%20solid%3B%0Aborder%3A%20none%3B%0Aborder%2Dtop%3A%201px%20solid%20%23777%3B%0Amargin%3A%2028px%200%3B%0A%7D%0Adl%20%7B%0Amargin%2Dleft%3A%200%3B%0A%7D%0Adl%20dd%20%7B%0Amargin%2Dbottom%3A%2013px%3B%0Amargin%2Dleft%3A%2013px%3B%0A%7D%0Adl%20dt%20%7B%0Afont%2Dweight%3A%20bold%3B%0A%7D%0Aul%20%7B%0Amargin%2Dtop%3A%200%3B%0A%7D%0Aul%20li%20%7B%0Alist%2Dstyle%3A%20circle%20outside%3B%0A%7D%0Aul%20ul%20%7B%0Amargin%2Dbottom%3A%200%3B%0A%7D%0Apre%2C%20code%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0Aborder%2Dradius%3A%203px%3B%0Acolor%3A%20%23333%3B%0Awhite%2Dspace%3A%20pre%2Dwrap%3B%20%0A%7D%0Apre%20%7B%0Aborder%2Dradius%3A%203px%3B%0Amargin%3A%205px%200px%2010px%200px%3B%0Apadding%3A%2010px%3B%0A%7D%0Apre%3Anot%28%5Bclass%5D%29%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Acode%20%7B%0Afont%2Dfamily%3A%20Consolas%2C%20Monaco%2C%20%27Courier%20New%27%2C%20monospace%3B%0Afont%2Dsize%3A%2085%25%3B%0A%7D%0Ap%20%3E%20code%2C%20li%20%3E%20code%20%7B%0Apadding%3A%202px%200px%3B%0A%7D%0Adiv%2Efigure%20%7B%0Atext%2Dalign%3A%20center%3B%0A%7D%0Aimg%20%7B%0Abackground%2Dcolor%3A%20%23FFFFFF%3B%0Apadding%3A%202px%3B%0Aborder%3A%201px%20solid%20%23DDDDDD%3B%0Aborder%2Dradius%3A%203px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Amargin%3A%200%205px%3B%0A%7D%0Ah1%20%7B%0Amargin%2Dtop%3A%200%3B%0Afont%2Dsize%3A%2035px%3B%0Aline%2Dheight%3A%2040px%3B%0A%7D%0Ah2%20%7B%0Aborder%2Dbottom%3A%204px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Apadding%2Dbottom%3A%202px%3B%0Afont%2Dsize%3A%20145%25%3B%0A%7D%0Ah3%20%7B%0Aborder%2Dbottom%3A%202px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Afont%2Dsize%3A%20120%25%3B%0A%7D%0Ah4%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23f7f7f7%3B%0Amargin%2Dleft%3A%208px%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Ah5%2C%20h6%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23ccc%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Aa%20%7B%0Acolor%3A%20%230033dd%3B%0Atext%2Ddecoration%3A%20none%3B%0A%7D%0Aa%3Ahover%20%7B%0Acolor%3A%20%236666ff%3B%20%7D%0Aa%3Avisited%20%7B%0Acolor%3A%20%23800080%3B%20%7D%0Aa%3Avisited%3Ahover%20%7B%0Acolor%3A%20%23BB00BB%3B%20%7D%0Aa%5Bhref%5E%3D%22http%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0Aa%5Bhref%5E%3D%22https%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0A%0Acode%20%3E%20span%2Ekw%20%7B%20color%3A%20%23555%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Edt%20%7B%20color%3A%20%23902000%3B%20%7D%20%0Acode%20%3E%20span%2Edv%20%7B%20color%3A%20%2340a070%3B%20%7D%20%0Acode%20%3E%20span%2Ebn%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Efl%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Ech%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Est%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Eco%20%7B%20color%3A%20%23888888%3B%20font%2Dstyle%3A%20italic%3B%20%7D%20%0Acode%20%3E%20span%2Eot%20%7B%20color%3A%20%23007020%3B%20%7D%20%0Acode%20%3E%20span%2Eal%20%7B%20color%3A%20%23ff0000%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Efu%20%7B%20color%3A%20%23900%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Eer%20%7B%20color%3A%20%23a61717%3B%20background%2Dcolor%3A%20%23e3d2d2%3B%20%7D%20%0A" type="text/css" />
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
 
 
 
@@ -44,65 +237,145 @@
 
 
 
-<h1 class="title toc-ignore">smooth: forecasting using state-space models</h1>
+<h1 class="title toc-ignore">smooth: forecasting using state-space
+models</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2022-03-29</h4>
+<h4 class="date">2023-01-17</h4>
 
 
 
-<p>This vignette explains how to use functions in <code>smooth</code> package, what they produce, what each field in outputs and what returned values mean. Underlying statistical models are not discussed here, but if you want to know more about them, then there is a document “<a href="https://github.com/config-i1/smooth/blob/master/vignettes/smooth-Documentation.pdf">Statistical models underlying functions of ‘smooth’ package for R</a>”. Some of the features of the package are also explained in my <a href="https://forecasting.svetunkov.ru/en/tag/smooth/">blog</a>.</p>
+<p>This vignette explains how to use functions in <code>smooth</code>
+package, what they produce, what each field in outputs and what returned
+values mean. Underlying statistical models are not discussed here, but
+if you want to know more about them, then there is a document “<a href="https://github.com/config-i1/smooth/blob/master/vignettes/smooth-Documentation.pdf">Statistical
+models underlying functions of ‘smooth’ package for R</a>”. Some of the
+features of the package are also explained in my <a href="https://forecasting.svetunkov.ru/en/tag/smooth/">blog</a>.</p>
 <p>The package includes the following functions:</p>
 <ol style="list-style-type: decimal">
-<li><a href="adam.html">adam() - ADAM - Advanced Dynamic Adaptive Model</a>, the model that encompasses both ETS and ARIMA;</li>
+<li><a href="adam.html">adam() - ADAM - Advanced Dynamic Adaptive
+Model</a>, the model that encompasses both ETS and ARIMA;</li>
 <li><a href="es.html">es() - Exponential Smoothing</a>;</li>
-<li><a href="ssarima.html">ssarima() - State-Space ARIMA</a>, also known as Several Seasonalities ARIMA and <code>msarima()</code>, aka Multiple Seasonal ARIMA;</li>
+<li><a href="ssarima.html">ssarima() - State-Space ARIMA</a>, also known
+as Several Seasonalities ARIMA and <code>msarima()</code>, aka Multiple
+Seasonal ARIMA;</li>
 <li><a href="ces.html">ces() - Complex Exponential Smoothing</a>;</li>
 <li><a href="gum.html">gum() - Generalised Univariate Model</a>;</li>
-<li><a href="sma.html">sma() - Simple Moving Average in state-space form</a>;</li>
+<li><a href="sma.html">sma() - Simple Moving Average in state-space
+form</a>;</li>
 <li><a href="simulate.html">Simulate functions of the package</a>.</li>
-<li><code>smoothCombine()</code> - function that combines forecasts of the main univariate functions of smooth package based on information criteria.</li>
-<li><a href="oes.html">oes() - Occurrence part of iETS model</a> – function that estimates probability of occurrence of variable using one of the following model types: 1. Fixed probability; 2. Odds ratio probability; 3. Inverse odds ratio probability; 4. Direct probability; 5. General. It can also select the most appropriate model among these five. The model produced by <code>oes()</code> can then be used in any forecasting function as input variable for <code>occurrence</code> parameter. This is the new function introduced in smooth v2.5.0, substituting the old <code>iss()</code> function.</li>
+<li><code>smoothCombine()</code> - function that combines forecasts of
+the main univariate functions of smooth package based on information
+criteria.</li>
+<li><a href="oes.html">oes() - Occurrence part of iETS model</a> –
+function that estimates probability of occurrence of variable using one
+of the following model types: 1. Fixed probability; 2. Odds ratio
+probability; 3. Inverse odds ratio probability; 4. Direct probability;
+5. General. It can also select the most appropriate model among these
+five. The model produced by <code>oes()</code> can then be used in any
+forecasting function as input variable for <code>occurrence</code>
+parameter. This is the new function introduced in smooth v2.5.0,
+substituting the old <code>iss()</code> function.</li>
 </ol>
-<p>The functions (1) - (4) and (6) return object of class <code>smooth</code>, (5) returns the object of class <code>vsmooth</code>, (7) returns <code>smooth.sim</code> class and finally (8) returns <code>oes</code> or <code>viss</code> (depending on the function used). There are several methods for these classes in the package.</p>
-<p>Some other functions, which are not considered as core and important:</p>
+<p>The functions (1) - (4) and (6) return object of class
+<code>smooth</code>, (5) returns the object of class
+<code>vsmooth</code>, (7) returns <code>smooth.sim</code> class and
+finally (8) returns <code>oes</code> or <code>viss</code> (depending on
+the function used). There are several methods for these classes in the
+package.</p>
+<p>Some other functions, which are not considered as core and
+important:</p>
 <ol style="list-style-type: decimal">
-<li><code>cma()</code> - Centred Moving Average based on <code>sma()</code> and <code>msarima()</code></li>
-<li><code>msdecompose</code> - Multiple Seasonal Decomposition based on centred moving averages. Useful if a series with several frequencies need to be decomposed. The frequencies are specified separately in the <code>lags</code> parameter. Given that this function does not rely on any state space model, it might be moved to a different package at some point.</li>
+<li><code>cma()</code> - Centred Moving Average based on
+<code>sma()</code> and <code>msarima()</code></li>
+<li><code>msdecompose</code> - Multiple Seasonal Decomposition based on
+centred moving averages. Useful if a series with several frequencies
+need to be decomposed. The frequencies are specified separately in the
+<code>lags</code> parameter. Given that this function does not rely on
+any state space model, it might be moved to a different package at some
+point.</li>
 </ol>
 <div id="methods-for-the-class-smooth" class="section level2">
 <h2>Methods for the class <code>smooth</code></h2>
-<p>There are several methods that can be used together with the forecasting functions of the package. When a model is saved to some object <code>ourModel</code>, these function will do some magic. Here’s the list of all the available methods with brief explanations:</p>
+<p>There are several methods that can be used together with the
+forecasting functions of the package. When a model is saved to some
+object <code>ourModel</code>, these function will do some magic. Here’s
+the list of all the available methods with brief explanations:</p>
 <ol style="list-style-type: decimal">
-<li><code>print(ourModel)</code> – function prints brief output with explanation of what was fitted, with what parameters and errors;</li>
-<li><code>summary(ourModel)</code> – returns an output with parameters, standard errors and confidence intervals in case of <code>adam()</code> function. For the other functions it is equivalent to <code>print(ourModel)</code>;</li>
+<li><code>print(ourModel)</code> – function prints brief output with
+explanation of what was fitted, with what parameters and errors;</li>
+<li><code>summary(ourModel)</code> – returns an output with parameters,
+standard errors and confidence intervals in case of <code>adam()</code>
+function. For the other functions it is equivalent to
+<code>print(ourModel)</code>;</li>
 <li><code>actuals(ourModel)</code> – returns actual values;</li>
 <li><code>fitted(ourModel)</code> – fitted values of the model;</li>
-<li><code>residuals(ourModel)</code> – residuals of constructed model;</li>
-<li><code>rstandard(ourModel)</code> – standardised residuals of the model;</li>
-<li><code>rstudent(ourModel)</code> – studentised residuals of the model;</li>
-<li><code>rmultistep(ourModel)</code> – returns in sample multiple steps ahead forecast errors;</li>
-<li><code>AIC(ourModel)</code>, <code>BIC(ourModel)</code>, <code>AICc(ourModel)</code> and <code>BICc(ourModel)</code> – information criteria of the constructed model. <code>AICc()</code> and <code>BICc()</code> functions are not standard <code>stats</code> functions and are imported from <code>greybox</code> package and modified in <code>smooth</code> for the specific models;</li>
-<li><code>plot(ourModel)</code> – produces plots for the diagnostics of the constructed model. There are 9 options of what to produce, see <code>?plot.smooth()</code> for more details. Note that if the number of states is higher than 10, then several graphs are produced for the option <code>which=9</code>.</li>
-<li><code>forecast(ourModel)</code> – point and interval forecasts. Returns object of class <code>smooth.forecast</code>;</li>
-<li><code>plot(forecast(ourModel))</code> – produces graph with actuals, forecast, fitted and prediction interval using <code>graphmaker()</code> function from <code>greybox</code> package.</li>
-<li><code>simulate(ourModel)</code> – produces data simulated from provided model (not supported by <code>adam()</code> yet);</li>
-<li><code>logLik(ourModel)</code> – returns log-likelihood of the model;</li>
-<li><code>nobs(ourModel)</code> – returns number of observations in-sample we had;</li>
-<li><code>nparam(ourModel)</code> – number of estimated parameters (originally from <code>greybox</code> package);</li>
-<li><code>pointLik(ourModel)</code> – likelihood values for each separate observation;</li>
-<li><code>sigma(ourModel)</code> – variance of the residuals of the model;</li>
-<li><code>lags(ourModel)</code> – lags of the model (used with <code>ssarima()</code> and <code>gum()</code>);</li>
-<li><code>orders(ourModel)</code> – orders of the model (can be used with <code>ssarima()</code>, <code>gum()</code> and <code>sma()</code>);</li>
-<li><code>modelType(ourModel)</code> – returns the type of the model. Returns something like “MMM” for ETS(MMM). Can be used with <code>es()</code>, <code>ces()</code> and <code>ets()</code>;</li>
-<li><code>errorType(ourModel)</code> – the type of the error of a model (additive or multiplicative);</li>
-<li><code>coef(ourModel)</code> – returns the vector of all the estimated coefficients of the model;</li>
-<li><code>confint(ourModel)</code> – returns confidence intervals for parameters of the model. Only works with <code>adam()</code>;</li>
-<li><code>vcov(ourModel)</code> – returns the covariance matrix of parameters. Only works with <code>adam()</code>;</li>
-<li><code>coefbootstrap(ourModel)</code> – returns the bootstrapped coefficients of model (imported from <code>greybox</code> package). Only works with <code>adam()</code>;</li>
-<li><code>formula(ourModel)</code> – returns the formula for the measurement equation. This is a proper formula in case of <code>adam()</code> and only decorative one for all the other functions;</li>
-<li><code>multicov(ourModel)</code> – covariance matrix of multiple steps ahead forecast errors;</li>
-<li><code>refit(ourModel)</code> – produces bootstrapped trajectories from <code>adam()</code> model. Only works with <code>adam()</code>;</li>
-<li><code>reforecast(ourModel)</code> – produces forecasts based on bootstrapped trajectories from a model. Only works with <code>adam()</code>;</li>
+<li><code>residuals(ourModel)</code> – residuals of constructed
+model;</li>
+<li><code>rstandard(ourModel)</code> – standardised residuals of the
+model;</li>
+<li><code>rstudent(ourModel)</code> – studentised residuals of the
+model;</li>
+<li><code>rmultistep(ourModel)</code> – returns in sample multiple steps
+ahead forecast errors;</li>
+<li><code>AIC(ourModel)</code>, <code>BIC(ourModel)</code>,
+<code>AICc(ourModel)</code> and <code>BICc(ourModel)</code> –
+information criteria of the constructed model. <code>AICc()</code> and
+<code>BICc()</code> functions are not standard <code>stats</code>
+functions and are imported from <code>greybox</code> package and
+modified in <code>smooth</code> for the specific models;</li>
+<li><code>plot(ourModel)</code> – produces plots for the diagnostics of
+the constructed model. There are 9 options of what to produce, see
+<code>?plot.smooth()</code> for more details. Note that if the number of
+states is higher than 10, then several graphs are produced for the
+option <code>which=9</code>.</li>
+<li><code>forecast(ourModel)</code> – point and interval forecasts.
+Returns object of class <code>smooth.forecast</code>;</li>
+<li><code>plot(forecast(ourModel))</code> – produces graph with actuals,
+forecast, fitted and prediction interval using <code>graphmaker()</code>
+function from <code>greybox</code> package.</li>
+<li><code>simulate(ourModel)</code> – produces data simulated from
+provided model (not supported by <code>adam()</code> yet);</li>
+<li><code>logLik(ourModel)</code> – returns log-likelihood of the
+model;</li>
+<li><code>nobs(ourModel)</code> – returns number of observations
+in-sample we had;</li>
+<li><code>nparam(ourModel)</code> – number of estimated parameters
+(originally from <code>greybox</code> package);</li>
+<li><code>pointLik(ourModel)</code> – likelihood values for each
+separate observation;</li>
+<li><code>sigma(ourModel)</code> – variance of the residuals of the
+model;</li>
+<li><code>lags(ourModel)</code> – lags of the model (used with
+<code>ssarima()</code> and <code>gum()</code>);</li>
+<li><code>orders(ourModel)</code> – orders of the model (can be used
+with <code>ssarima()</code>, <code>gum()</code> and
+<code>sma()</code>);</li>
+<li><code>modelType(ourModel)</code> – returns the type of the model.
+Returns something like “MMM” for ETS(MMM). Can be used with
+<code>es()</code>, <code>ces()</code> and <code>ets()</code>;</li>
+<li><code>errorType(ourModel)</code> – the type of the error of a model
+(additive or multiplicative);</li>
+<li><code>coef(ourModel)</code> – returns the vector of all the
+estimated coefficients of the model;</li>
+<li><code>confint(ourModel)</code> – returns confidence intervals for
+parameters of the model. Only works with <code>adam()</code>;</li>
+<li><code>vcov(ourModel)</code> – returns the covariance matrix of
+parameters. Only works with <code>adam()</code>;</li>
+<li><code>coefbootstrap(ourModel)</code> – returns the bootstrapped
+coefficients of model (imported from <code>greybox</code> package). Only
+works with <code>adam()</code>;</li>
+<li><code>formula(ourModel)</code> – returns the formula for the
+measurement equation. This is a proper formula in case of
+<code>adam()</code> and only decorative one for all the other
+functions;</li>
+<li><code>multicov(ourModel)</code> – covariance matrix of multiple
+steps ahead forecast errors;</li>
+<li><code>refit(ourModel)</code> – produces bootstrapped trajectories
+from <code>adam()</code> model. Only works with
+<code>adam()</code>;</li>
+<li><code>reforecast(ourModel)</code> – produces forecasts based on
+bootstrapped trajectories from a model. Only works with
+<code>adam()</code>;</li>
 </ol>
 </div>
 

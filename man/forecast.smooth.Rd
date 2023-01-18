@@ -12,15 +12,13 @@
   occurrence = NULL, interval = c("none", "prediction", "confidence",
   "simulated", "approximate", "semiparametric", "nonparametric", "empirical",
   "complete"), level = 0.95, side = c("both", "upper", "lower"),
-  cumulative = FALSE, nsim = NULL, ...)
+  cumulative = FALSE, nsim = NULL, scenarios = FALSE, ...)
 
 \method{forecast}{smooth}(object, h = 10, interval = c("parametric",
   "semiparametric", "nonparametric", "none"), level = 0.95,
   side = c("both", "upper", "lower"), ...)
 
-\method{forecast}{oes}(object, h = 10, interval = c("parametric",
-  "semiparametric", "nonparametric", "none"), level = 0.95,
-  side = c("both", "upper", "lower"), ...)
+\method{forecast}{oes}(object, h = 10, ...)
 
 \method{forecast}{msdecompose}(object, h = 10, interval = c("parametric",
   "semiparametric", "nonparametric", "none"), level = 0.95, model = NULL,
@@ -70,6 +68,10 @@ inventory control systems.}
 The default value for the prediction / simulated interval is 1000. In case of
 confidence or complete intervals, this is set to 100.}
 
+\item{scenarios}{Binary, defining whether to return scenarios produced via
+simulations or not. Only works if \code{interval="simulated"}. If \code{TRUE}
+the object will contain \code{scenarios} variable.}
+
 \item{...}{Other arguments accepted by either \link[smooth]{es},
 \link[smooth]{ces}, \link[smooth]{gum} or \link[smooth]{ssarima}.}
 
@@ -90,17 +92,19 @@ Returns object of class "smooth.forecast", which contains:
 \item \code{upper} - upper bound of prediction interval.
 \item \code{level} - confidence level.
 \item \code{interval} - binary variable (whether interval were produced or not).
+\item \code{scenarios} - in case of \code{forecast.adam()} and
+\code{interval="simulated"} returns matrix with scenarios (future paths) that were
+used in simulations.
 }
 }
 \description{
-This function is created in order for the package to be compatible with Rob
-Hyndman's "forecast" package
+Function produces conditional expectation (point forecasts) and prediction
+intervals for the estimated model.
 }
 \details{
-This is not a compulsory function. You can simply use \link[smooth]{es},
-\link[smooth]{ces}, \link[smooth]{gum} or \link[smooth]{ssarima} without
-\code{forecast.smooth}. But if you are really used to \code{forecast}
-function, then go ahead!
+By default the function will generate conditional expectations from the
+estimated model and will also produce a variety of prediction intervals
+based on user preferences.
 }
 \examples{
 
@@ -117,7 +121,7 @@ Forecasting with exponential smoothing: the state space approach,
 Springer-Verlag.
 }
 \seealso{
-\code{\link[greybox]{forecast}}
+\code{\link[generics]{forecast}}
 }
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}

@@ -14,7 +14,8 @@ test_that("Reuse previous SSARIMA on BJsales", {
 # Test some crazy order of SSARIMA
 test_that("Test if crazy order SSARIMA was estimated on AirPassengers", {
     skip_on_cran()
-    testModel <- ssarima(AirPassengers, orders=NULL, ar.orders=c(1,1,0), i.orders=c(1,0,1), ma.orders=c(0,1,1), lags=c(1,6,12), h=18, holdout=TRUE, initial="o", silent=TRUE, interval=TRUE)
+    testModel <- ssarima(AirPassengers, orders=list(ar=c(1,1,0), i=c(1,0,1),ma=c(0,1,1)),
+                         lags=c(1,6,12), h=18, holdout=TRUE, initial="o", silent=TRUE, interval=TRUE)
     expect_equal(testModel$model, "SARIMA(1,1,0)[1](1,0,1)[6](0,1,1)[12]")
 })
 
@@ -30,6 +31,6 @@ test_that("Select exogenous variables for auto SSARIMAX on BJsales with selectio
     skip_on_cran()
     x <- BJsales.lead
     y <- BJsales
-    testModel <- auto.ssarima(y, orders=list(ar=3,i=2,ma=3), lags=1, h=18, holdout=TRUE, xreg=xregExpander(x), xregDo="select", silent=TRUE)
+    testModel <- auto.ssarima(y, orders=list(ar=3,i=2,ma=3), lags=1, h=18, holdout=TRUE, xreg=xregExpander(x), regressors="select", silent=TRUE)
     expect_equal(ncol(testModel$xreg),1)
 })
