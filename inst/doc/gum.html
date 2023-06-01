@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2023-01-17" />
+<meta name="date" content="2023-06-01" />
 
 <title>gum() - Generalised Univariate Model</title>
 
@@ -340,7 +340,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">gum() - Generalised Univariate Model</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2023-01-17</h4>
+<h4 class="date">2023-06-01</h4>
 
 
 
@@ -354,7 +354,7 @@ It is very demanding in sample size, but is also insanely flexible.</p>
 <p>A simple call by default constructs GUM<span class="math inline">\((1^1,1^m)\)</span>, where <span class="math inline">\(m\)</span> is frequency of the data. So for our
 example with <code>AirPassengers</code> data, we will have GUM<span class="math inline">\((1^1,1^{12})\)</span>:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">gum</span>(AirPassengers, <span class="at">h=</span><span class="dv">18</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.6 seconds
+<pre><code>## Time elapsed: 0.62 seconds
 ## Model estimated: GUM(1[1],1[12])
 ## Persistence vector g:
 ##        [,1]   [,2]
@@ -381,7 +381,7 @@ example with <code>AirPassengers</code> data, we will have GUM<span class="math 
 ## MASE: 0.6; sMAE: 5.4%; sMSE: 0.5%; rMAE: 0.216; rRMSE: 0.233</code></pre>
 <p>But some different orders and lags can be specified. For example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">gum</span>(AirPassengers, <span class="at">h=</span><span class="dv">18</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">orders=</span><span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">1</span>), <span class="at">lags=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">12</span>))</span></code></pre></div>
-<pre><code>## Time elapsed: 0.81 seconds
+<pre><code>## Time elapsed: 0.83 seconds
 ## Model estimated: GUM(2[1],1[12])
 ## Persistence vector g:
 ##        [,1]   [,2]  [,3]
@@ -415,7 +415,7 @@ number of models:</p>
 ## Searching for appropriate lags:  —\|/—\|/—\|/We found them!
 ## Searching for appropriate orders:  —\|/—\|/—Orders found.
 ## Reestimating the model. Done!</code></pre>
-<pre><code>## Time elapsed: 13.48 seconds
+<pre><code>## Time elapsed: 13.54 seconds
 ## Model estimated: GUM(1[1],3[12])
 ## Persistence vector g:
 ##        [,1]   [,2]    [,3]   [,4]

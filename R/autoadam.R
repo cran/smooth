@@ -3,7 +3,7 @@
 #' WARNING! Packages \code{foreach} and either \code{doMC} (Linux and Mac only)
 #' or \code{doParallel} are needed in order to run the function in parallel.
 #' @param outliers Defines what to do with outliers: \code{"ignore"}, so just returning the model,
-#' \code{"detect"} outliers based on specified \code{level} and include dummies for them in the model,
+#' \code{"use"} - detect outliers based on specified \code{level} and include dummies for them in the model,
 #' or detect and \code{"select"} those of them that reduce \code{ic} value.
 #' @param level What confidence level to use for detection of outliers. The default is 99\%. The specific
 #' bounds of confidence interval depend on the distribution used in the model.
@@ -22,7 +22,7 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)),
                       distribution=c("dnorm","dlaplace","ds","dgnorm","dlnorm","dinvgauss","dgamma"),
                       outliers=c("ignore","use","select"), level=0.99,
                       h=0, holdout=FALSE,
-                      persistence=NULL, phi=NULL, initial=c("optimal","backcasting"), arma=NULL,
+                      persistence=NULL, phi=NULL, initial=c("optimal","backcasting","complete"), arma=NULL,
                       ic=c("AICc","AIC","BIC","BICc"), bounds=c("usual","admissible","none"),
                       silent=TRUE, parallel=FALSE, ...){
     # Copyright (C) 2020 - Inf  Ivan Svetunkov
