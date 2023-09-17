@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2023-06-01" />
+<meta name="date" content="2023-09-16" />
 
 <title>ces() - Complex Exponential Smoothing</title>
 
@@ -340,7 +340,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">ces() - Complex Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2023-06-01</h4>
+<h4 class="date">2023-09-16</h4>
 
 
 
@@ -432,26 +432,25 @@ call:</p>
 types of prediction interval in exactly the same manner as
 <code>es()</code>:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">auto.ces</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">xreg=</span>x, <span class="at">regressors=</span><span class="st">&quot;select&quot;</span>, <span class="at">interval=</span><span class="st">&quot;p&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.21 seconds
-## Model estimated: CESX(n)
-## a0 + ia1: 1.9986+1.0034i
+<pre><code>## Time elapsed: 0.13 seconds
+## Model estimated: CES(n)
+## a0 + ia1: 1.9981+1.0034i
 ## Initial values were produced using backcasting.
-## Xreg coefficients were estimated in a normal style
 ## 
-## Loss function type: likelihood; Loss function value: 249.4303
-## Error standard deviation: 1.4967
+## Loss function type: likelihood; Loss function value: 249.4613
+## Error standard deviation: 1.4914
 ## Sample size: 138
-## Number of estimated parameters: 4
-## Number of degrees of freedom: 134
+## Number of estimated parameters: 3
+## Number of degrees of freedom: 135
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
-## 506.8605 507.1613 518.5696 519.3105 
+## 504.9227 505.1018 513.7045 514.1457 
 ## 
 ## 95% parametric prediction interval was constructed
 ## 100% of values are in the prediction interval
 ## Forecast errors:
-## MPE: 0.1%; sCE: 0.8%; Asymmetry: -3.3%; MAPE: 0.4%
-## MASE: 0.855; sMAE: 0.4%; sMSE: 0%; rMAE: 0.329; rRMSE: 0.339</code></pre>
+## MPE: 0%; sCE: 0.7%; Asymmetry: -5.3%; MAPE: 0.4%
+## MASE: 0.857; sMAE: 0.4%; sMSE: 0%; rMAE: 0.329; rRMSE: 0.338</code></pre>
 
 
 

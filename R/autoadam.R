@@ -9,6 +9,7 @@
 #' bounds of confidence interval depend on the distribution used in the model.
 #'
 #' @examples
+#' # Automatic selection of appropriate distribution and orders of ADAM ETS+ARIMA
 #' \donttest{ourModel <- auto.adam(rnorm(100,100,10), model="ZZN", lags=c(1,4),
 #'                       orders=list(ar=c(2,2),ma=c(2,2),select=TRUE))}
 #'
@@ -16,7 +17,7 @@
 #' @importFrom stats update.formula
 #' @export
 auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)),
-                      orders=list(ar=c(0),i=c(0),ma=c(0),select=FALSE),
+                      orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3),select=TRUE),
                       formula=NULL, regressors=c("use","select","adapt"),
                       occurrence=c("none","auto","fixed","general","odds-ratio","inverse-odds-ratio","direct"),
                       distribution=c("dnorm","dlaplace","ds","dgnorm","dlnorm","dinvgauss","dgamma"),
@@ -501,6 +502,7 @@ auto.adam <- function(data, model="ZXZ", lags=c(frequency(data)),
 
             ##### Loop for differences #####
             # Prepare table with differences
+            # expand.grid() can be used instead...
             if(any(iMax!=0)){
                 iOrders[,1] <- rep(c(0:iMax[1]),times=prod(iMax[-1]+1));
                 if(ordersLength>1){

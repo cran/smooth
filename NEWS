@@ -1,3 +1,26 @@
+smooth v4.0.0 (Release data: 2023-09-15)
+=======
+
+Changes:
+* Starting from v4.0.0, the smooth package for R will be released under the LGPLv2.1 license. The source of the older version of the software under the GPL(>=2) is available here: https://github.com/config-i1/smooth/releases/tag/v3.2.2
+
+
+smooth v3.2.2 (Release data: 2023-09-15)
+=======
+
+Changes:
+* Expanded info on simulate functions in the package description.
+* vcov() now can also return heuristic covariance matrix for adam via the heuristics=0.0025 or something like that. This is an experimental feature, which is why it is not explained in the documentation.
+* auto.msarima() is now a wrapper of adam() with orders=list(..., select=TRUE).
+* accuracy() is now implemented for smooth classes.
+
+Bugfixes:
+* forecast.adam() would not work correctly if the newdata had missing values.
+* Finally found and fixed an annoying bug that caused ARIMA to fail in some cases.
+* Fix in forecast.adam() for cases of h=1 and analytical variance.
+* A fix for adam() with LASSO/RIDGE, where "lambdaOriginal was not found".
+
+
 smooth v3.2.1 (Release data: 2023-06-01)
 =======
 
