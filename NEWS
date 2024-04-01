@@ -1,3 +1,22 @@
+smooth v4.0.1 (Release data: 2024-04-01)
+=======
+
+Changes:
+* Initialisation of ARIMA is now more precise, both for "optimal" and "backcasting", leading to a better fit of the model to the data. This was done using more meaningful initial values of states and by cutting the small step of refitting the head states in ARIMA with backcasting.
+* Further tuning of the initialisation via backcasting. This time in C++ code for the preheating period.
+* Rewrote the polynomialiser() function in C++. This should speed up ADAM ARIMA and msarima().
+* Renamed the internal variable "profileObseredTable" into a more meaningful "indexLookupTable".
+
+Bugfixes:
+* Fixed a bug with multicov.adam() and simulated covariance matrix.
+* adam() ARIMA and msarima() with backcasting would count number of components towards the number of estimated parameters.
+* adam() would not remove components of ETS correctly in cases of small samples (e.g. obs == 2*frequency).
+* Fixed the code of sma() - there was a bug in the architecture resulting in wrong fitting.
+* ARIMA parameters are now initialised even when ACF/PACF returns NaNs (exotic case).
+* Fixed bugs in es() not accepting xreg of a different length than y and not using the existing data in pre-estimated model via model=ourModel. Thanks to Nikos Kourentzes for spotting these!
+* Another bugfix in es() and xreg: resolved the issue with the simulated data.
+
+
 smooth v4.0.0 (Release data: 2023-09-15)
 =======
 

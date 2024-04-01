@@ -7,6 +7,7 @@
 #' function and order specified in \code{lags} variable in order to smooth the
 #' original series and obtain level, trend and seasonal components of the series.
 #'
+#' @template smoothRef
 #' @template ssAuthor
 #' @template ssKeywords
 #'
@@ -336,6 +337,7 @@ residuals.msdecompose <- function(object, ...){
     }
 }
 
+#' @export
 sigma.msdecompose <- function(object, ...){
     if(errorType(object)=="A"){
         return(sqrt(mean(residuals(object)^2,na.rm=TRUE)));
