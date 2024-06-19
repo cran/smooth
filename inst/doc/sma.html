@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2024-04-01" />
+<meta name="date" content="2024-06-19" />
 
 <title>sma() - Simple Moving Average</title>
 
@@ -340,7 +340,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">sma() - Simple Moving Average</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2024-04-01</h4>
+<h4 class="date">2024-06-19</h4>
 
 
 
@@ -375,16 +375,24 @@ model with the lowest value:</p>
 ## Order 15 - 2088.1914; Order 18 - 2093.311; Order 22 - 2101.1263
 ## Order 15 - 2088.1914; Order 16 - 2088.1965; Order 18 - 2093.311
 ## Order 12 - 2087.6591</code></pre>
-<pre><code>## Time elapsed: 0.03 seconds
+<pre><code>## Time elapsed: 0.02 seconds
 ## Model estimated using sma() function: SMA(12)
 ## Distribution assumed in the model: Normal
 ## Loss function type: MSE; Loss function value: 4403812
 ## ARMA parameters of the model:
-## AR:
-##  phi1[1]  phi2[1]  phi3[1]  phi4[1]  phi5[1]  phi6[1]  phi7[1]  phi8[1] 
-##   0.0833   0.0833   0.0833   0.0833   0.0833   0.0833   0.0833   0.0833 
-##  phi9[1] phi10[1] phi11[1] phi12[1] 
-##   0.0833   0.0833   0.0833   0.0833 
+##         Lag 1
+## AR(1)  0.0833
+## AR(2)  0.0833
+## AR(3)  0.0833
+## AR(4)  0.0833
+## AR(5)  0.0833
+## AR(6)  0.0833
+## AR(7)  0.0833
+## AR(8)  0.0833
+## AR(9)  0.0833
+## AR(10) 0.0833
+## AR(11) 0.0833
+## AR(12) 0.0833
 ## 
 ## Sample size: 115
 ## Number of estimated parameters: 0

@@ -241,7 +241,7 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 #' procedure.
 #' @param bounds The type of bounds for the persistence to use in the model
 #' estimation. Can be either \code{admissible} - guaranteeing the stability of the
-#' model, \code{traditional} - restricting the values with (0, 1) or \code{none} - no
+#' model, \code{usual} - restricting the values with (0, 1) or \code{none} - no
 #' restrictions (potentially dangerous).
 #' @param regressors The variable defines what to do with the provided explanatory
 #' variables:
@@ -282,7 +282,7 @@ utils::globalVariables(c("adamFitted","algorithm","arEstimate","arOrders","arReq
 #' \item \code{ftol_abs} - the stopping criterion in case of the absolute change in the loss
 #' function (the default is 0 - not used);
 #' \item \code{algorithm} - the algorithm to use in optimisation
-#' (by default, \code{"NLOPT_LN_SBPLX"} is used);
+#' (by default, \code{"NLOPT_LN_NELDERMEAD"} is used);
 #' \item \code{print_level} - the level of output for the optimiser (0 by default).
 #' If equal to 41, then the detailed results of the optimisation are returned.
 #' }
@@ -851,7 +851,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         }
 
         # Modify transition to do drift
-        if(constantRequired){
+        if(!arimaModel && constantRequired){
             matF[1,ncol(matF)] <- 1;
         }
 
@@ -895,6 +895,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         else{
             arimaPolynomials <- NULL;
         }
+
 
         if(!profilesRecentProvided){
             # ETS model, initial state
@@ -3629,6 +3630,11 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             yFitted[] <- yFitted * pFitted;
         }
 
+        # Fix the cases, when we have zeroes in the provided occurrence
+        if(occurrence=="provided"){
+            yFitted[!otLogical] <- yFitted[!otLogical] * pFitted[!otLogical];
+        }
+
         # Produce forecasts if the horizon is non-zero
         if(horizon>0){
             if(any(yClasses=="ts")){
@@ -3656,7 +3662,7 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             if(occurrenceModel && !occurrenceModelProvided){
                 yForecast[] <- yForecast * c(suppressWarnings(forecast(oesModel, h=h))$mean);
             }
-            else if(occurrenceModel && occurrenceModelProvided){
+            else if((occurrenceModel && occurrenceModelProvided) || occurrence=="provided"){
                 yForecast[] <- yForecast * pForecast;
             }
         }
@@ -6024,6 +6030,11 @@ print.adam <- function(x, digits=4, ...){
         }
     }
 
+    # If there is a Intercept/drift
+    if(!is.null(x$constant)){
+        cat("\nIntercept/Drift value:", round(x$constant, digits));
+    }
+
     if(etsModel){
         if(!is.null(x$persistence)){
             cat("\nPersistence vector g");
@@ -6054,14 +6065,40 @@ print.adam <- function(x, digits=4, ...){
 
     # If this is ARIMA model
     if(!is.null(x$arma) && (!is.null(x$arma$ar) || !is.null(x$arma$ma))){
+        ordersModel <- orders(x);
+        # If the order was just a vector
+        if(!is.list(ordersModel)){
+            ordersModel <- list(ar=ordersModel[1], i=ordersModel[2], ma=ordersModel[3]);
+        }
+        lagsModel <- lags(x);
         cat("\nARMA parameters of the model:\n");
         if(!is.null(x$arma$ar)){
-            cat("AR:\n")
-            print(round(x$arma$ar,digits));
+            # cat("AR:\n")
+            arMatrix <- matrix(NA,max(ordersModel$ar),length(lagsModel[ordersModel$ar!=0]),
+                               dimnames=list(paste0("AR(",1:max(ordersModel$ar),")"),
+                                             paste0("Lag ",lagsModel[ordersModel$ar!=0],"")));
+            arNumber <- 0;
+            # Remove zero lags
+            ordersModel$ar <- ordersModel$ar[ordersModel$ar!=0];
+            for(i in 1:length(ordersModel$ar)){
+                arMatrix[(1:ordersModel$ar[i]),i] <- x$arma$ar[arNumber+(1:ordersModel$ar[i])];
+                arNumber <- arNumber + ordersModel$ar[i];
+            }
+            print(round(arMatrix, digits));
         }
         if(!is.null(x$arma$ma)){
-            cat("MA:\n")
-            print(round(x$arma$ma,digits));
+            # cat("MA:\n")
+            # print(round(x$arma$ma,digits));
+            maMatrix <- matrix(NA,max(ordersModel$ma),length(lagsModel[ordersModel$ma!=0]),
+                               dimnames=list(paste0("MA(",1:max(ordersModel$ma),")"),
+                                             paste0("Lag ",lagsModel[ordersModel$ma!=0],"")))
+            maNumber <- 0;
+            ordersModel$ma <- ordersModel$ma[ordersModel$ma!=0];
+            for(i in 1:length(ordersModel$ma)){
+                maMatrix[(1:ordersModel$ma[i]),i] <- x$arma$ma[maNumber+(1:ordersModel$ma[i])];
+                maNumber <- maNumber + ordersModel$ma[i];
+            }
+            print(round(maMatrix, digits));
         }
     }
 
@@ -10187,7 +10224,7 @@ multicov.adam <- function(object, type=c("analytical","empirical","simulated"), 
 }
 
 #' @export
-pointLik.adam <- function(object, ...){
+pointLik.adam <- function(object, log=TRUE, ...){
     distribution <- object$distribution;
     yInSample <- actuals(object);
     obsInSample <- nobs(object);
@@ -10284,6 +10321,10 @@ pointLik.adam <- function(object, ...){
         likValues[] <- likValues + pointLik(object$occurrence);
     }
     likValues <- ts(likValues, start=start(yFitted), frequency=frequency(yFitted));
+
+    if(!log){
+        likValues[] <- exp(likValues);
+    }
 
     return(likValues);
 }
