@@ -234,7 +234,7 @@ testModel
 #                         h=12, holdout=TRUE)
 
 ## -----------------------------------------------------------------------------
-testModel <- auto.adam(BJsales, "AAN", orders=list(ar=2,i=2,ma=2), silent=TRUE,
+testModel <- auto.adam(BJsales, "AAN", orders=list(ar=2,i=0,ma=0), silent=TRUE,
                        distribution=c("dnorm","dlaplace","ds","dgnorm"),
                        h=12, holdout=TRUE)
 testModel
