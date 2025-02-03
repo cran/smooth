@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2024-10-01" />
+<meta name="date" content="2025-02-03" />
 
 <title>ssarima() - State-Space ARIMA</title>
 
@@ -363,7 +363,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">ssarima() - State-Space ARIMA</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2024-10-01</h4>
+<h4 class="date">2025-02-03</h4>
 
 
 
@@ -421,7 +421,7 @@ advised to install it.</p>
 <p>We could try selecting orders manually, but this can also be done
 automatically via <code>auto.ssarima()</code> function:</p>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">auto.ssarima</span>(AirPassengers, <span class="at">h=</span><span class="dv">12</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 1.76 seconds
+<pre><code>## Time elapsed: 1.6 seconds
 ## Model estimated: SARIMA(0,1,3)[1](0,1,0)[12]
 ## Matrix of MA terms:
 ##         Lag 1
@@ -444,7 +444,7 @@ of the possible high number of parameters in some models and partially
 because of potential overfitting of first observations when non-zero
 order of AR is selected:</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">auto.ssarima</span>(AirPassengers, <span class="at">h=</span><span class="dv">12</span>, <span class="at">initial=</span><span class="st">&quot;backcasting&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 1.68 seconds
+<pre><code>## Time elapsed: 1.6 seconds
 ## Model estimated: SARIMA(0,1,3)[1](0,1,0)[12]
 ## Matrix of MA terms:
 ##         Lag 1
@@ -462,7 +462,7 @@ order of AR is selected:</p>
 ##      AIC     AICc      BIC     BICc 
 ## 1107.841 1108.129 1119.720 1120.435</code></pre>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">auto.ssarima</span>(AirPassengers, <span class="at">h=</span><span class="dv">12</span>, <span class="at">initial=</span><span class="st">&quot;optimal&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 15.13 seconds
+<pre><code>## Time elapsed: 15.51 seconds
 ## Model estimated: SARIMA(0,1,3)[1](0,1,0)[12] with drift
 ## Matrix of MA terms:
 ##         Lag 1
@@ -502,26 +502,26 @@ alternative ARIMA model for multiple seasonalities, called
 <div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>ourModel <span class="ot">&lt;-</span> <span class="fu">auto.ssarima</span>(AirPassengers, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">xreg=</span>x)</span></code></pre></div>
 <p>we can then reuse it:</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">ssarima</span>(AirPassengers, <span class="at">model=</span>ourModel, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">FALSE</span>, <span class="at">xreg=</span>x, <span class="at">interval=</span><span class="cn">TRUE</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.07 seconds
+<pre><code>## Time elapsed: 0.43 seconds
 ## Model estimated: SARIMAX(0,1,3)[1](0,1,0)[12] with drift
 ## Matrix of MA terms:
 ##         Lag 1
-## MA(1) -0.2593
-## MA(2)  0.1397
-## MA(3) -0.2587
-## Constant value is: 0.3841
+## MA(1) -0.2360
+## MA(2)  0.1151
+## MA(3) -0.2520
+## Constant value is: 0.3305
 ## Initial values were provided by user.
 ## Xreg coefficients were estimated in a normal style
 ## 
-## Loss function type: likelihood; Loss function value: 551.0437
-## Error standard deviation: 11.1478
+## Loss function type: likelihood; Loss function value: 550.5181
+## Error standard deviation: 11.1071
 ## Sample size: 144
 ## Number of estimated parameters: 1
 ## Number of provided parameters: 19
 ## Number of degrees of freedom: 143
 ## Information criteria:
 ##      AIC     AICc      BIC     BICc 
-## 1104.087 1104.116 1107.057 1107.127 
+## 1103.036 1103.064 1106.006 1106.076 
 ## 
 ## 95% parametric prediction interval was constructed</code></pre>
 <p>Finally, we can combine several SARIMA models:</p>

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2024-10-01" />
+<meta name="date" content="2025-02-03" />
 
 <title>ces() - Complex Exponential Smoothing</title>
 
@@ -340,7 +340,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">ces() - Complex Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2024-10-01</h4>
+<h4 class="date">2025-02-03</h4>
 
 
 
@@ -356,7 +356,7 @@ of non-seasonal model:</p>
 <p>For the same series from M3 dataset <code>ces()</code> can be
 constructed using:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">ces</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">silent=</span><span class="cn">FALSE</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.06 seconds
+<pre><code>## Time elapsed: 0.05 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.9981+1.0034i
 ## Initial values were produced using backcasting.
@@ -432,7 +432,7 @@ call:</p>
 types of prediction interval in exactly the same manner as
 <code>es()</code>:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">auto.ces</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">xreg=</span>x, <span class="at">regressors=</span><span class="st">&quot;select&quot;</span>, <span class="at">interval=</span><span class="st">&quot;p&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.14 seconds
+<pre><code>## Time elapsed: 0.13 seconds
 ## Model estimated: CES(n)
 ## a0 + ia1: 1.9981+1.0034i
 ## Initial values were produced using backcasting.

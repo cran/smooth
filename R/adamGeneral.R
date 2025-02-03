@@ -2435,7 +2435,7 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     # If we don't need to estimate anything, flag initialEstimate
     if(!any(c(etsModel && initialLevelEstimate,
               (etsModel && modelIsTrendy && initialTrendEstimate),
-              (etsModel & modelIsSeasonal & initialSeasonalEstimate),
+              (etsModel && modelIsSeasonal && all(initialSeasonalEstimate)),
               (arimaModel && initialArimaEstimate),
               (xregModel && initialXregEstimate)))){
         initialEstimate[] <- FALSE;
@@ -2447,7 +2447,7 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     # If at least something is provided, flag it as "provided"
     if((etsModel && !initialLevelEstimate) ||
        (etsModel && modelIsTrendy && !initialTrendEstimate) ||
-       any(etsModel & modelIsSeasonal & !initialSeasonalEstimate) ||
+       (etsModel && modelIsSeasonal && any(!initialSeasonalEstimate)) ||
        (arimaModel && !initialArimaEstimate) ||
        (xregModel && !initialXregEstimate)){
         initialType[] <- "provided";
@@ -2967,6 +2967,13 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     else{
         nIterations <- ellipsis$nIterations;
     }
+    # Smoother used in msdecompose
+    if(is.null(ellipsis$smoother)){
+        smoother <- "ma";
+    }
+    else{
+        smoother <- ellipsis$smoother;
+    }
     # Fisher Information
     if(is.null(ellipsis$FI)){
         FI <- FALSE;
@@ -3042,10 +3049,11 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     # See if the estimation of the model is not needed (do we estimate anything?)
     if(!any(c(etsModel & c(persistenceLevelEstimate, persistenceTrendEstimate,
                            persistenceSeasonalEstimate, phiEstimate,
-                           (initialType!="complete") & c(initialLevelEstimate,
-                                                            initialTrendEstimate,
-                                                            initialSeasonalEstimate)),
-              arimaModel & c(arEstimate, maEstimate, (initialType!="complete") & initialArimaEstimate),
+                           all(initialType!=c("complete","backcasting")) & c(initialLevelEstimate,
+                                                                             initialTrendEstimate,
+                                                                             initialSeasonalEstimate)),
+              arimaModel & c(arEstimate, maEstimate,
+                             all(initialType!=c("complete","backcasting")) & initialEstimate & initialArimaEstimate),
               xregModel & c(persistenceXregEstimate, (initialType!="complete") & initialXregEstimate),
               constantEstimate,
               otherParameterEstimate))){
@@ -3251,6 +3259,8 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     assign("lambda",lambda,ParentEnvironment);
     # Number of iterations in backcasting
     assign("nIterations",nIterations,ParentEnvironment);
+    # Smoother used in the msdecompose
+    assign("smoother",smoother,ParentEnvironment);
     # Fisher Information
     assign("FI",FI,ParentEnvironment);
     # Step size for the hessian

@@ -15,25 +15,25 @@ knitr::opts_chunk$set(
 require(greybox)
 require(smooth)
 
-## -----------------------------------------------------------------------------
+## ----ETSMMM-------------------------------------------------------------------
 testModel <- adam(AirPassengers, "MMM", lags=c(1,12), distribution="dnorm",
                   h=12, holdout=TRUE)
 summary(testModel)
 plot(forecast(testModel,h=12,interval="prediction"))
 
-## -----------------------------------------------------------------------------
+## ----ETSMMMPrint--------------------------------------------------------------
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ETSMMMForecast-----------------------------------------------------------
 plot(forecast(testModel,h=18,interval="simulated"))
 
-## -----------------------------------------------------------------------------
+## ----ETSMMMPlots--------------------------------------------------------------
 par(mfcol=c(3,4))
 plot(testModel,which=c(1:11))
 par(mfcol=c(1,1))
 plot(testModel,which=12)
 
-## -----------------------------------------------------------------------------
+## ----ETSLoss------------------------------------------------------------------
 lossFunction <- function(actual, fitted, B){
   return(sum(abs(actual-fitted)^3))
 }
@@ -41,26 +41,26 @@ testModel <- adam(BJsales, "AAN", silent=FALSE, loss=lossFunction,
                   h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ETSDGNorm----------------------------------------------------------------
 testModel <- adam(BJsales, "MMN", silent=FALSE, distribution="dgnorm", shape=3,
                   h=12, holdout=TRUE)
 
-## -----------------------------------------------------------------------------
+## ----ETSSelection-------------------------------------------------------------
 testModel <- adam(AirPassengers, "ZXZ", lags=c(1,12), silent=FALSE,
                   h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ETSCombination-----------------------------------------------------------
 testModel <- adam(AirPassengers, "CXC", lags=c(1,12),
                   h=12, holdout=TRUE)
 testForecast <- forecast(testModel,h=18,interval="semiparametric", level=c(0.9,0.95))
 testForecast
 plot(testForecast)
 
-## -----------------------------------------------------------------------------
+## ----ETSInterval--------------------------------------------------------------
 forecast(testModel,h=18,interval="semiparametric", level=c(0.9,0.95,0.99), side="upper")
 
-## -----------------------------------------------------------------------------
+## ----GUMData------------------------------------------------------------------
 ordersGUM <- c(1,1,1)
 lagsGUM <- c(1,48,336)
 initialGUM1 <- -25381.7
@@ -116,35 +116,35 @@ y <- sim.gum(orders=ordersGUM, lags=lagsGUM, nsim=1, frequency=336, obs=3360,
              measurement=rep(1,3), transition=diag(3), persistence=c(0.045,0.162,0.375),
              initial=cbind(initialGUM1,initialGUM2,initialGUM3))$data
 
-## -----------------------------------------------------------------------------
+## ----ETSMultiFreq-------------------------------------------------------------
 testModel <- adam(y, "MMdM", lags=c(1,48,336), initial="backcasting",
                   silent=FALSE, h=336, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ETSMultiFreq10000--------------------------------------------------------
 testModel <- adam(y, "MMdM", lags=c(1,48,336), initial="backcasting",
                   silent=FALSE, h=336, holdout=TRUE, maxeval=10000)
 testModel
 
-## ----eval=FALSE, echo=TRUE----------------------------------------------------
+## ----ETSMultiFreqB, eval=FALSE, echo=TRUE-------------------------------------
 #  testModel$B
 
-## -----------------------------------------------------------------------------
+## ----ETSMultiFreqBReused------------------------------------------------------
 testModel <- adam(y, "MMdM", lags=c(1,48,336), initial="backcasting",
                   silent=FALSE, h=336, holdout=TRUE, B=testModel$B)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ETSMultiFreqBeta---------------------------------------------------------
 testModel <- adam(y, "MMdM", lags=c(1,48,336), initial="backcasting",
                   silent=TRUE, h=336, holdout=TRUE, persistence=list(beta=0.1))
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ETSMultiFreqOccurrence---------------------------------------------------
 testModel <- adam(rpois(120,0.5), "MNN", silent=FALSE, h=12, holdout=TRUE,
                   occurrence="odds-ratio")
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ADAMETSvES---------------------------------------------------------------
 adamModel <- adam(AirPassengers, "CCC",
                   h=12, holdout=TRUE)
 esModel <- es(AirPassengers, "CCC",
@@ -154,54 +154,54 @@ adamModel
 "es():"
 esModel
 
-## -----------------------------------------------------------------------------
+## ----ARIMA022-----------------------------------------------------------------
 testModel <- adam(BJsales, "NNN", silent=FALSE, orders=c(0,2,2),
                   h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ARIMADLNorm--------------------------------------------------------------
 testModel <- adam(AirPassengers, "NNN", silent=FALSE, lags=c(1,12),
                   orders=list(ar=c(1,1),i=c(1,1),ma=c(2,2)), distribution="dlnorm",
                   h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ARIMADrift---------------------------------------------------------------
 testModel <- adam(AirPassengers, "NNN", silent=FALSE, lags=c(1,12), constant=TRUE,
                   orders=list(ar=c(1,1),i=c(1,1),ma=c(2,2)), distribution="dnorm",
                   h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ARIMABProvided-----------------------------------------------------------
 testModel <- adam(AirPassengers, "NNN", silent=FALSE, lags=c(1,12),
                   orders=list(ar=c(1,1),i=c(1,1),ma=c(2,2)), distribution="dnorm",
                   arma=list(ar=c(0.1,0.1), ma=c(-0.96, 0.03, -0.12, 0.03)),
                   h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ARIMAInitials------------------------------------------------------------
 testModel <- adam(AirPassengers, "NNN", silent=FALSE, lags=c(1,12),
                   orders=list(ar=c(1,1),i=c(1,1),ma=c(2,0)), distribution="dnorm",
                   initial=list(arima=AirPassengers[1:24]),
                   h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ADAMX1-------------------------------------------------------------------
 BJData <- cbind(BJsales,BJsales.lead)
 testModel <- adam(BJData, "AAN", h=18, silent=FALSE)
 
-## -----------------------------------------------------------------------------
+## ----ADAMXLags----------------------------------------------------------------
 BJData <- cbind(as.data.frame(BJsales),as.data.frame(xregExpander(BJsales.lead,c(-7:7))))
 colnames(BJData)[1] <- "y"
 testModel <- adam(BJData, "ANN", h=18, silent=FALSE, holdout=TRUE, formula=y~xLag1+xLag2+xLag3)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----ADAMXSelect--------------------------------------------------------------
 testModel <- adam(BJData, "ANN", h=18, silent=FALSE, holdout=TRUE, regressors="select")
 
-## -----------------------------------------------------------------------------
+## ----ADAMXARIMA---------------------------------------------------------------
 testModel <- adam(BJData, "NNN", h=18, silent=FALSE, holdout=TRUE, regressors="select", orders=c(0,1,1))
 
-## -----------------------------------------------------------------------------
+## ----ADAMARIMA-ETS------------------------------------------------------------
 BJData <- BJData[,c("y",names(testModel$initial$xreg))];
 testModel <- adam(BJData, "NNN", h=18, silent=TRUE, holdout=TRUE, orders=c(0,1,1),
                   initial=testModel$initial, arma=testModel$arma)
@@ -211,41 +211,41 @@ testModel2 <- adam(BJData, "ANN", h=18, silent=TRUE, holdout=TRUE,
                    initial=testModel$initial, persistence=testModel$arma$ma+1)
 testModel2
 
-## -----------------------------------------------------------------------------
+## ----ADAMXAdapt---------------------------------------------------------------
 testModel <- adam(BJData, "ANN", h=18, silent=FALSE, holdout=TRUE, regressors="adapt")
 testModel$persistence
 
-## -----------------------------------------------------------------------------
+## ----ADAMMixture--------------------------------------------------------------
 testModel <- adam(BJData, "AAN", h=18, silent=FALSE, holdout=TRUE, orders=c(1,0,0))
 summary(testModel)
 
-## -----------------------------------------------------------------------------
+## ----ADAMMixtureBackcasting---------------------------------------------------
 testModel <- adam(BJData, "AAN", h=18, silent=TRUE, holdout=TRUE, initial="backcasting")
 summary(testModel)
 
-## -----------------------------------------------------------------------------
+## ----AutoADAM-----------------------------------------------------------------
 testModel <- auto.adam(BJsales, "XXX", silent=FALSE,
                        distribution=c("dnorm","dlaplace","ds"),
                        h=12, holdout=TRUE)
 testModel
 
-## ----eval=FALSE, echo=TRUE----------------------------------------------------
+## ----AutoADAMParallel, eval=FALSE, echo=TRUE----------------------------------
 #  testModel <- auto.adam(BJsales, "ZZZ", silent=FALSE, parallel=TRUE,
 #                         h=12, holdout=TRUE)
 
-## -----------------------------------------------------------------------------
+## ----AutoADAMETSARIMA---------------------------------------------------------
 testModel <- auto.adam(BJsales, "AAN", orders=list(ar=2,i=0,ma=0), silent=TRUE,
                        distribution=c("dnorm","dlaplace","ds","dgnorm"),
                        h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----AutoADAMETSARIMASelect---------------------------------------------------
 testModel <- auto.adam(BJsales, "XXN", orders=list(ar=2,i=2,ma=2,select=TRUE),
                        distribution="default", silent=FALSE,
                        h=12, holdout=TRUE)
 testModel
 
-## -----------------------------------------------------------------------------
+## ----AutoADAMETSOutliers------------------------------------------------------
 testModel <- auto.adam(AirPassengers, "PPP", silent=FALSE, outliers="use",
                        distribution="default",
                        h=12, holdout=TRUE)
