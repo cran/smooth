@@ -127,7 +127,7 @@ testModel <- adam(y, "MMdM", lags=c(1,48,336), initial="backcasting",
 testModel
 
 ## ----ETSMultiFreqB, eval=FALSE, echo=TRUE-------------------------------------
-#  testModel$B
+# testModel$B
 
 ## ----ETSMultiFreqBReused------------------------------------------------------
 testModel <- adam(y, "MMdM", lags=c(1,48,336), initial="backcasting",
@@ -230,8 +230,8 @@ testModel <- auto.adam(BJsales, "XXX", silent=FALSE,
 testModel
 
 ## ----AutoADAMParallel, eval=FALSE, echo=TRUE----------------------------------
-#  testModel <- auto.adam(BJsales, "ZZZ", silent=FALSE, parallel=TRUE,
-#                         h=12, holdout=TRUE)
+# testModel <- auto.adam(BJsales, "ZZZ", silent=FALSE, parallel=TRUE,
+#                        h=12, holdout=TRUE)
 
 ## ----AutoADAMETSARIMA---------------------------------------------------------
 testModel <- auto.adam(BJsales, "AAN", orders=list(ar=2,i=0,ma=0), silent=TRUE,

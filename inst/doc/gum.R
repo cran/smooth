@@ -12,7 +12,7 @@ gum(AirPassengers, h=18, holdout=TRUE)
 gum(AirPassengers, h=18, holdout=TRUE, orders=c(2,1), lags=c(1,12))
 
 ## ----Autogum_N2457_1[1]-------------------------------------------------------
-auto.gum(AirPassengers, interval=TRUE, silent=FALSE)
+auto.gum(AirPassengers, silent=FALSE)
 
 ## ----gum_N2457_predefined-----------------------------------------------------
 	transition <- matrix(c(1,0,0,1,1,0,0,0,1),3,3)

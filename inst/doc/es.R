@@ -67,5 +67,5 @@ es(BJsales, model="ZZZ", h=12, holdout=TRUE,
    xreg=xregExpander(x), regressors="select")
 
 ## ----es_N2457_M3, eval=FALSE--------------------------------------------------
-#  es(Mcomp::M3$N2457, silent=FALSE)
+# es(Mcomp::M3$N2457, silent=FALSE)
 

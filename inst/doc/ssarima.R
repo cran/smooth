@@ -19,7 +19,7 @@ auto.ssarima(AirPassengers, h=12, initial="backcasting")
 auto.ssarima(AirPassengers, h=12, initial="optimal")
 
 ## ----ssarima_N2457_orders_multiple_seasonalities, eval=FALSE------------------
-#  ssarima(AirPassengers, orders=list(ar=c(0,0,1),i=c(1,0,0),ma=c(1,1,1)), lags=c(1,6,12), h=12, silent=FALSE)
+# ssarima(AirPassengers, orders=list(ar=c(0,0,1),i=c(1,0,0),ma=c(1,1,1)), lags=c(1,6,12), h=12, silent=FALSE)
 
 ## ----es_N2457_xreg_create-----------------------------------------------------
 x <- cbind(rnorm(length(AirPassengers),50,3),rnorm(length(AirPassengers),100,7))

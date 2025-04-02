@@ -4,6 +4,7 @@ knitr::opts_chunk$set(fig.width=6, fig.height=4, fig.path='Figs/', fig.show='hol
 library(smooth)
 
 ## ----artificialData-----------------------------------------------------------
+set.seed(41)
 y <- ts(c(rpois(20,0.25),rpois(20,0.5),rpois(20,1),rpois(20,2),rpois(20,3),rpois(20,5)))
 
 ## ----iETSFExample1------------------------------------------------------------
@@ -23,7 +24,7 @@ plot(oETSOModel)
 adam(y, "MMN", occurrence="o", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSOExample3, eval=FALSE------------------------------------------------
-#  adam(y, "MMN", occurrence=oETSOModel, h=10, holdout=TRUE, silent=FALSE)
+# adam(y, "MMN", occurrence=oETSOModel, h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSIExample1------------------------------------------------------------
 oETSIModel <- oes(y, model="MMN", occurrence="i", h=10, holdout=TRUE)
@@ -34,7 +35,7 @@ plot(oETSIModel)
 adam(y, "MMN", occurrence="i", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSIExample3, eval=FALSE------------------------------------------------
-#  adam(y, "MMN", occurrence=oETSIModel, h=10, holdout=TRUE, silent=FALSE)
+# adam(y, "MMN", occurrence=oETSIModel, h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSDExample1------------------------------------------------------------
 oETSDModel <- oes(y, model="MMN", occurrence="d", h=10, holdout=TRUE)
@@ -55,7 +56,7 @@ oETSGModel2
 plot(oETSGModel2)
 
 ## ----iETSGExample3------------------------------------------------------------
-es(y, "MMN", occurrence="g", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
+adam(y, "MMN", occurrence="g", oesmodel="MMN", h=10, holdout=TRUE, silent=FALSE)
 
 ## ----iETSAExample1------------------------------------------------------------
 oETSAModel <- oes(y, model="MNN", occurrence="a", h=10, holdout=TRUE)

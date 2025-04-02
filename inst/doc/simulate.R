@@ -117,7 +117,7 @@ par(mfcol=c(1,1))
 
 ## ----simulate_smooth_gum------------------------------------------------------
 x <- ts(100 + rnorm(120,0,5) + rep(runif(12,-50,50),10)*rep(c(1:10),each=12) ,frequency=12)
-ourModel <- auto.gum(x, h=18, silent=TRUE)
+ourModel <- auto.gum(x, h=18, silent=TRUE, initial="backcasting")
 ourData <- simulate(ourModel, nsim=50)
 
 ## ----simulate_smooth_gum_compare----------------------------------------------

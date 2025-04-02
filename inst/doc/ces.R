@@ -9,14 +9,15 @@ require(smooth)
 ces(BJsales, h=12, holdout=TRUE, silent=FALSE)
 
 ## ----auto_ces_N2457-----------------------------------------------------------
-auto.ces(BJsales, h=12, holdout=TRUE, interval="p", silent=FALSE)
+auto.ces(AirPassengers, h=12, holdout=TRUE, silent=FALSE)
 
 ## ----auto_ces_N2457_optimal---------------------------------------------------
-auto.ces(BJsales, h=12, holdout=TRUE, initial="o", interval="sp")
+ces(BJsales, h=12, holdout=TRUE, initial="back")
 
 ## ----es_N2457_xreg_create-----------------------------------------------------
-x <- cbind(rnorm(length(BJsales),50,3),rnorm(length(BJsales),100,7))
+BJData <- cbind(y=BJsales, x=BJsales.lead)
+cesModel <- ces(BJData, h=12, holdout=TRUE, regressors="use")
 
-## ----auto_ces_N2457_xreg_simple-----------------------------------------------
-auto.ces(BJsales, h=12, holdout=TRUE, xreg=x, regressors="select", interval="p")
+## -----------------------------------------------------------------------------
+forecast(cesModel, h=12, interval="pred") |> plot()
 
