@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2025-07-01" />
+<meta name="date" content="2025-10-24" />
 
 <title>ssarima() - State-Space ARIMA</title>
 
@@ -363,7 +363,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">ssarima() - State-Space ARIMA</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2025-07-01</h4>
+<h4 class="date">2025-10-24</h4>
 
 
 
@@ -420,7 +420,7 @@ advised to install it.</p>
 <p>We could try selecting orders manually, but this can also be done
 automatically via <code>auto.ssarima()</code> function:</p>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">auto.ssarima</span>(AirPassengers, <span class="at">h=</span><span class="dv">12</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 1.57 seconds
+<pre><code>## Time elapsed: 1.56 seconds
 ## Model estimated using ssarima() function: SSARIMA(0,1,3)[1](0,1,0)[12]
 ## With backcasting initialisation
 ## Distribution assumed in the model: Normal
@@ -443,7 +443,7 @@ of the possible high number of parameters in some models and partially
 because of potential overfitting of first observations when non-zero
 order of AR is selected:</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">auto.ssarima</span>(AirPassengers, <span class="at">h=</span><span class="dv">12</span>, <span class="at">initial=</span><span class="st">&quot;backcasting&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 1.63 seconds
+<pre><code>## Time elapsed: 1.49 seconds
 ## Model estimated using ssarima() function: SSARIMA(0,1,3)[1](0,1,0)[12]
 ## With backcasting initialisation
 ## Distribution assumed in the model: Normal
@@ -461,7 +461,7 @@ order of AR is selected:</p>
 ##      AIC     AICc      BIC     BICc 
 ## 1123.798 1124.086 1135.678 1136.393</code></pre>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">auto.ssarima</span>(AirPassengers, <span class="at">h=</span><span class="dv">12</span>, <span class="at">initial=</span><span class="st">&quot;optimal&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 10.13 seconds
+<pre><code>## Time elapsed: 10.62 seconds
 ## Model estimated using ssarima() function: SSARIMA(0,1,2)[1](0,1,0)[12] with drift
 ## With optimal initialisation
 ## Distribution assumed in the model: Normal

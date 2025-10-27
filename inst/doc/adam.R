@@ -61,6 +61,7 @@ plot(testForecast)
 forecast(testModel,h=18,interval="semiparametric", level=c(0.9,0.95,0.99), side="upper")
 
 ## ----GUMData------------------------------------------------------------------
+set.seed(41)
 ordersGUM <- c(1,1,1)
 lagsGUM <- c(1,48,336)
 initialGUM1 <- -25381.7
