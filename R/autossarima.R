@@ -1,5 +1,3 @@
-utils::globalVariables(c("silent","silentGraph","silentLegend","initialType","ar.orders","i.orders","ma.orders"));
-
 #' State Space ARIMA
 #'
 #' Function selects the best State Space ARIMA based on information criteria,
@@ -79,7 +77,7 @@ utils::globalVariables(c("silent","silentGraph","silentLegend","initialType","ar
 auto.ssarima <- function(y, orders=list(ar=c(3,3),i=c(2,1),ma=c(3,3)), lags=c(1,frequency(y)),
                          fast=TRUE, constant=NULL,
                          initial=c("backcasting","optimal","two-stage","complete"),
-                         loss=c("likelihood","MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
+                         loss=c("likelihood","MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE","GPL"),
                          ic=c("AICc","AIC","BIC","BICc"),
                          h=0, holdout=FALSE, bounds=c("admissible","usual","none"), silent=TRUE,
                          xreg=NULL, regressors=c("use","select","adapt"),

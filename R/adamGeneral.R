@@ -1457,14 +1457,14 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                     }
                     for(i in 1:length(lags)){
                         if(arRequired && !is.null(arma$ar) && arOrders[i]>0){
-                            armaParameters[j+c(1:arOrders[i])] <- arma$ar[arIndex+c(1:arOrders[i])]
+                            armaParameters[j+c(1:arOrders[i])] <- arma$ar[arIndex+c(1:arOrders[i])];
                             names(armaParameters)[j+c(1:arOrders[i])] <- paste0("phi",1:arOrders[i],"[",lags[i],"]");
                             j[] <- j+arOrders[i];
                             arIndex[] <- arIndex+arOrders[i];
                             arEstimate[] <- FALSE;
                         }
                         if(maRequired && !is.null(arma$ma) && maOrders[i]>0){
-                            armaParameters[j+c(1:maOrders[i])] <- arma$ma[maIndex+c(1:maOrders[i])]
+                            armaParameters[j+c(1:maOrders[i])] <- arma$ma[maIndex+c(1:maOrders[i])];
                             names(armaParameters)[j+c(1:maOrders[i])] <- paste0("theta",1:maOrders[i],"[",lags[i],"]");
                             j[] <- j+maOrders[i];
                             maIndex[] <- maIndex+maOrders[i];
@@ -1477,7 +1477,7 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                     for(i in 1:length(lags)){
                         k <- 1;
                         if(arRequired && !is.null(arma[[1]]) && arOrders[i]>0){
-                            armaParameters[j+c(1:arOrders[i])] <- arma[[1]][arIndex+c(1:arOrders[i])]
+                            armaParameters[j+c(1:arOrders[i])] <- arma[[1]][arIndex+c(1:arOrders[i])];
                             names(armaParameters)[j+c(1:arOrders[i])] <- paste0("phi",1:arOrders[i],"[",lags[i],"]");
                             j[] <- j+arOrders[i];
                             arIndex[] <- arIndex+arOrders[i];
@@ -1485,7 +1485,7 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                             k[] <- 2;
                         }
                         if(maRequired && !is.null(arma[[k]]) && maOrders[i]>0){
-                            armaParameters[j+c(1:maOrders[i])] <- arma[[k]][maIndex+c(1:maOrders[i])]
+                            armaParameters[j+c(1:maOrders[i])] <- arma[[k]][maIndex+c(1:maOrders[i])];
                             names(armaParameters)[j+c(1:maOrders[i])] <- paste0("theta",1:maOrders[i],"[",lags[i],"]");
                             j[] <- j+maOrders[i];
                             maIndex[] <- maIndex+maOrders[i];
@@ -1537,6 +1537,11 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     }
     else{
         armaParameters <- NULL;
+    }
+
+    # Make armaParameters a zero vector. Needed for C++ code to work
+    if(is.null(armaParameters)){
+        armaParameters <- matrix(0,0,0);
     }
 
     #### xreg preparation ####
@@ -2665,28 +2670,28 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                 # We have enough observations for trend model
                 if(obsNonzero > (5 + nParamExo)){
                     if(any(Ttype==c("Z","X","A"))){
-                        modelsPool <- c(modelsPool,"AAN");
+                        modelsPool <- c(modelsPool,"AAN","MAN");
                     }
                     if(allowMultiplicative && any(Ttype==c("Z","Y","M"))){
-                        modelsPool <- c(modelsPool,"AMN","MAN","MMN");
+                        modelsPool <- c(modelsPool,"AMN","MMN");
                     }
                 }
                 # We have enough observations for damped trend model
                 if(obsNonzero > (6 + nParamExo)){
                     if(any(Ttype==c("Z","X","A"))){
-                        modelsPool <- c(modelsPool,"AAdN");
+                        modelsPool <- c(modelsPool,"AAdN","MAdN");
                     }
                     if(allowMultiplicative && any(Ttype==c("Z","Y","M"))){
-                        modelsPool <- c(modelsPool,"AMdN","MAdN","MMdN");
+                        modelsPool <- c(modelsPool,"AMdN","MMdN");
                     }
                 }
                 # We have enough observations for seasonal model
                 if((obsNonzero > (lagsModelMax)) && lagsModelMax!=1){
                     if(any(Stype==c("Z","X","A"))){
-                        modelsPool <- c(modelsPool,"ANA");
+                        modelsPool <- c(modelsPool,"ANA","MNA");
                     }
                     if(allowMultiplicative && any(Stype==c("Z","Y","M"))){
-                        modelsPool <- c(modelsPool,"ANM","MNA","MNM");
+                        modelsPool <- c(modelsPool,"ANM","MNM");
                     }
                 }
                 # We have enough observations for seasonal model with trend
@@ -2774,6 +2779,8 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                 # We don't have enough observations for seasonal models with damped trend
                 if((obsNonzero <= (6 + lagsModelMax + 1 + nParamExo))){
                     if(nchar(model)==4){
+                        warning("Not enough of non-zero observations for the fit of ETS(",model,")! Fitting what I can...",
+                                call.=FALSE);
                         model <- paste0(substr(model,1,2),substr(model,4,4));
                     }
                     # model <- model[!(nchar(model)==4 &
@@ -2783,27 +2790,45 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                 }
                 # We don't have enough observations for seasonal models with trend
                 if((obsNonzero <= (5 + lagsModelMax + 1 + nParamExo))){
+                    warning("Not enough of non-zero observations for the fit of ETS(",model,")! Fitting what I can...",
+                            call.=FALSE);
                     model <- paste0(substr(model,1,1),"N",substr(model,3,3));
                     # model <- model[!(substr(model,2,2)!="N" &
                     #                      substr(model,nchar(model),nchar(model))!="N")];
                 }
                 # We don't have enough observations for seasonal models
                 if(obsNonzero <= lagsModelMax){
+                    warning("Not enough of non-zero observations for the fit of ETS(",model,")! Fitting what I can...",
+                            call.=FALSE);
                     model <- paste0(substr(model,1,2),"N");
                     # model <- model[substr(model,nchar(model),nchar(model))=="N"];
                 }
                 # We don't have enough observations for damped trend
                 if(obsNonzero <= (6 + nParamExo)){
                     if(nchar(model)==4){
+                        warning("Not enough of non-zero observations for the fit of ETS(",model,")! Fitting what I can...",
+                                call.=FALSE);
                         model <- paste0(substr(model,1,2),substr(model,4,4));
                     }
                     # model <- model[nchar(model)!=4];
                 }
                 # We don't have enough observations for any trend
                 if(obsNonzero <= (5 + nParamExo)){
+                    warning("Not enough of non-zero observations for the fit of ETS(",model,")! Fitting what I can...",
+                            call.=FALSE);
                     model <- paste0(substr(model,1,1),"N",substr(model,3,3));
                     # model <- model[substr(model,2,2)=="N"];
                 }
+                # Change E,T,S elements based on the trimmed thingy
+                Etype <- substr(model,1,1);
+                Ttype <- substr(model,2,2);
+                Stype <- substr(model,nchar(model),nchar(model));
+
+                modelIsTrendy <- Ttype!="N";
+                modelIsSeasonal <- Stype!="N";
+
+                damped <- modelIsTrendy && (nchar(model)==4);
+                phiEstimate <- damped;
             }
             # Extreme cases of small samples
             else if(obsNonzero==4){
@@ -2880,7 +2905,7 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                 initialType <- "provided";
                 initialEstimate <- initialLevelEstimate <- FALSE;
                 warning("I did not have enough of non-zero observations, so I used Naive.",call.=FALSE);
-                modelDo <- "nothing"
+                modelDo <- "use"
                 model <- "ANN";
                 Etype <- "A";
                 Ttype <- "N";
@@ -2900,7 +2925,7 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
                 occurrenceModelProvided <- occurrenceModel <- FALSE;
                 occurrence <- "none";
                 warning("You have a sample with zeroes only. Your forecast will be zero.",call.=FALSE);
-                modelDo <- "nothing"
+                modelDo <- "use"
                 model <- "ANN";
                 Etype <- "A";
                 Ttype <- "N";
@@ -3056,7 +3081,7 @@ parametersChecker <- function(data, model, lags, formulaToUse, orders, constant=
     }
     # Smoother used in msdecompose
     if(is.null(ellipsis$smoother)){
-        smoother <- "ma";
+        smoother <- "lowess";
     }
     else{
         smoother <- ellipsis$smoother;

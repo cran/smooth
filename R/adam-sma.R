@@ -190,10 +190,11 @@ sma <- function(y, order=NULL, ic=c("AICc","AIC","BIC","BICc"),
     Etype <- "A";
     Ttype <- Stype <- "N";
 
-    componentsNumberETS <- componentsNumberETSSeasonal <- xregNumber <- 0;
+    componentsNumberETS <- componentsNumberETSSeasonal <- componentsNumberETSNonSeasonal <- xregNumber <- 0;
     constantRequired <- FALSE;
     ot <- yInSample;
     ot[] <- 1;
+
 
     CreatorSMA <- function(order){
         lagsModelAll <- matrix(1:order, ncol=1);
@@ -213,17 +214,40 @@ sma <- function(y, order=NULL, ic=c("AICc","AIC","BIC","BICc"),
         vecG <- matrix(1/order,order);
         matVt <- matrix(0,order,obsStates);
 
+        # Create C++ adam class, which will then use fit, forecast etc methods
+        adamCpp <- new(adamCore,
+                       lagsModelAll, Etype, Ttype, Stype,
+                       componentsNumberETSNonSeasonal,
+                       componentsNumberETSSeasonal,
+                       componentsNumberETS, order,
+                       xregNumber, length(lagsModelAll),
+                       constantRequired, FALSE);
+
         #### Fitter and the losses calculation ####
-        adamFitted <- adamFitterWrap(matVt, matWt, matF, vecG,
-                                     lagsModelAll, indexLookupTable, profilesRecentTable,
-                                     Etype, Ttype, Stype, componentsNumberETS, componentsNumberETSSeasonal,
-                                     order, xregNumber, constantRequired,
-                                     yInSample, ot, TRUE, 2, TRUE, FALSE);
+        adamFitted <- adamCpp$fit(matVt, matWt,
+                                  matF, vecG,
+                                  indexLookupTable, profilesRecentTable,
+                                  yInSample, ot,
+                                  TRUE, 2,
+                                  TRUE);
 
         # Get scale, cf, logLik and IC
         scale <- sqrt(sum(adamFitted$errors^2)/obsInSample);
-        cfObjective <- sum(dnorm(x=yInSample, mean=adamFitted$yFitted, sd=scale, log=TRUE));
-        logLik <- structure(cfObjective, nobs=obsInSample, df=1, class="logLik");
+        cfObjective <- sum(dnorm(x=yInSample, mean=adamFitted$fitted, sd=scale, log=TRUE));
+
+        nStatesBackcasting <- 0;
+        #### This is switched off because in sma() the initial values have almost no effect
+        # on the final values. This is because the weights are 1/n, and the difference
+        # between g=0 and g=1/n is almost non-existent
+
+        # Calculate the number of degrees of freedom coming from states in case of backcasting
+        # nStatesBackcasting[] <- calculateBackcastingDF(profilesRecentTable, lagsModelAll,
+        #                                                FALSE, Stype, componentsNumberETSNonSeasonal,
+        #                                                componentsNumberETSSeasonal, vecG, matF,
+        #                                                obsInSample, lagsModelMax, indexLookupTable,
+        #                                                adamCpp);
+
+        logLik <- structure(cfObjective, nobs=obsInSample, df=1+nStatesBackcasting, class="logLik");
         ICValue <- icFunction(logLik);
 
         return(ICValue);

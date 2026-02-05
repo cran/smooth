@@ -6,6 +6,7 @@ knitr::opts_chunk$set(fig.width=6, fig.height=4, fig.path='Figs/', fig.show='hol
 require(smooth)
 
 ## ----sim_es_ANN---------------------------------------------------------------
+set.seed(41)
 ourSimulation <- sim.es("ANN", frequency=12, obs=120)
 
 ## ----sim_es_ANN_plot_data-----------------------------------------------------
@@ -51,7 +52,8 @@ ourSimulation <- sim.ssarima(orders=list(ar=c(0,1),i=c(1,0),ma=c(1,2)), lags=c(1
 plot(ourSimulation)
 
 ## ----sim_ssarima_(0,1,1)(1,0,2)_12_drift_predefined---------------------------
-ourSimulation <- sim.ssarima(orders=list(ar=c(0,1),i=c(1,0),ma=c(1,2)), lags=c(1,12), constant=TRUE, MA=c(0.5,0.2,0.3), obs=120)
+ourSimulation <- sim.ssarima(orders=list(ar=c(0,1),i=c(1,0),ma=c(1,2)),
+                             lags=c(1,12), constant=TRUE, arma=list(ma=c(0.5,0.2,0.3)), obs=120)
 ourSimulation
 
 ## ----sim_ssarima_(1,0,2)_1(0,1,1)_7(1,0,1)_30---------------------------------
@@ -88,11 +90,12 @@ plot(ourSimulation)
 ourSimulation
 
 ## ----sim_ces_(s)--------------------------------------------------------------
+set.seed(41)
 ourSimulation <- sim.ces("s",frequency=24, obs=240, nsim=1)
 plot(ourSimulation)
 
 ## ----sim_ces_(s)_messing_arround----------------------------------------------
-ourSimulation$initial[c(1:5,20:24),] <- 0
+ourSimulation$initial[,c(1:5,20:24)] <- 0
 ourSimulation <- sim.ces("s",frequency=24, obs=120, nsim=1, initial=ourSimulation$initial, randomizer="rt", df=4)
 plot(ourSimulation)
 

@@ -14,7 +14,7 @@ adam(data, model = "ZXZ", lags = c(frequency(data)), orders = list(ar =
   "inverse-odds-ratio", "direct"), distribution = c("default", "dnorm",
   "dlaplace", "ds", "dgnorm", "dlnorm", "dinvgauss", "dgamma"),
   loss = c("likelihood", "MSE", "MAE", "HAM", "LASSO", "RIDGE", "MSEh",
-  "TMSE", "GTMSE", "MSCE"), outliers = c("ignore", "use", "select"),
+  "TMSE", "GTMSE", "MSCE", "GPL"), outliers = c("ignore", "use", "select"),
   level = 0.99, h = 0, holdout = FALSE, persistence = NULL,
   phi = NULL, initial = c("backcasting", "optimal", "two-stage",
   "complete"), arma = NULL, ic = c("AICc", "AIC", "BIC", "BICc"),
@@ -165,7 +165,8 @@ likelihood of the function specified in \code{distribution};
 \item \code{TMSE} - Trace Mean Squared Error,
 \item \code{GTMSE} - Geometric Trace Mean Squared Error,
 \item \code{MSEh} - optimisation using only h-steps ahead error,
-\item \code{MSCE} - Mean Squared Cumulative Error.
+\item \code{MSCE} - Mean Squared Cumulative Error,
+\item \code{GPL} - Generalised Predictive Likelihood.
 }
 In case of LASSO / RIDGE, the variables are not normalised prior to the estimation,
 but the parameters are divided by the mean values of explanatory variables.
@@ -287,7 +288,8 @@ If equal to 41, then the detailed results of the optimisation are returned.
 You can read more about these parameters by running the function
 \link[nloptr]{nloptr.print.options}.
 It is also possible to regulate what smoother to use to get initial seasonal indices
-from the \link[smooth]{msdecompose} function via the \code{smoother} parameter.
+from the \link[smooth]{msdecompose} function via the \code{smoother} parameter. The default
+value is \code{smoother="lowess"}.
 Finally, the parameter \code{lambda} for LASSO / RIDGE, \code{alpha} for the Asymmetric
 Laplace, \code{shape} for the Generalised Normal and \code{nu} for Student's distributions
 can be provided here as well.}
@@ -478,16 +480,6 @@ weights. International Journal of Forecasting, 27, pp 238 - 251.
 \item Svetunkov, I., Boylan, J.E., 2023b. Staying Positive: Challenges and
  Solutions in Using Pure Multiplicative ETS Models. IMA Journal of
  Management Mathematics. p. 403-425. \doi{10.1093/imaman/dpad028}
-}
-
-\itemize{
-\item Taylor, J.W. and Bunn, D.W. (1999) A Quantile Regression Approach to
-Generating Prediction Intervals. Management Science, Vol 45, No 2, pp
-225-237.
-\item Lichtendahl Kenneth C., Jr., Grushka-Cockayne Yael, Winkler
-Robert L., (2013) Is It Better to Average Probabilities or
-Quantiles? Management Science 59(7):1594-1611. DOI:
-\doi{10.1287/mnsc.1120.1667}
 }
 }
 \seealso{

@@ -1,7 +1,3 @@
-utils::globalVariables(c("xregData","xregModel","xregNumber","initialXregEstimate","xregNames",
-                         "otLogical","yFrequency","yIndex",
-                         "persistenceXreg","yHoldout","distribution"));
-
 #' Generalised Univariate Model
 #'
 #' Function constructs Generalised Univariate Model, estimating matrices F, w,
@@ -60,7 +56,8 @@ utils::globalVariables(c("xregData","xregModel","xregNumber","initialXregEstimat
 #' estimated.
 #' @param bounds The type of bounds for the parameters to use in the model
 #' estimation. Can be either \code{admissible} - guaranteeing the stability of the
-#' model, or \code{none} - no restrictions (potentially dangerous).
+#' model, \code{"usual"} restrict all the parameters with the (0, 1) region,
+#' or \code{none} - no restrictions (potentially dangerous).
 #' @param model A previously estimated GUM model, if provided, the function
 #' will not estimate anything and will use all its parameters.
 #' @param ...  Other non-documented parameters. See \link[smooth]{adam} for
@@ -101,8 +98,8 @@ utils::globalVariables(c("xregData","xregModel","xregNumber","initialXregEstimat
 gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","multiplicative"),
                 initial=c("backcasting","optimal","two-stage","complete"),
                 persistence=NULL, transition=NULL, measurement=rep(1,sum(orders)),
-                loss=c("likelihood","MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE"),
-                h=0, holdout=FALSE, bounds=c("admissible","none"), silent=TRUE,
+                loss=c("likelihood","MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE","GPL"),
+                h=0, holdout=FALSE, bounds=c("usual","admissible","none"), silent=TRUE,
                 model=NULL, xreg=NULL, regressors=c("use","select","adapt","integrate"), initialX=NULL, ...){
 # General Univariate Model function. Paper to follow... at some point... maybe.
 #
@@ -119,6 +116,7 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
     # Check seasonality and loss
     type <- match.arg(type);
     loss <- match.arg(loss);
+    boundsOriginal <- match.arg(bounds);
 
     # paste0() is needed in order to get rid of potential issues with names
     yName <- paste0(deparse(substitute(data)),collapse="");
@@ -248,17 +246,30 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         regressors <- "adapt";
     }
 
+    # Default parameters for the wrapper
+    constant <- FALSE;
+    distribution <- "dnorm";
+    formula <- NULL;
+    ic <- "AICc";
+    level <- 0.99;
+    occurrence <- "none";
+    outliers <- "ignore";
+    phi <- NULL;
+
     ##### Set environment for ssInput and make all the checks #####
-    checkerReturn <- parametersChecker(data=data, model, lags, formulaToUse=NULL,
+    checkerReturn <- parametersChecker(data=data, model, lags, formulaToUse=formula,
                                        orders=list(ar=c(orders),i=c(0),ma=c(0),select=FALSE),
-                                       constant=FALSE, arma=NULL,
-                                       outliers="ignore", level=0.99,
-                                       persistence=NULL, phi=NULL, initial,
-                                       distribution="dnorm", loss, h, holdout, occurrence="none",
+                                       constant=constant, arma=NULL,
+                                       outliers=outliers, level=level,
+                                       persistence=NULL, phi=phi, initial,
+                                       distribution=distribution, loss, h, holdout, occurrence=occurrence,
                                        # This is not needed by the gum() function
-                                       ic="AICc", bounds=bounds[1],
+                                       ic=ic, bounds=bounds[1],
                                        regressors=regressors, yName=yName,
                                        silent, modelDo, ParentEnvironment=environment(), ellipsis, fast=FALSE);
+
+    # Return to the original ones. The parametersChecker will force "admissible"
+    bounds <- boundsOriginal
 
     # Check whether the multiplicative model is applicable
     if(type=="multiplicative"){
@@ -320,37 +331,34 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         return(sqrt(sum(errors^2)/obsInSample));
     }
 
-    ##### Cost function for CES #####
+    ##### Cost function for GUM #####
     CF <- function(B, matVt, matF, vecG, matWt){
-        # Obtain the elements of CES
+        # Obtain the elements of GUM
         elements <- filler(B, matVt[,1:lagsModelMax,drop=FALSE], matF, vecG, matWt);
 
-        if(xregModel){
-            # We drop the X parts from matrices
-            indices <- c(1:componentsNumber)
-            eigenValues <- abs(eigen(elements$matF[indices,indices,drop=FALSE] -
-                                         elements$vecG[indices,,drop=FALSE] %*%
-                                         matWt[obsInSample,indices,drop=FALSE],
-                                     symmetric=FALSE, only.values=TRUE)$values);
+        if(bounds=="admissible"){
+            # Stability / invertibility condition
+            eigenValues <- smoothEigens(elements$vecG, elements$matF, matWt,
+                                        lagsModelAll, xregModel, obsInSample);
+            if(any(eigenValues>1+1E-50)){
+                return(1E+100*max(eigenValues));
+            }
         }
-        else{
-            eigenValues <- abs(eigen(elements$matF -
-                                         elements$vecG %*% matWt[obsInSample,,drop=FALSE],
-                                     symmetric=FALSE, only.values=TRUE)$values);
-        }
-        if(any(eigenValues>1+1E-50)){
-            return(1E+100*max(eigenValues));
+        else if(bounds=="usual"){
+            if(any(B>1) || any(B<0)){
+                return(1E+100);
+            }
         }
 
         # Write down the initials in the recent profile
         matVt[,1:lagsModelMax] <- profilesRecentTable[] <- elements$vt;
 
-        adamFitted <- adamFitterWrap(matVt, elements$matWt, elements$matF, elements$vecG,
-                                     lagsModelAll, indexLookupTable, profilesRecentTable,
-                                     Etype, Ttype, Stype, componentsNumberETS, componentsNumberETSSeasonal,
-                                     componentsNumberARIMA, xregNumber, FALSE,
-                                     yInSample, ot, any(initialType==c("complete","backcasting")),
-                                     nIterations, refineHead, FALSE);
+        adamFitted <- adamCpp$fit(matVt, elements$matWt,
+                                  elements$matF, elements$vecG,
+                                  indexLookupTable, profilesRecentTable,
+                                  yInSample, ot,
+                                  any(initialType==c("complete","backcasting")), nIterations,
+                                  refineHead);
 
         if(!multisteps){
             if(loss=="likelihood"){
@@ -359,7 +367,7 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
 
                 # Calculate the likelihood
                 CFValue <- -sum(dnorm(x=yInSample[otLogical],
-                                      mean=adamFitted$yFitted[otLogical],
+                                      mean=adamFitted$fitted[otLogical],
                                       sd=scale, log=TRUE));
             }
             else if(loss=="MSE"){
@@ -372,17 +380,15 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
                 CFValue <- sum(sqrt(abs(adamFitted$errors)))/obsInSample;
             }
             else if(loss=="custom"){
-                CFValue <- lossFunction(actual=yInSample,fitted=adamFitted$yFitted,B=B);
+                CFValue <- lossFunction(actual=yInSample,fitted=adamFitted$fitted,B=B);
             }
         }
         else{
             # Call for the Rcpp function to produce a matrix of multistep errors
-            adamErrors <- adamErrorerWrap(adamFitted$matVt, elements$matWt, elements$matF,
-                                          lagsModelAll, indexLookupTable, profilesRecentTable,
-                                          Etype, Ttype, Stype,
-                                          componentsNumberETS, componentsNumberETSSeasonal,
-                                          componentsNumberARIMA, xregNumber, constantRequired, h,
-                                          yInSample, ot);
+            adamErrors <- adamCpp$ferrors(adamFitted$states, elements$matWt,
+                                          elements$matF,
+                                          indexLookupTable, profilesRecentTable,
+                                          h, yInSample)$errors;
 
             # Not done yet: "aMSEh","aTMSE","aGTMSE","aMSCE","aGPL"
             CFValue <- switch(loss,
@@ -455,6 +461,15 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         regressors <- "integrate";
         componentsNumberAll <- componentsNumber+xregNumber;
     }
+
+    # Create C++ adam class, which will then use fit, forecast etc methods
+    adamCpp <- new(adamCore,
+                   lagsModelAll, Etype, Ttype, Stype,
+                   componentsNumberETSNonSeasonal,
+                   componentsNumberETSSeasonal,
+                   componentsNumberETS, componentsNumberARIMA,
+                   xregNumber, length(lagsModelAll),
+                   constantRequired, FALSE);
 
     matF <- diag(componentsNumber+xregNumber);
     vecG <- matrix(0,componentsNumber+xregNumber,1);
@@ -691,7 +706,8 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         }
 
         # First run of BOBYQA to get better values of B
-        res <- nloptr(B, CF, opts=list(algorithm=algorithm0, xtol_rel=xtol_rel0, xtol_abs=xtol_abs0,
+        res <- nloptr(B, CF,
+                      opts=list(algorithm=algorithm0, xtol_rel=xtol_rel0, xtol_abs=xtol_abs0,
                                        ftol_rel=ftol_rel0, ftol_abs=ftol_abs0,
                                        maxeval=maxeval0, maxtime=maxtime0, print_level=print_level),
                       matVt=matVt, matF=matF, vecG=vecG, matWt=matWt);
@@ -716,8 +732,21 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         B[] <- res$solution;
         CFValue <- res$objective;
 
+        nStatesBackcasting <- 0;
+        # Calculate the number of degrees of freedom coming from states in case of backcasting
+        if(any(initialType==c("backcasting","complete"))){
+            # Obtain the elements of GUM
+            gumFilled <- filler(B, matVt[,1:lagsModelMax,drop=FALSE], matF, vecG, matWt);
+
+            nStatesBackcasting[] <- calculateBackcastingDF(profilesRecentTable, lagsModelAll,
+                                                           FALSE, Stype, componentsNumberETSNonSeasonal,
+                                                           componentsNumberETSSeasonal, gumFilled$vecG, gumFilled$matF,
+                                                           obsInSample, lagsModelMax, indexLookupTable,
+                                                           adamCpp);
+        }
+
         # Parameters estimated + variance
-        nParamEstimated <- length(B) + (loss=="likelihood")*1;
+        nParamEstimated <- length(B) + (loss=="likelihood")*1 + nStatesBackcasting;
 
         # Prepare for fitting
         elements <- filler(B, matVt[,1:lagsModelMax,drop=FALSE], matF, vecG, matWt);
@@ -728,15 +757,18 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
 
         # Write down the initials in the recent profile
         profilesRecentInitial <- profilesRecentTable[] <- matVt[,1:lagsModelMax,drop=FALSE];
-        parametersNumber[1,1] <- length(B);
+        parametersNumber[1,1] <- length(B) + nStatesBackcasting;
     }
     #### If we just use the provided values ####
     else{
         # Create index lookup table
         indexLookupTable <- adamProfileCreator(lagsModelAll, lagsModelMax, obsAll,
                                            lags=lags, yIndex=yIndexAll, yClasses=yClasses)$lookup;
-        if(any(initialType==c("optimal","two-stage"))){
+        if(any(initialType==c("optimal","two-stage","provided"))){
             initialType <- "provided";
+        }
+        else{
+            initialType <- initialOriginal[1];
         }
         # initialValue <- profilesRecentInitial;
         initialXregEstimateOriginal <- initialXregEstimate;
@@ -766,8 +798,8 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
             measurementEstimateOriginal <- measurementEstimate;
             measurementEstimate <- TRUE;
         }
-        initialTypeOriginal <- initialType;
-        initialType <- "optimal";
+        # initialTypeOriginal <- initialType;
+        # initialType <- "optimal";
         if(!is.null(initialValueProvided$xreg) && initialOriginal!="complete"){
             initialXregEstimateOriginal <- initialXregEstimate;
             initialXregEstimate <- TRUE;
@@ -785,7 +817,7 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         if(any(substr(names(B),1,1)=="w")){
             measurementEstimate <- measurementEstimateOriginal;
         }
-        initialType <- initialTypeOriginal;
+        # initialType <- initialTypeOriginal;
         if(!is.null(initialValueProvided$xreg) && initialOriginal!="complete"){
             initialXregEstimate <- initialXregEstimateOriginal;
         }
@@ -798,19 +830,21 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
     logLikValue <- structure(logLikFunction(B, matVt=matVt, matF=matF, vecG=vecG, matWt=matWt),
                              nobs=obsInSample, df=nParamEstimated, class="logLik");
 
-    adamFitted <- adamFitterWrap(matVt, matWt, matF, vecG,
-                                 lagsModelAll, indexLookupTable, profilesRecentTable,
-                                 Etype, Ttype, Stype, componentsNumberETS, componentsNumberETSSeasonal,
-                                 componentsNumberARIMA, xregNumber, FALSE,
-                                 yInSample, ot, any(initialType==c("complete","backcasting")),
-                                 nIterations, refineHead, FALSE);
+    adamFitted <- adamCpp$fit(matVt, matWt,
+                              matF, vecG,
+                              indexLookupTable, profilesRecentTable,
+                              yInSample, ot,
+                              any(initialType==c("complete","backcasting")), nIterations,
+                              refineHead);
 
     errors[] <- adamFitted$errors;
-    yFitted[] <- adamFitted$yFitted;
+    yFitted[] <- adamFitted$fitted;
     # Write down the recent profile for future use
     profilesRecentTable <- adamFitted$profile;
-    matVt[] <- adamFitted$matVt;
-    profilesRecentInitial <- matVt[,1:lagsModelMax,drop=FALSE]
+    matVt[] <- adamFitted$states;
+    if(!any(initialType==c("complete","backcasting"))){
+        profilesRecentInitial <- matVt[,1:lagsModelMax,drop=FALSE];
+    }
 
     scale <- scaler(adamFitted$errors[otLogical], obsInSample);
 
@@ -821,14 +855,10 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         yForecast <- zoo(rep(NA, max(1,h)), order.by=yForecastIndex);
     }
     if(h>0){
-        yForecast[] <- adamForecasterWrap(tail(matWt,h), matF,
-                                          lagsModelAll,
-                                          indexLookupTable[,lagsModelMax+obsInSample+c(1:h),drop=FALSE],
-                                          profilesRecentTable,
-                                          Etype, Ttype, Stype,
-                                          componentsNumberETS, componentsNumberETSSeasonal,
-                                          componentsNumberARIMA, xregNumber, FALSE,
-                                          h);
+        yForecast[] <- adamCpp$forecast(tail(matWt,h), matF,
+                                        indexLookupTable[,lagsModelMax+obsInSample+c(1:h),drop=FALSE],
+                                        profilesRecentTable,
+                                        h)$forecast;
     }
     else{
         yForecast[] <- NA;
@@ -938,7 +968,8 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
                                     ICs=setNames(c(AIC(logLikValue), AICc(logLikValue), BIC(logLikValue), BICc(logLikValue)),
                                                  c("AIC","AICc","BIC","BICc")),
                                     distribution=distribution, bounds=bounds,
-                                    scale=scale, B=B, lags=lags, lagsAll=lagsModelAll, res=res, FI=FI),
+                                    scale=scale, B=B, lags=lags, lagsAll=lagsModelAll, res=res, FI=FI,
+                                    adamCpp=adamCpp),
                           class=c("adam","smooth"));
 
     # Fix data and holdout if we had explanatory variables
