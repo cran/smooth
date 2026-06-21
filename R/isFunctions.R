@@ -11,8 +11,6 @@
 #' \link[smooth]{msarima} function;
 #' \item \code{is.smoothC()} tests if the object was produced by a combination
 #' function (currently applies only to \link[smooth]{smoothCombine});
-#' \item \code{is.oes()} tests if the object was produced by \link[smooth]{oes}
-#' function;
 #' \item \code{is.smooth.sim()} tests if the object was produced by simulate functions
 #' (e.g. \link[smooth]{sim.es} / \link[smooth]{sim.ces} / \link[smooth]{sim.ssarima}
 #' / \link[smooth]{sim.sma} / \link[smooth]{sim.gum});
@@ -52,14 +50,14 @@ is.msarima <- function(x){
 
 #' @rdname isFunctions
 #' @export
-is.oes <- function(x){
-    return(inherits(x,"oes"))
+is.om <- function(x){
+    return(inherits(x,"om"))
 }
 
 #' @rdname isFunctions
 #' @export
-is.oesg <- function(x){
-    return(inherits(x,"oesg"))
+is.omg <- function(x){
+    return(inherits(x,"omg"))
 }
 
 #' @rdname isFunctions

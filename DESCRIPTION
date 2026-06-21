@@ -1,8 +1,8 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using State Space Models
-Version: 4.4.0
-Date: 2026-02-05
+Version: 4.5.0
+Date: 2026-06-19
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.com", role = c("aut", "cre"),
                   comment="Senior Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
 URL: https://github.com/config-i1/smooth
@@ -19,19 +19,19 @@ Description: Functions implementing Single Source of Error state space models fo
 License: LGPL-2.1
 Depends: R (>= 3.0.2), greybox (>= 2.0.2)
 Imports: Rcpp (>= 0.12.3), stats, generics (>= 0.1.2), graphics,
-        grDevices, methods, pracma, statmod, MASS, nloptr, utils,
-        xtable, zoo
+        grDevices, methods, statmod, MASS, nloptr, utils, xtable, zoo
 LinkingTo: Rcpp, RcppArmadillo (>= 0.8.100.0.0)
 Suggests: legion, numDeriv, testthat, knitr, rmarkdown, doMC,
         doParallel, foreach
 VignetteBuilder: knitr
-RoxygenNote: 7.3.3
 Encoding: UTF-8
 ByteCompile: true
+Config/roxygen2/version: 8.0.0
+RoxygenNote: 8.0.0
 NeedsCompilation: yes
-Packaged: 2026-02-05 10:25:01 UTC; config
+Packaged: 2026-06-20 21:10:18 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Senior Lecturer at Centre for Marketing
     Analytics and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.com>
 Repository: CRAN
-Date/Publication: 2026-02-05 11:00:02 UTC
+Date/Publication: 2026-06-21 05:10:02 UTC

@@ -237,7 +237,8 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
                                        # This is not needed by the function
                                        ic=ic, bounds=bounds[1],
                                        regressors=regressors, yName=yName,
-                                       silent, modelDo, ParentEnvironment=environment(), ellipsis, fast=FALSE);
+                                       silent, modelDo, ellipsis, fast=FALSE);
+    list2env(checkerReturn, envir=environment());
 
     # This is the variable needed for the C++ code to determine whether the head of data needs to be
     # refined. GUM doesn't need that.
@@ -397,7 +398,15 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         rownames(matVt) <- rep(" ", componentsNumber+xregNumber);
 
         if(seasonality!="none"){
-            yDecomposedSeasonal <- msdecompose(yInSample, lags=lagsModelSeasonal, type="additive")$seasonal;
+            # smoother="global" instead of the historical default "lowess":
+            # Python's greybox.lowess does not match R's stats::lowess
+            # byte-for-byte (~3e-13 output diff on real data); that ULP-level
+            # gap propagates through the CES seasonal seed into different
+            # BOBYQA basins on partial / full seasonality. The shared
+            # olsCore.h backend behind smoother="global" produces
+            # byte-identical decompositions across languages.
+            yDecomposedSeasonal <- msdecompose(yInSample, lags=lagsModelSeasonal,
+                                                type="additive", smoother="global")$seasonal;
         }
 
         # Fill in matrices for each of the special cases
@@ -505,7 +514,7 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
                                   indexLookupTable, profilesRecentTable,
                                   yInSample, ot,
                                   any(initialType==c("complete","backcasting")), nIterations,
-                                  refineHead);
+                                  refineHead, "n");
 
         if(!multisteps){
             if(loss=="likelihood"){
@@ -850,11 +859,14 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
             ftol_abs0 <- ellipsis$ftol_abs0;
         }
 
+        nloptrArgs <- list(matVt=matVt, matF=matF, vecG=vecG, a=a, b=b);
+
         # First run of BOBYQA to get better values of B
-        res <- nloptr(B, CF, opts=list(algorithm=algorithm0, xtol_rel=xtol_rel0, xtol_abs=xtol_abs0,
-                                       ftol_rel=ftol_rel0, ftol_abs=ftol_abs0,
-                                       maxeval=maxeval0, maxtime=maxtime0, print_level=print_level),
-                      matVt=matVt, matF=matF, vecG=vecG, a=a, b=b);
+        opts <- list(algorithm=algorithm0, xtol_rel=xtol_rel0, xtol_abs=xtol_abs0,
+                     ftol_rel=ftol_rel0, ftol_abs=ftol_abs0,
+                     maxeval=maxeval0, maxtime=maxtime0, print_level=print_level);
+        res <- do.call(nloptr, c(list(x0=B, eval_f=CF, opts=opts), nloptrArgs));
+        res$call <- quote(nloptr(x0=B, eval_f=CF, opts=opts));
 
         if(print_level_hidden>0){
             print(res);
@@ -863,11 +875,11 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         B[] <- res$solution;
 
         # Tuning the best obtained values using Nelder-Mead
-        res <- suppressWarnings(nloptr(B, CF,
-                                       opts=list(algorithm=algorithm, xtol_rel=xtol_rel, xtol_abs=xtol_abs,
-                                                 ftol_rel=ftol_rel, ftol_abs=ftol_abs,
-                                                 maxeval=maxevalUsed, maxtime=maxtime, print_level=print_level),
-                                       matVt=matVt, matF=matF, vecG=vecG, a=a, b=b));
+        opts <- list(algorithm=algorithm, xtol_rel=xtol_rel, xtol_abs=xtol_abs,
+                     ftol_rel=ftol_rel, ftol_abs=ftol_abs,
+                     maxeval=maxevalUsed, maxtime=maxtime, print_level=print_level);
+        res <- suppressWarnings(do.call(nloptr, c(list(x0=B, eval_f=CF, opts=opts), nloptrArgs)));
+        res$call <- quote(nloptr(x0=B, eval_f=CF, opts=opts));
 
         if(print_level_hidden>0){
             print(res);
@@ -886,7 +898,7 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
                                                            FALSE, Stype, componentsNumberETSNonSeasonal,
                                                            componentsNumberETSSeasonal, cesFilled$vecG, cesFilled$matF,
                                                            obsInSample, lagsModelMax, indexLookupTable,
-                                                           adamCpp);
+                                                           adamCpp, dfForBack);
         }
 
         # Parameters estimated + variance
@@ -960,7 +972,8 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         boundsOriginal <- bounds
         bounds <- "none"
 
-        FI <- -hessian(logLikFunction, B, h=stepSize, matVt=matVt, matF=matF, vecG=vecG, a=a, b=b);
+        logLikFunction_FI <- function(B) logLikFunction(B, matVt=matVt, matF=matF, vecG=vecG, a=a, b=b);
+        FI <- -hessianCpp(logLikFunction_FI, B, h=stepSize);
         colnames(FI) <- rownames(FI) <- names(B);
 
         if(any(substr(names(B),1,5)=="alpha")){
@@ -987,7 +1000,7 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
                               indexLookupTable, profilesRecentTable,
                               yInSample, ot,
                               any(initialType==c("complete","backcasting")), nIterations,
-                              refineHead);
+                              refineHead, "n");
 
     errors[] <- adamFitted$errors;
     yFitted[] <- adamFitted$fitted;

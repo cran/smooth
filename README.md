@@ -1,5 +1,7 @@
 # smooth
 
+[![License: LGPL-2.1](https://img.shields.io/badge/License-LGPL--2.1-blue.svg)](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
+
 R:
 
 [![CRAN_Status_Badge](https://www.r-pkg.org/badges/version/smooth)](https://cran.r-project.org/package=smooth)
@@ -8,11 +10,20 @@ R:
 
 Python:
 
+[![PyPI version](https://img.shields.io/pypi/v/smooth.svg)](https://pypi.org/project/smooth/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/smooth.svg)](https://pypi.org/project/smooth/)
+[![Python versions](https://img.shields.io/pypi/pyversions/smooth.svg)](https://pypi.org/project/smooth/)
+[![Python CI](https://github.com/config-i1/smooth/actions/workflows/python_ci.yml/badge.svg)](https://github.com/config-i1/smooth/actions/workflows/python_ci.yml)
+[![SLSA Build Level 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
 
+Python wheels on PyPI ship with [PEP 740 attestations](https://peps.python.org/pep-0740/) — SLSA Build Level 3 provenance, signed via [Sigstore](https://www.sigstore.dev/) on the GitHub Actions runner that built them. Verifiable client-side with [`pypi-attestations`](https://pypi.org/project/pypi-attestations/).
 
 The **smooth** package implements Single Source of Error (SSOE) state-space models for forecasting and time series analysis, available for both R and Python.
 
-![hex-sticker of the smooth package for R](https://github.com/config-i1/smooth/blob/master/man/figures/smooth-web.png?raw=true)
+![hex-sticker of the smooth package for R](https://github.com/config-i1/smooth/blob/master/man/figures/smooth-web.png?raw=true) ![hex-sticker of the smooth package for Python](https://github.com/config-i1/smooth/blob/master/python/img/smooth-python-web.png?raw=true)
+
+Both the R and Python versions of **smooth** depend on the [**greybox**](https://github.com/config-i1/greybox) package for distributions, information criteria, and supporting utilities (in Python this also provides the LOWESS smoother). It is installed automatically with **smooth**.
+
 
 ## Installation
 
@@ -30,10 +41,10 @@ remotes::install_github("config-i1/smooth")
 
 **Python (PyPI):**
 ```bash
-# Not yet available
+pip install smooth
 ```
 
-**Python (github):**
+**Python (github, dev):**
 ```bash
 pip install "git+https://github.com/config-i1/smooth.git@master#subdirectory=python"
 ```

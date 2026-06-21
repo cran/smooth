@@ -7,7 +7,12 @@ calculateBackcastingDF <- function(profilesRecentTable, lagsModelAll,
                                    etsModel, Stype, componentsNumberETSNonSeasonal,
                                    componentsNumberETSSeasonal, vecG, matF,
                                    obsInSample, lagsModelMax, indexLookupTable,
-                                   adamCpp){
+                                   adamCpp, dfForBack=TRUE){
+
+    # Switch off if this was not required
+    if(!dfForBack){
+        return(0);
+    }
 
     # The code below creates dummy states with 1 where the value was supposed to be estimated
     # Then it propagates the states to the end of sample and back
@@ -54,9 +59,7 @@ calculateBackcastingDF <- function(profilesRecentTable, lagsModelAll,
     # na.rm is needed to avoid NaNs due to 0/0
     nStatesBackcasting <- sum(dfs1$profileRecent, na.rm=TRUE);
 
-    # Switch off the backcasted number of degrees of freedom for now
-    return(0)
-    # return(nStatesBackcasting);
+    return(nStatesBackcasting);
 }
 
 # The function calculates the discounted number of degrees of freedom for the model
@@ -183,7 +186,7 @@ dfDiscounterFit <- function(persistence, transition,
                                   indexLookupTableBack, profilesRecentTableBack,
                                   yInSampleBack, otBack,
                                   FALSE, 1,
-                                  FALSE);
+                                  FALSE, "n");
 
     # Get the final profile. It now contains the discounted df for the start of the data
     return(list(profileRecent=adamFittedBack$profile));
