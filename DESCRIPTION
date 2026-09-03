@@ -1,12 +1,13 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using State Space Models
-Version: 4.5.0
-Date: 2026-06-19
+Version: 4.5.1
+Date: 2026-09-03
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.com", role = c("aut", "cre"),
-                  comment="Senior Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
-URL: https://github.com/config-i1/smooth
-BugReports: https://github.com/config-i1/smooth/issues
+                  comment = c("Director of the OpenForecast consultancy company, UK",
+                              ORCID = "0000-0001-7826-0281"))
+URL: https://openforecast.org/packages/
+BugReports: https://github.com/openforecast-org/smooth/issues
 Language: en-GB
 Description: Functions implementing Single Source of Error state space models for purposes of time series analysis and forecasting.
              The package includes ADAM (Svetunkov, 2023, <https://openforecast.org/adam/>),
@@ -29,9 +30,9 @@ ByteCompile: true
 Config/roxygen2/version: 8.0.0
 RoxygenNote: 8.0.0
 NeedsCompilation: yes
-Packaged: 2026-06-20 21:10:18 UTC; config
-Author: Ivan Svetunkov [aut, cre] (Senior Lecturer at Centre for Marketing
-    Analytics and Forecasting, Lancaster University, UK)
+Packaged: 2026-09-03 09:01:40 UTC; config
+Author: Ivan Svetunkov [aut, cre] (Director of the OpenForecast consultancy
+    company, UK, ORCID: <https://orcid.org/0000-0001-7826-0281>)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.com>
 Repository: CRAN
-Date/Publication: 2026-06-21 05:10:02 UTC
+Date/Publication: 2026-09-03 10:10:02 UTC

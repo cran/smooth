@@ -96,7 +96,7 @@
 #' @rdname gum
 #' @export
 gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","multiplicative"),
-                initial=c("backcasting","optimal","two-stage","complete"),
+                initial=c("backcasting","optimal","two-stage","complete","gradient"),
                 persistence=NULL, transition=NULL, measurement=rep(1,sum(orders)),
                 loss=c("likelihood","MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE","GPL"),
                 h=0, holdout=FALSE, bounds=c("usual","admissible","none"), silent=TRUE,
@@ -289,10 +289,6 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         modelIsMultiplicative <- FALSE;
     }
 
-    # This is the variable needed for the C++ code to determine whether the head of data needs to be
-    # refined.
-    refineHead <- TRUE;
-
     ##### Elements of GUM #####
     filler <- function(B, vt, matF, vecG, matWt){
 
@@ -354,12 +350,16 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         # Write down the initials in the recent profile
         matVt[,1:lagsModelMax] <- profilesRecentTable[] <- elements$vt;
 
-        adamFitted <- adamCpp$fit(matVt, elements$matWt,
-                                  elements$matF, elements$vecG,
-                                  indexLookupTable, profilesRecentTable,
-                                  yInSample, ot,
-                                  any(initialType==c("complete","backcasting")), nIterations,
-                                  refineHead, "n");
+        # Additive SSOE: initial="gradient" profiles the state initials by least
+        # squares (falls back to backcasting for a multiplicative GUM).
+        adamFitted <- adam_fitOrGradient(matVt, elements$matWt,
+                                         elements$matF, elements$vecG,
+                                         indexLookupTable, profilesRecentTable,
+                                         yInSample, ot, initialType, nIterations, adamCpp,
+                                         FALSE, TRUE, xregModel, Etype, "N", "N",
+                                         0, 0, 0, lagsModelAll, lagsModelMax,
+                                         obsInSample, loss, "dnorm", NULL, 0, FALSE, "n",
+                                         componentsNumberARIMA, lagsModelAll);
 
         if(!multisteps){
             if(loss=="likelihood"){
@@ -429,10 +429,6 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
     if(!is.null(initialValue)){
         initialType <- "provided";
     }
-
-    # if(initialType=="provided"){
-    #     refineHead[] <- FALSE;
-    # }
 
     orders <- ordersOriginal;
     lags <- lagsOriginal;
@@ -708,48 +704,55 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
 
         nloptrArgs <- list(matVt=matVt, matF=matF, vecG=vecG, matWt=matWt);
 
-        # First run of BOBYQA to get better values of B
-        opts <- list(algorithm=algorithm0, xtol_rel=xtol_rel0, xtol_abs=xtol_abs0,
-                     ftol_rel=ftol_rel0, ftol_abs=ftol_abs0,
-                     maxeval=maxeval0, maxtime=maxtime0, print_level=print_level);
-        res <- do.call(nloptr, c(list(x0=B, eval_f=CF, opts=opts), nloptrArgs));
-        res$call <- quote(nloptr(x0=B, eval_f=CF, opts=opts));
+        if(length(B)==0){
+            # Nothing to estimate (persistence, transition and initials all
+            # provided): evaluate the cost once instead of calling nloptr with a
+            # zero-length x0, which errors ("x0 must have length > 0"). Mirrors
+            # the empty-B guard in om().
+            CFValue <- do.call(CF, c(list(B), nloptrArgs));
+            res <- NULL;
+        }
+        else{
+            # First run of BOBYQA to get better values of B
+            opts <- list(algorithm=algorithm0, xtol_rel=xtol_rel0, xtol_abs=xtol_abs0,
+                         ftol_rel=ftol_rel0, ftol_abs=ftol_abs0,
+                         maxeval=maxeval0, maxtime=maxtime0, print_level=print_level);
+            res <- do.call(nloptr, c(list(x0=B, eval_f=CF, opts=opts), nloptrArgs));
+            res$call <- quote(nloptr(x0=B, eval_f=CF, opts=opts));
 
-        if(print_level_hidden>0){
-            print(res);
+            if(print_level_hidden>0){
+                print(res);
+            }
+
+            B[] <- res$solution;
+
+            # Tuning the best obtained values using Nelder-Mead
+            opts <- list(algorithm=algorithm, xtol_rel=xtol_rel, xtol_abs=xtol_abs,
+                         ftol_rel=ftol_rel, ftol_abs=ftol_abs,
+                         maxeval=maxevalUsed, maxtime=maxtime, print_level=print_level);
+            res <- suppressWarnings(do.call(nloptr, c(list(x0=B, eval_f=CF, opts=opts), nloptrArgs)));
+            res$call <- quote(nloptr(x0=B, eval_f=CF, opts=opts));
+
+            if(print_level_hidden>0){
+                print(res);
+            }
+
+            B[] <- res$solution;
+            CFValue <- res$objective;
         }
 
-        B[] <- res$solution;
-
-        # Tuning the best obtained values using Nelder-Mead
-        opts <- list(algorithm=algorithm, xtol_rel=xtol_rel, xtol_abs=xtol_abs,
-                     ftol_rel=ftol_rel, ftol_abs=ftol_abs,
-                     maxeval=maxevalUsed, maxtime=maxtime, print_level=print_level);
-        res <- suppressWarnings(do.call(nloptr, c(list(x0=B, eval_f=CF, opts=opts), nloptrArgs)));
-        res$call <- quote(nloptr(x0=B, eval_f=CF, opts=opts));
-
-        if(print_level_hidden>0){
-            print(res);
-        }
-
-        B[] <- res$solution;
-        CFValue <- res$objective;
-
+        # Identifiable initial-state df of GUM: the number of GUM state initials
+        # (= sum of the component lags; xreg is counted separately in [1,2]),
+        # the same whether they are optimised or backcast/complete/gradient. GUM
+        # has no multi-seasonal shared-frequency redundancy (structural = rank).
         nStatesBackcasting <- 0;
-        # Calculate the number of degrees of freedom coming from states in case of backcasting
-        if(any(initialType==c("backcasting","complete"))){
-            # Obtain the elements of GUM
-            gumFilled <- filler(B, matVt[,1:lagsModelMax,drop=FALSE], matF, vecG, matWt);
-
-            nStatesBackcasting[] <- calculateBackcastingDF(profilesRecentTable, lagsModelAll,
-                                                           FALSE, Stype, componentsNumberETSNonSeasonal,
-                                                           componentsNumberETSSeasonal, gumFilled$vecG, gumFilled$matF,
-                                                           obsInSample, lagsModelMax, indexLookupTable,
-                                                           adamCpp, dfForBack);
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            nStatesBackcasting[] <- sum(lagsModelAll) - xregNumber;
         }
 
-        # Parameters estimated + variance
-        nParamEstimated <- length(B) + (loss=="likelihood")*1 + nStatesBackcasting;
+        # Parameters estimated + variance. The scale is always an estimated
+        # parameter (every reported logLik is a concentrated likelihood).
+        nParamEstimated <- length(B) + 1 + nStatesBackcasting;
 
         # Prepare for fitting
         elements <- filler(B, matVt[,1:lagsModelMax,drop=FALSE], matF, vecG, matWt);
@@ -780,8 +783,15 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
         CFValue <- CF(B, matVt, matF, vecG, matWt);
         res <- NULL;
 
-        # Only variance is estimated
-        nParamEstimated <- 1;
+        # Nothing is optimised, but backcast / complete / gradient initials are
+        # still determined from the data and consume df exactly as in the
+        # estimated branch above (line 748-755); the scale is always estimated.
+        nStatesBackcasting <- 0;
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            nStatesBackcasting[] <- sum(lagsModelAll) - xregNumber;
+        }
+        nParamEstimated <- nStatesBackcasting + 1;
+        parametersNumber[1,1] <- nStatesBackcasting;
 
         initialXregEstimate <- initialXregEstimateOriginal;
     }
@@ -834,12 +844,14 @@ gum <- function(y, orders=c(1,1), lags=c(1,frequency(y)), type=c("additive","mul
     logLikValue <- structure(logLikFunction(B, matVt=matVt, matF=matF, vecG=vecG, matWt=matWt),
                              nobs=obsInSample, df=nParamEstimated, class="logLik");
 
-    adamFitted <- adamCpp$fit(matVt, matWt,
-                              matF, vecG,
-                              indexLookupTable, profilesRecentTable,
-                              yInSample, ot,
-                              any(initialType==c("complete","backcasting")), nIterations,
-                              refineHead, "n");
+    adamFitted <- adam_fitOrGradient(matVt, matWt,
+                                     matF, vecG,
+                                     indexLookupTable, profilesRecentTable,
+                                     yInSample, ot, initialType, nIterations, adamCpp,
+                                     FALSE, TRUE, xregModel, Etype, "N", "N",
+                                     0, 0, 0, lagsModelAll, lagsModelMax,
+                                     obsInSample, loss, "dnorm", NULL, 0, FALSE, "n",
+                                     componentsNumberARIMA, lagsModelAll);
 
     errors[] <- adamFitted$errors;
     yFitted[] <- adamFitted$fitted;

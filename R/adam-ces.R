@@ -89,7 +89,7 @@
 #' @rdname ces
 #' @export
 ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequency(y)),
-                initial=c("backcasting","optimal","two-stage","complete"), a=NULL, b=NULL,
+                initial=c("backcasting","optimal","two-stage","complete","gradient"), a=NULL, b=NULL,
                 loss=c("likelihood","MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE","GPL"),
                 h=0, holdout=FALSE, bounds=c("admissible","none"), silent=TRUE,
                 model=NULL, xreg=NULL, regressors=c("use","select","adapt"), initialX=NULL, ...){
@@ -152,6 +152,30 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         modelDo <- modelDoOriginal <- "estimate";
         initialValueProvided <- NULL;
         initialOriginal <- initial;
+    }
+
+    # Validate the provided b against the seasonality it belongs to. "partial"
+    # carries one real coefficient, "full" a complex pair, and "none"/"simple"
+    # have no b at all -- silently taking Re(b), or letting a wrong-shaped b
+    # reach the cost function (where it only surfaces as a 1e+300 penalty),
+    # would hide a user error rather than report it.
+    if(!is.null(b)){
+        if(any(seasonality==c("none","simple"))){
+            warning(paste0("CES(", seasonality, ") has no second smoothing parameter, ",
+                           "so the provided b is not used. Dropping it."),
+                    call.=FALSE);
+            b <- NULL;
+        }
+        else if(seasonality=="partial" && is.complex(b)){
+            stop(paste0("CES(partial) has a real second smoothing parameter, but b is ",
+                        "complex. Provide a real value, or use seasonality=\"full\" ",
+                        "for a complex b."), call.=FALSE);
+        }
+        else if(seasonality=="full" && !is.complex(b)){
+            stop(paste0("CES(full) has a complex second smoothing parameter, but b is ",
+                        "real. Provide a complex value (e.g. complex(real=, imaginary=)), ",
+                        "or use seasonality=\"partial\" for a real b."), call.=FALSE);
+        }
     }
 
     a <- list(value=a);
@@ -239,14 +263,6 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
                                        regressors=regressors, yName=yName,
                                        silent, modelDo, ellipsis, fast=FALSE);
     list2env(checkerReturn, envir=environment());
-
-    # This is the variable needed for the C++ code to determine whether the head of data needs to be
-    # refined. GUM doesn't need that.
-    refineHead <- TRUE;
-
-    # if(initialType=="provided"){
-    #     refineHead[] <- FALSE;
-    # }
 
     # Fix lagsModel and Ttype for CES. This is needed because the function drops duplicate seasonal lags
     # if(seasonality=="simple"){
@@ -492,7 +508,11 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
     }
 
     ##### Cost function for CES #####
-    CF <- function(B, matVt, matF, vecG, a, b){
+    # loss / bounds are formals here so that logLikFunction() can re-evaluate the
+    # very same fit under the likelihood, the way adam() re-runs CF with lossNew
+    # (adam.R:1030). nloptr inspects its objective's formals and insists every
+    # one of them be supplied, so it gets the fixed-arity CF() wrapper below.
+    CFgeneric <- function(B, matVt, matF, vecG, a, b, loss, bounds){
         # Obtain the elements of CES
         elements <- filler(B, matVt, matF, vecG, a, b);
 
@@ -509,12 +529,17 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         # Write down the initials in the recent profile
         profilesRecentTable[] <- elements$vt;
 
-        adamFitted <- adamCpp$fit(matVt, matWt,
-                                  elements$matF, elements$vecG,
-                                  indexLookupTable, profilesRecentTable,
-                                  yInSample, ot,
-                                  any(initialType==c("complete","backcasting")), nIterations,
-                                  refineHead, "n");
+        # Additive SSOE: initial="gradient" profiles the initials by least
+        # squares (the CES state-space is linear/additive despite the complex
+        # smoothing); falls back to backcasting for a multiplicative CES.
+        adamFitted <- adam_fitOrGradient(matVt, matWt,
+                                         elements$matF, elements$vecG,
+                                         indexLookupTable, profilesRecentTable,
+                                         yInSample, ot, initialType, nIterations, adamCpp,
+                                         FALSE, TRUE, xregModel, Etype, "N", "N",
+                                         0, 0, 0, lagsModelAll, lagsModelMax,
+                                         obsInSample, loss, "dnorm", NULL, 0, FALSE, "n",
+                                         componentsNumberARIMA, lagsModelAll);
 
         if(!multisteps){
             if(loss=="likelihood"){
@@ -571,9 +596,39 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         return(CFValue);
     }
 
+    CF <- function(B, matVt, matF, vecG, a, b){
+        return(CFgeneric(B, matVt, matF, vecG, a, b, loss=loss, bounds=bounds));
+    }
+
     #### Likelihood function ####
+    # The reported logLik is a concentrated likelihood, never -loss. A fit-only
+    # loss still reports the *Normal* likelihood at the fitted parameters: CES is
+    # a Normal-error model throughout -- its scale, its density and its
+    # prediction intervals are all Normal -- so there is no loss-implied
+    # distribution to switch to. This is what es() does, which pins
+    # distribution="dnorm" for the same reason (adam-es.R:417); adam() follows
+    # the loss only because it has a distribution argument to follow.
     logLikFunction <- function(B, matVt, matF, vecG, a, b){
-        return(-CF(B, matVt=matVt, matF=matF, vecG=vecG, a=a, b=b));
+        if(!multisteps){
+            return(-CFgeneric(B, matVt, matF, vecG, a, b,
+                              loss="likelihood", bounds="none"));
+        }
+
+        # Predictive likelihoods of the GPL paper (adam.R:1119-1135).
+        CFValue <- CF(B, matVt=matVt, matF=matF, vecG=vecG, a=a, b=b);
+        logLikValue <- -switch(loss,
+                               "MSEh"=, "TMSE"=, "MSCE"=
+                                   (obsInSample-h)/2*(log(2*pi)+1+log(CFValue)),
+                               "GTMSE"=
+                                   (obsInSample-h)/2*(log(2*pi)+1+CFValue),
+                               #### Divide GPL by h to make it comparable with the univariate ones
+                               "GPL"=
+                                   (obsInSample-h)/2*(h*log(2*pi)+h+CFValue)/h,
+                               CFValue);
+
+        # Rescale from T-h to T, so that the value stays comparable with the
+        # single-step likelihoods.
+        return(logLikValue / (obsInSample-h) * obsInSample);
     }
 
 
@@ -730,7 +785,7 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
                 }
             }
 
-            if(all(initialType!=c("backcasting","complete"))){
+            if(all(initialType!=c("backcasting","complete","gradient"))){
                 # Record the level and potential
                 if(seasonality!="simple"){
                     B <- c(B, matVt[1:2,1]);
@@ -888,21 +943,21 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         B[] <- res$solution;
         CFValue <- res$objective;
 
+        # Identifiable initial-state df of CES: the same count whether the
+        # initials are optimised or backcast/complete/gradient. CES has no
+        # multi-seasonal shared-frequency redundancy, so it is the plain
+        # structural count (matching the "optimal" branch of the nParam table).
+        cesInitialCount <- 2*(seasonality!="simple") +
+                           lagsModelMax*(seasonality!="none") +
+                           lagsModelMax*any(seasonality==c("full","simple"));
         nStatesBackcasting <- 0;
-        # Calculate the number of degrees of freedom coming from states in case of backcasting
-        if(any(initialType==c("backcasting","complete"))){
-            # Obtain the elements of CES
-            cesFilled <- filler(B, matVt, matF, vecG, a, b);
-
-            nStatesBackcasting[] <- calculateBackcastingDF(profilesRecentTable, lagsModelAll,
-                                                           FALSE, Stype, componentsNumberETSNonSeasonal,
-                                                           componentsNumberETSSeasonal, cesFilled$vecG, cesFilled$matF,
-                                                           obsInSample, lagsModelMax, indexLookupTable,
-                                                           adamCpp, dfForBack);
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            nStatesBackcasting[] <- cesInitialCount;
         }
 
-        # Parameters estimated + variance
-        nParamEstimated <- length(B) + (loss=="likelihood")*1 + nStatesBackcasting;
+        # Parameters estimated + variance. The scale is always an estimated
+        # parameter (every reported logLik is a concentrated likelihood).
+        nParamEstimated <- length(B) + 1 + nStatesBackcasting;
     }
     #### If we just use the provided values ####
     else{
@@ -924,17 +979,44 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         if(!exists("matF", inherits=FALSE)){
             cesCreated <- creator(seasonality, xregModel,
                                   lagsModelAll, lagsModelMax, obsAll, lags, yIndexAll, yClasses,
+                                  lagsModelSeasonal, nSeasonal,
                                   componentsNumber, xregNumber, obsInSample, obsStates, xregNames,
                                   yFrequency, xregModelInitials);
 
             list2env(cesCreated, environment());
         }
 
+        # A re-derived initial has to start its backward pass from the creator
+        # seed. matVt came from the fitted model, and for a seasonal CES
+        # (lagsModelMax>1) its head is the *refined* one, not the seed --
+        # backcasting from there lands on different initials, so the refit does
+        # not reproduce the fit. That reproduction is exactly what
+        # vcov(type="opg") checks before it trusts the scores, which is why the
+        # OPG covariance silently fell back to the Hessian for every seasonal
+        # CES. "none" was unaffected: with lagsModelMax==1 there is no head to
+        # refine, so its states head already was the seed.
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            matVt[,1:lagsModelMax] <-
+                creator(seasonality, xregModel,
+                        lagsModelAll, lagsModelMax, obsAll, lags, yIndexAll, yClasses,
+                        lagsModelSeasonal, nSeasonal,
+                        componentsNumber, xregNumber, obsInSample, obsStates, xregNames,
+                        yFrequency, xregModelInitials)$matVt[,1:lagsModelMax];
+        }
+
         CFValue <- CF(B, matVt, matF, vecG, a, b);
         res <- NULL;
 
-        # Only variance is estimated
-        nParamEstimated <- (loss=="likelihood")*1;
+        # Nothing is optimised, but backcast / complete / gradient initials are
+        # still determined from the data and consume df exactly as in the
+        # estimated branch above (line 888-902); the scale is always estimated.
+        nStatesBackcasting <- 0;
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            nStatesBackcasting[] <- 2*(seasonality!="simple") +
+                                    lagsModelMax*(seasonality!="none") +
+                                    lagsModelMax*any(seasonality==c("full","simple"));
+        }
+        nParamEstimated <- nStatesBackcasting + 1;
 
         initialXregEstimate <- initialXregEstimateOriginal;
     }
@@ -995,19 +1077,21 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
     logLikValue <- structure(logLikFunction(B, matVt=matVt, matF=matF, vecG=vecG, a=a, b=b),
                              nobs=obsInSample, df=nParamEstimated, class="logLik");
 
-    adamFitted <- adamCpp$fit(matVt, matWt,
-                              matF, vecG,
-                              indexLookupTable, profilesRecentTable,
-                              yInSample, ot,
-                              any(initialType==c("complete","backcasting")), nIterations,
-                              refineHead, "n");
+    adamFitted <- adam_fitOrGradient(matVt, matWt,
+                                     matF, vecG,
+                                     indexLookupTable, profilesRecentTable,
+                                     yInSample, ot, initialType, nIterations, adamCpp,
+                                     FALSE, TRUE, xregModel, Etype, "N", "N",
+                                     0, 0, 0, lagsModelAll, lagsModelMax,
+                                     obsInSample, loss, "dnorm", NULL, 0, FALSE, "n",
+                                     componentsNumberARIMA, lagsModelAll);
 
     errors[] <- adamFitted$errors;
     yFitted[] <- adamFitted$fitted;
     # Write down the recent profile for future use
     profilesRecentTable <- adamFitted$profile;
     matVt[] <- adamFitted$states;
-    if(!any(initialType==c("complete","backcasting"))){
+    if(!any(initialType==c("complete","backcasting","gradient"))){
         profilesRecentInitial <- matVt[,1:lagsModelMax,drop=FALSE];
     }
 
@@ -1047,7 +1131,10 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
             initialValue$seasonal <- matVt[lagsModelAll!=1,1:lagsModelMax];
         }
 
-        if(any(initialType==c("optimal","two-stage"))){
+        # Initials count in the parameter total however they are obtained
+        # (optimised or backcast/complete/gradient) -- the same identifiable
+        # count either way.
+        if(any(initialType==c("optimal","two-stage","backcasting","complete","gradient"))){
             parametersNumber[1,1] <- (parametersNumber[1,1] + 2*(seasonality!="simple") +
                                       lagsModelMax*(seasonality!="none") + lagsModelMax*any(seasonality==c("full","simple")));
         }
@@ -1068,6 +1155,8 @@ ces <- function(y, seasonality=c("none","simple","partial","full"), lags=c(frequ
         }
         else{
             a$value <- complex(real=B[nCoefficients+(1:nSeasonal)*2-1], imaginary=B[nCoefficients+(1:nSeasonal)*2]);
+            # Two real coefficients (a0, a1) per seasonal frequency
+            parametersNumber[1,1] <- parametersNumber[1,1] + 2*nSeasonal;
             if(nSeasonal>1){
                 names(a$value) <- paste0("a0+ia1[",lagsModelSeasonal,"]");
             }

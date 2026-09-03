@@ -31,11 +31,18 @@
 #' @param persistence Optional persistence (smoothing) parameter vector.
 #' @param phi Optional damping parameter.
 #' @param initial Initialisation method: \code{"backcasting"}, \code{"optimal"},
-#'   \code{"two-stage"}, or \code{"complete"}.
+#'   \code{"two-stage"}, \code{"complete"}, or \code{"gradient"} (solves the
+#'   initial states by profiling the occurrence loss; falls back to backcasting
+#'   for a custom loss or an out-of-scope specification).
 #' @param arma Optional fixed ARMA parameters.
 #' @param ic Information criterion for model selection.
 #' @param bounds Parameter bounds type.
 #' @param ets Type of ETS model: \code{"conventional"} or \code{"adam"}.
+#' @param smoother The smoother used by \link[smooth]{msdecompose} to obtain the
+#' initial level, trend and seasonal indices (and the seasonal profiles for
+#' multiple seasonal models). \code{"default"} (the default) uses \code{"ma"} for
+#' \code{initial="optimal"} and \code{"global"} otherwise; \code{"ma"},
+#' \code{"lowess"}, \code{"supsmu"} and \code{"global"} force the respective smoother.
 #' @param silent If \code{TRUE}, suppresses output and plot.
 #' @param ... Additional arguments passed to the optimiser (\code{maxeval},
 #'   \code{xtol_rel}, \code{algorithm}, \code{print_level}).
@@ -63,11 +70,12 @@ om <- function(data,
                loss = c("likelihood","MSE","MAE","HAM","LASSO","RIDGE"),
                h = 0, holdout = FALSE,
                persistence = NULL, phi = NULL,
-               initial = c("backcasting","optimal","two-stage","complete"),
+               initial = c("backcasting","optimal","two-stage","complete","gradient"),
                arma = NULL,
                ic = c("AICc","AIC","BIC","BICc"),
                bounds = c("usual","admissible","none"),
                ets = c("conventional","adam"),
+               smoother = c("default","ma","lowess","supsmu","global"),
                silent = TRUE, ...){
 
     startTime <- Sys.time();
@@ -76,6 +84,10 @@ om <- function(data,
     # Capture ellipsis early so FI / stepSize / B / lb / ub passed via ...
     # are visible downstream. Mirrors adam.R.
     ellipsis <- list(...);
+    # The msdecompose() smoother for the initial states, passed via ellipsis so
+    # the internal adam_checkOptimizer() resolves "default" once initialType is known.
+    smoother <- match.arg(smoother);
+    ellipsis$smoother <- smoother;
 
     # If a fitted om object is passed via `model`, lift its parameters out
     # and set modelDo="use" so the optimiser is skipped. Mirrors
@@ -112,7 +124,7 @@ om <- function(data,
         # to backcast produces NaN in fitted values (the two seeds disagree).
         # For ``optimal`` / ``provided`` fits, the converged numeric initials
         # ARE the correct seed, so keep the original behaviour for that case.
-        if(any(model$initialType == c("backcasting","complete"))){
+        if(any(model$initialType == c("backcasting","complete","gradient"))){
             initial                <- model$initialType;
             profilesRecentTable    <- NULL;
             profilesRecentProvided <- FALSE;
@@ -433,7 +445,6 @@ om <- function(data,
     occurrenceModel <- FALSE;
     oesModel <- NULL;
     yFitted <- matrix(rep(mean(yInSample), obsInSample), ncol=1);
-    refineHead <- TRUE;
     adamETS <- (ets == "adam");
 
     #### Optimiser settings ####
@@ -676,7 +687,7 @@ om <- function(data,
             constantEstimate=constantEstimate,
             bounds=bounds, regressors=regressors, loss=loss,
             ot=ot, otLogical=otLogical, obsInSample=obsInSample,
-            nIterations=nIterations, refineHead=refineHead,
+            nIterations=nIterations,
             occurrence=occurrence, occurrenceChar=occurrenceChar,
             adamCpp=adamCpp,
             lambda=lambda, lossFunction=lossFunction);
@@ -725,7 +736,35 @@ om <- function(data,
         B_used <- res$solution;
         names(B_used) <- names(BValues$B);
         CFValue <- res$objective;
-        nParamEstimated <- length(B_used);
+
+        # Initial states consume the same df however obtained (mirrors adam):
+        # added when backcast/complete/gradient (not in B), redundancy subtracted
+        # when optimised. The occurrence model is Bernoulli, so there is no scale
+        # parameter. See dfInitialsETSLevelSeasonal().
+        etsRedundancy <- 0;
+        dfInitials <- 0;
+        if(etsModel){
+            seasonalLagsEstimated <- if(modelIsSeasonal){
+                lagsModelSeasonal[as.logical(initialSeasonalEstimate)];
+            } else {
+                numeric(0);
+            }
+            dfLevelSeasonal <- dfInitialsETSLevelSeasonal(seasonalLagsEstimated,
+                                                          as.logical(initialLevelEstimate));
+            naiveLevelSeasonal <- initialLevelEstimate +
+                modelIsSeasonal*sum(initialSeasonalEstimate*(lagsModelSeasonal-1));
+            etsRedundancy <- naiveLevelSeasonal - dfLevelSeasonal;
+            dfInitials <- dfLevelSeasonal + modelIsTrendy*initialTrendEstimate;
+        }
+        if(arimaModel){
+            dfInitials <- dfInitials + initialArimaNumber*initialArimaEstimate;
+        }
+        nStatesBackcasting <- 0;
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            nStatesBackcasting <- dfInitials;
+            etsRedundancy <- 0;
+        }
+        nParamEstimated <- length(B_used) + nStatesBackcasting - etsRedundancy;
         logLikValue <- -CFValue;
 
         # Fisher Information is NOT computed inside omEstimator. The canonical
@@ -867,23 +906,56 @@ om <- function(data,
                                   constantEstimate, adamArchitect$adamCpp,
                                   constantRequired, initialArimaNumber);
         prof <- adamFilled$matVt[, 1:adamArchitect$lagsModelMax, drop=FALSE];
-        adamFitted <- adamArchitect$adamCpp$fit(adamFilled$matVt, adamFilled$matWt, adamFilled$matF, adamFilled$vecG,
-                                                adamArchitect$indexLookupTable, prof,
-                                                as.numeric(ot), as.numeric(ot),
-                                                any(initialType == c("complete","backcasting")),
-                                                nIterations, refineHead, occurrenceChar);
+        # Same dispatcher as omCF_local: re-solves the gradient initials from
+        # the seed at the optimum (or falls back to backcasting)
+        adamFitted <- adam_fitOrGradient(adamFilled$matVt, adamFilled$matWt,
+                                         adamFilled$matF, adamFilled$vecG,
+                                         adamArchitect$indexLookupTable, prof,
+                                         as.numeric(ot), as.numeric(ot),
+                                         initialType, nIterations, adamArchitect$adamCpp,
+                                         nla$etsModel, nla$arimaModel, xregModel,
+                                         nla$Etype, nla$Ttype, nla$Stype,
+                                         adamArchitect$componentsNumberETS,
+                                         adamArchitect$componentsNumberETSSeasonal,
+                                         adamArchitect$componentsNumberETSNonSeasonal,
+                                         adamArchitect$lagsModel, adamArchitect$lagsModelMax,
+                                         obsInSample, loss, oType=occurrenceChar,
+                                         componentsNumberARIMA=componentsNumberARIMA,
+                                         lagsModelAll=adamArchitect$lagsModelAll,
+                                         xregNumber=xregNumber);
         yFitted <- omLinkFunction(adamFitted$fitted, nla$Etype, occurrence);
 
-        # For "fixed" occurrence the optimizer never ran, so logLikADAMValue is absent.
-        # Compute the Bernoulli log-likelihood from the constant fitted probability.
-        if(is.null(res$logLikADAMValue)){
+        # The occurrence model's log-likelihood is ALWAYS the Bernoulli
+        # likelihood of the fitted probabilities. For loss="likelihood" the
+        # cost already is that (up to sign), but for the fit-only losses
+        # (MSE/MAE/HAM/...) the cost measures fit, not likelihood, so the
+        # logLik must be computed here from the fitted probabilities rather
+        # than taken from the cost. No flooring: an infeasible fitted
+        # probability surfaces as -Inf instead of being silently clipped.
+        # (The empty-B estimator path also arrives here with logLik absent.)
+        if(is.null(res$logLikADAMValue) || loss != "likelihood"){
             ot_vec   <- as.numeric(yInSample);
             yfit_vec <- as.numeric(yFitted);
-            ll <- sum(ot_vec   * log(pmax(yfit_vec,     1e-15)) +
-                      (1 - ot_vec) * log(pmax(1 - yfit_vec, 1e-15)));
+            ll <- sum(ot_vec * log(yfit_vec) + (1 - ot_vec) * log(1 - yfit_vec));
             res$logLikADAMValue <- ll;
-            res$CFValue <- -ll;
         }
+
+        # The reported lossValue is the fitting loss evaluated on the final
+        # fitted probabilities, ungated. The infeasibility guard inside the
+        # cost (return 1e300 when p leaves [0,1]) only exists to steer the
+        # optimiser; it must not leak into the reported loss when the loss
+        # optimum itself is infeasible (an MAE/HAM optimum can put p<0). This
+        # keeps lossValue = the actual loss the gradient/optimiser minimised,
+        # while logLik stays the (possibly NaN) Bernoulli — they are allowed to
+        # be misaligned. LASSO/RIDGE/custom keep the optimiser's value (their
+        # penalty terms are not recoverable from the fitted alone).
+        errorsFinal <- as.numeric(yInSample) - as.numeric(yFitted);
+        res$CFValue <- switch(loss,
+                              "likelihood" = -res$logLikADAMValue,
+                              "MSE"  = mean(errorsFinal^2),
+                              "MAE"  = mean(abs(errorsFinal)),
+                              "HAM"  = mean(sqrt(abs(errorsFinal))),
+                              if(is.null(res$CFValue)) res$objective else res$CFValue);
 
         # Forecast
         if(hLocal > 0){
@@ -953,14 +1025,15 @@ om <- function(data,
                                      occurrenceType, adamArchitect$componentsNumberETSSeasonal,
                                      prefix = "o");
 
-        # Persistence vector
+        # Persistence vector. Keep every row of vecG, not just the ETS ones:
+        # adam() reports alpha together with the ARIMA psi and the xreg deltas,
+        # and simulate()/reapply() size their g vector against the full state
+        # vector. Truncating to the ETS components left a length-1 g against a
+        # 2-row state for an om with ARIMA, which aborted inside the C++ kernel
+        # with "incompatible matrix dimensions: 2x1 and 1x1".
         vecGFinal <- adamFilled$vecG;
-        if(adamArchitect$componentsNumberETS > 0){
-            persistenceVec <- as.vector(vecGFinal)[1:adamArchitect$componentsNumberETS];
-            names(persistenceVec) <- rownames(vecGFinal)[1:adamArchitect$componentsNumberETS];
-        } else {
-            persistenceVec <- numeric(0);
-        }
+        persistenceVec <- as.vector(vecGFinal);
+        names(persistenceVec) <- rownames(vecGFinal);
 
         # Initial values
         initialCollected <- adam_initial_collector(
@@ -1020,7 +1093,13 @@ om <- function(data,
             forecast = yForecast,
             states = matVt,
             profile = adamFitted$profile,
-            profileInitial = prof,
+            # The head the fitted recursion actually starts from, matching what
+            # adam() stores: `prof` is the pre-fit seed, which for an occurrence
+            # model is still on the raw probability scale (om_initial_transform
+            # and the backcasting pass both run after it), so seeding
+            # simulate()/rmultistep() from it starts the state recursion in the
+            # wrong space.
+            profileInitial = adamFitted$profile,
             persistence = persistenceVec,
             phi = if(nla$phiEstimate) res$B["phi"] else phi,
             transition = adamFilled$matF,
@@ -1359,7 +1438,7 @@ om <- function(data,
             constantEstimate=constantEstimate,
             bounds=bounds, regressors=regressors, loss=loss,
             ot=ot, otLogical=otLogical, obsInSample=obsInSample,
-            nIterations=nIterations, refineHead=refineHead,
+            nIterations=nIterations,
             occurrence=occurrence, occurrenceChar=occurrenceChar,
             adamCpp=adamArchitectUse$adamCpp);
 
@@ -1469,6 +1548,21 @@ om <- function(data,
                     rownames(FIMatrixUse) <- Bnames;
                 }
             }
+        }
+
+        # Degrees of freedom for the "use" path: nothing is optimised, but the
+        # backcast / complete / gradient initial states are still determined from
+        # the data and consume df. The occurrence model is Bernoulli, so there is
+        # no scale. "fixed" occurrence instead estimates a single probability
+        # level (nParamEstimated=1, set above); every other use case counts its
+        # backcast initials here.
+        if(occurrenceType != "fixed"){
+            nParamEstimated <- dfInitialsBackcast(etsModel, modelIsSeasonal, modelIsTrendy,
+                                                  lagsModelSeasonal, initialLevelEstimate,
+                                                  initialTrendEstimate, initialSeasonalEstimate,
+                                                  arimaModel, initialArimaNumber, initialArimaEstimate,
+                                                  xregModel, xregNumber, initialXregEstimate,
+                                                  initialType);
         }
 
         estimatorResult <- list(
@@ -1716,7 +1810,7 @@ omCF_local <- function(B,
                        constantRequired, constantEstimate,
                        bounds, regressors, loss,
                        ot, otLogical, obsInSample,
-                       nIterations, refineHead,
+                       nIterations,
                        occurrence, occurrenceChar,
                        adamCpp,
                        lambda = 0, lossFunction = NULL){
@@ -1758,12 +1852,21 @@ omCF_local <- function(B,
         return(penalty);
     }
     profilesRecentTable[] <- adamElements$matVt[, 1:lagsModelMax];
-    adamFitted <- adamCpp$fit(adamElements$matVt, adamElements$matWt,
-                              adamElements$matF, adamElements$vecG,
-                              indexLookupTable, profilesRecentTable,
-                              as.numeric(ot), as.numeric(ot),
-                              any(initialType == c("complete","backcasting")),
-                              nIterations, refineHead, occurrenceChar);
+    # Fit dispatcher: for initial="gradient" this solves the initials by
+    # profiling the occurrence loss over the probability residuals (in C++);
+    # otherwise (or when out of scope) it is the ordinary occurrence fit, with
+    # gradient joining the backcasting group as a fall-back.
+    adamFitted <- adam_fitOrGradient(adamElements$matVt, adamElements$matWt,
+                                     adamElements$matF, adamElements$vecG,
+                                     indexLookupTable, profilesRecentTable,
+                                     as.numeric(ot), as.numeric(ot),
+                                     initialType, nIterations, adamCpp,
+                                     etsModel, arimaModel, xregModel, Etype, Ttype, Stype,
+                                     componentsNumberETS, componentsNumberETSSeasonal,
+                                     componentsNumberETSNonSeasonal, lagsModel, lagsModelMax,
+                                     obsInSample, loss, oType=occurrenceChar,
+                                     componentsNumberARIMA=componentsNumberARIMA,
+                                     lagsModelAll=lagsModelAll, xregNumber=xregNumber);
     yFitted <- omLinkFunction(adamFitted$fitted, Etype, occurrence);
     if(any(is.nan(yFitted)) || any(yFitted<0) || any(yFitted>1)){
         return(1e+300);
@@ -1901,8 +2004,9 @@ coefbootstrap.om <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
         method <- "dsr";
     }
 
-    # If this is backcasting, do sampling with moving origin
-    changeOrigin <- any(object$initialType==c("backcasting","complete"));
+    # If this is backcasting (or gradient, which also derives the initials
+    # from the data), do sampling with moving origin
+    changeOrigin <- any(object$initialType==c("backcasting","complete","gradient"));
 
     sampler <- function(indices,size,replace,prob,regressionPure=FALSE,changeOrigin=FALSE){
         if(regressionPure){
@@ -2008,23 +2112,39 @@ coefbootstrap.om <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
 }
 
 #' @export
-vcov.om <- function(object, bootstrap=FALSE, heuristics=NULL, ...){
+vcov.om <- function(object, type=c("opg","hessian","bootstrap"),
+                    bootstrap=FALSE, heuristics=NULL, ...){
     ellipsis <- list(...);
+    type <- covarTypeResolver(type, bootstrap);
 
     if(!is.null(heuristics) && is.numeric(heuristics)){
         return(diag(abs(coef(object)) * heuristics));
     }
 
-    if(bootstrap){
+    if(type=="bootstrap"){
         return(coefbootstrap(object, ...)$vcov);
     }
 
-    h <- if(any(!is.na(object$forecast))) length(object$forecast) else 0;
     stepSize <- if(is.null(ellipsis$stepSize)) {
         .Machine$double.eps^(1/4);
     } else {
         ellipsis$stepSize;
     };
+
+    # OPG / BHHH covariance J = sum_t s_t s_t' -- PSD by construction, so it
+    # returns finite standard errors at boundary estimates where the observed
+    # Fisher Information (below) is indefinite. Falls back to the Hessian if the
+    # reproduction guard trips (covarOPGom returns NULL).
+    if(type=="opg"){
+        vcovOPG <- covarOPGom(object, stepSize=stepSize);
+        if(!is.null(vcovOPG)){
+            return(vcovOPG);
+        }
+        warning("The OPG covariance could not be computed for this om model; ",
+                "falling back to the observed Fisher Information.", call.=FALSE);
+    }
+
+    h <- if(any(!is.na(object$forecast))) length(object$forecast) else 0;
 
     modelReturn <- suppressWarnings(
         om(object$data, h=h, model=object,

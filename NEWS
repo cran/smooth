@@ -1,4 +1,54 @@
-smooth v4.5.0 (Release data: 2026-06-19)
+smooth v4.5.1 (Release date: 2026-08-12)
+=======
+
+Changes:
+* `vignettes/sma.Rmd` builds its example series with `structure(..., tsp = ...)` instead of the deprecated `.Tsp`. The vignette is tangled into `inst/doc/sma.R` at build time, which is what CRAN's "Found calls to structure() using deprecated special names" NOTE was pointing at. The two spellings produce an `identical()` object, so nothing about the vignette's output changes. It was the only use of a deprecated special name (`.Tsp`, `.Names`, `.Dim`, `.Dimnames`, `.Label`) anywhere in the package.
+* `simulate()` warns when a supplied `randomizer` returns error values a multiplicative model cannot admit. Its support is `1 + e > 0`, and none of the distributions ADAM samples from can produce `e <= -1`, so a fitted model never reaches it; only a user-supplied randomizer can, and the state recursion then takes a log of a negative number and returns `NaN` from that point on. The warning names how many values were out of support and what to do about it, rather than leaving a silent field of `NaN` that looks like a defect in the kernel. The `NaN` itself is left in place deliberately: it is the correct report that the simulator was asked for something outside the model, and hiding it behind a complex-arithmetic branch would cost the hot loop on every observation of every optimiser evaluation to protect a case that cannot arise from a fit. The check covers additive-error models on log-space distributions too, where the error is multiplicative in effect.
+* `simulate()` on an `om` object started the state recursion from the wrong value. `simulateADAMCore()` seeds from `$profileInitial`, which for `adam` is the head the fitted recursion runs from; `om()` was storing the *pre-fit* seed there, still on the raw probability scale, because `om_initial_transform()` and the backcasting pass both run after it is captured. Every simulated latent value came out scaled by a constant -- on a 60-point `om(MNN, occurrence="odds-ratio")` the whole series was off by a factor of 4.16, the ratio between the transformed head (3.891389) and the raw seed (0.935484). `$profileInitial` now holds the fitted head, matching `adam`. `rmultistep()` and `multicov()` read the same slot and are unaffected in value.
+* `om()` no longer truncates the persistence vector to the ETS components. `adam()` reports `alpha` together with the ARIMA `psi` and any xreg `delta`s; `om()` kept only the first `componentsNumberETS` entries, so an occurrence model with ARIMA carried a length-1 persistence against a 2-row state vector. `simulate()` sizes its `g` from that vector, so `simulate(om(y, orders=list(ar=1, i=0, ma=1)))` aborted inside the C++ kernel with `element-wise multiplication: incompatible matrix dimensions: 2x1 and 1x1`. It now returns a series. Note the ARIMA state of a multiplicative-error occurrence model still goes `NaN` on the first simulated step -- the ETS level updates correctly, the ARIMA state does not -- which is a separate defect in the simulator's multiplicative-error ARIMA update and reproduces identically in the Python port.
+* `multicov(type="analytical")` on a multiplicative-error ETS with a log or positive distribution (`dgamma`, `dinvgauss`, `dlnorm`, ...) now returns the per-horizon variances on the diagonal, as `forecast()` already did for the same models, instead of the additive closed form from `covarAnal()`. Those models have no usable closed form for the off-diagonal, which is why the interval code takes `adamVarAnal()` there; `multicov()` was the one caller that did not, so the covariance it reported and the covariance the prediction intervals were built from disagreed about the same fit. On `adam(AirPassengers, "MNN", lags=c(1,12))` at `h=4` the diagonal changes from `0.011811, 0.023622, 0.035433, 0.047243` to `0.011811, 0.023761, 0.035853, 0.048087` and the off-diagonal becomes zero. Additive-error models are unchanged, as are `type="empirical"` and `type="simulated"`, and occurrence models keep the full matrix (their `plogis` link is not one of the log/positive distributions). This also matches the Python port, which already dispatched this way: `multicov()` is now bit-identical across the two languages for both analytical and empirical types and every error type.
+* `confint()` on a model with multiplicative seasonality reported the wrong interval for every seasonal initial state. The positivity restriction on those initials was applied with `max()` where the values are vectors -- one element per seasonal initial -- so the whole vector of corrections collapsed to a single number that was then recycled across every seasonal row. Each seasonal state ended up with the same two offsets, `-t*min(S.E.)` below and `+t*max(S.E.)` above, instead of its own: on `adam(AirPassengers, "MAM", lags=c(1,12), initial="optimal")` all twelve seasonal intervals came out exactly 0.209049 wide although their standard errors range from 0.028 to 0.078, and none of them was centred on its own coefficient any more. Now `pmax()`, matching the `gammas` / `deltas` branches a few lines above, which always used the elementwise form. The block had been copied from the `trend` one, where the value is a single element and `max()` and `pmax()` coincide. The companion restriction on the *upper* bound is removed rather than fixed: the upper offset is always above the lower one, so it clears `-parameters` automatically once the lower does, in every case including a negative initial. The worst bound on that fit moves by 0.098 (11% relative); `coef()`, `vcov()` and the reported standard errors are untouched. This also closes the last known disagreement with the Python port on `confint()` -- the two now agree to 5e-10 relative across `MAM`, `MAdM`, `MMM` and `AAA`, the same finite-difference floor the standard errors sit at.
+* `distribution="default"` now maps every absolute-error loss to the Laplace distribution and every half-moment loss to the S distribution, whatever the reduction over horizons. `MAE`, `MAEh` and `MACE` already resolved to `dlaplace` and `HAM`, `HAMh` and `CHAM` to `ds`, but the trace and geometric-trace variants -- `TMAE`, `GTMAE`, `THAM`, `GTHAM` -- fell through to the switch default and reported `dnorm`, even though they are sums of the same per-horizon reductions. Fixed in all four places the mapping is written (`estimator()`, `preparator()`, the selection branch of `adam()` and `adam-gradient.R`). The reported log-likelihood, loss value and coefficients are unchanged for every loss -- the concentrated likelihood for a multistep loss is keyed off the loss, not off this slot -- so only `object$distribution` and what depends on it (prediction intervals, `extractScale()`, printing) move for those four. This also closes the last disagreement with the Python port, which already grouped them this way: R and Python now report the same distribution for all nineteen losses.
+* `plot(which=12)` no longer draws the initial-state rows. The states matrix carries `lagsModelMax` leading rows that hold the *initialiser's seed*, not anything the fitter used -- for a backcast `ETS(ANN)` the level row holds `mean(y)` -- and they have no matching observation, so `cbind()`ing them against the actuals put a spurious spike at the left edge of every states panel. On a 200-point series with level around 100 the level state was drawn starting at 129.99 before dropping to 99.76. Note the seed itself is unchanged and no fitted value or forecast is affected: the level the first fitted value actually came from is 98.9998, which is neither what the states head reports nor what was being drawn.
+* `plot()` now routes the squared-residual ACF and PACF (`which=15`, `16`) through the scale model when one has been implanted, as it already did for `which=2:6`, `8`, `9`, `13` and `14`. Those two panels exist to detect heteroscedasticity that is still unexplained, which is precisely what a scale model is fitted to remove, so showing the raw residuals there made a working scale model look like a failed one: on a series whose variance follows a slow cycle, the ACF of the raw squared residuals is 0.36 at lag 1 while the ACF of the standardised squared residuals is 0.005. The plain ACF/PACF (`which=10`, `11`) are unchanged and stay with the location model -- rescaling barely moves autocorrelation -- and so do the structural panels (`1` actuals vs fitted, `7` the series over time, `12` the states), which describe the location model itself; plot the scale model directly for its own versions of those. The note printed at the start of the call now covers 15 and 16 as well.
+* `extractScale()` on a model with a `dgnorm` scale model raised `non-numeric argument to binary operator`. `extractScale.smooth` indexed `object$scale$other` -- which is a list, `list(shape=...)` -- where it needs `object$scale$other$shape`. `extractSigma.smooth`, two functions below, already named the element correctly. Every other distribution was unaffected.
+* `sm()` now works for occurrence (intermittent) models, which previously could not run at all. Two defects: the cost function referenced `obsZero`, which was never defined in `sm.R`, so every occurrence call died with `object 'obsZero' not found`; and the residual transform assigned over the whole vector (`et[] <- et[otLogical]^2`) when the right-hand side is only `sum(otLogical)` long, so the scale response was recycled across `obsInSample` slots and misaligned (with `number of items to replace is not a multiple of replacement length` whenever the two are not multiples -- e.g. 47 non-zeroes into 60 observations). The transform is now assigned into the non-zero positions, keeping the length and the alignment. The differential-entropy term also dropped its `obsZero` multiplier: unlike `adam()`, where the scale is a scalar and `obsZero*(...)` is the whole term, `sm()` sums a vector of length `obsZero`, so the multiplier counted every zero observation `obsZero` times.
+* `adam()`, `es()`, `om()`, `omg()`, `oes()` and `oesg()` gain a documented `smoother` argument (previously an undocumented `...` option). It selects the `msdecompose()` smoother that produces the initial states — the level and trend, together with the initial seasonal indices (and the seasonal profiles for multiple-seasonal models). The **new default `smoother="default"`** resolves to `"ma"` (the centred moving average) when `initial="optimal"` and to `"global"` (a global model fitted to the data) for every other initialisation method; `"ma"`, `"lowess"`, `"supsmu"` and `"global"` force the respective smoother regardless of the initialisation. Resolution happens once in `adam_checkOptimizer()`, so `oes()`/`oesg()` inherit it via `om()`/`omg()`. The previous behaviour was a fixed `"global"` default, so optimal-initialisation fits now seed their seasonals from the classical moving-average decomposition by default.
+* `initial="gradient"` for occurrence models `om()`/`omg()` with ARIMA or xreg is now much faster: the Gauss-Newton solve uses an exact analytic Jacobian instead of finite differences whenever the occurrence sub-model(s) are additive-error (`E="A"` — the odds-ratio / inverse-odds default), covering ARIMA, xreg and constant components (their state maps are linear, so one forward pass propagates the sensitivities instead of one pass per free initial). For the coupled `omg()` the two sides' sensitivities are propagated jointly through the shared probability. Measured 1.4–8.3× faster than the finite-difference path (e.g. an `omg()` ARIMA fit 5.0s → 2.8s, an `omg()` two-sided additive-ETS fit 1.1s → 0.13s), and the cleaner Jacobian reaches an **equal-or-slightly-better** optimum, so these fits' log-likelihoods change marginally (e.g. −44.48 → −43.93). Multiplicative-error occurrence with ARIMA/xreg keeps the finite-difference Jacobian; pure-ETS occurrence is unchanged (bit-identical).
+* Degrees-of-freedom accounting is now structural and identical across initialisation methods. Backcasted, complete-backcast and gradient-solved initial states count towards the number of estimated parameters exactly as optimised ones do — the identifiable count of the initial-state design — so information criteria are comparable across `initial="optimal"/"backcasting"/"complete"/"gradient"`. Previously backcasting counted its initials as zero (and CES/GUM/SSARIMA used an experimental fractional heuristic behind `dfForBack`, now removed). This changes the ICs of `initial="backcasting"` (the default) and `"gradient"` models — they increase — but rankings within one method are typically unaffected. For ETS the seasonal initial df uses the exact identifiable count (`sum(m_i) − sum(gcd) + …`, inclusion–exclusion over the seasonal periods): for a single or coprime seasonality this is the usual `level + (m−1) per block`, but for **non-coprime multi-seasonal** models (e.g. lags 4 and 8) it is smaller, and this correction now applies to **all** initialisation methods **including `initial="optimal"`** — so those models' ICs change too. `sma()` now counts `order + 1` parameters (an AR with unit-root coefficients: all `order` initials are identifiable), instead of a constant 1, so its order selection now carries a proper complexity penalty. Occurrence models (`om`/`omg`) count their initials the same way.
+* The distribution scale is now counted as an estimated parameter for every loss, not only `loss="likelihood"` — every reported log-likelihood is a concentrated likelihood, so a continuous-response model always estimates a scale. Non-likelihood-loss models' degrees of freedom therefore increase by 1 (AIC by 2). Occurrence models (Bernoulli) are unaffected: they have no scale.
+* An explicitly-selected `distribution` is now honoured for the reported log-likelihood (and the information criteria) even when the fitting `loss` is a fit-only loss that implies a different distribution. Previously `adam(y, loss="MAE", distribution="dnorm")` reported the Laplace likelihood (the MAE-implied distribution), silently ignoring the requested Normal; it now reports the Normal likelihood, while still fitting by MAE. `distribution="default"` is unchanged — it still follows the loss (MSE↔dnorm, MAE↔dlaplace, HAM↔ds). The loss continues to drive estimation; only the reporting distribution changed. `logLikADAM()` no longer re-overrides the already-resolved distribution.
+* New `initial="gradient"` option for `adam()` (and `es()`, which routes through it): a first-class initialisation type that solves for the initial state by least squares instead of the backcasting backward pass. Given the persistence, the in-sample residuals are an affine function of the initial state for additive ETS — the design matrix is propagated analytically alongside a single C++ forward pass and solved by one pivoted-QR least squares — and a smooth nonlinear function otherwise, solved by Gauss-Newton with an analytic Jacobian (initial-state sensitivities propagated by the chain rule through the measurement/transition/update maps in one forward pass, covering both `ets="conventional"` and `ets="adam"` maths) and a Levenberg-Marquardt fallback for ill-conditioned steps; finite differences remain available as an internal fallback and validation oracle. The whole solve is implemented in C++ (`adamCore::gradientSolve`, shared with the Python build) and is stateless, so the objective stays a deterministic function of the parameters. When persistence is provided it is a single solve; when persistence is estimated the optimiser estimates it while the initials are solved by gradient at each evaluation (nested — the backward pass is never run). It avoids a divergence that `initial="backcasting"` can exhibit for seasonal additive models with a trend and a large seasonal smoothing parameter (e.g. ETS(A,A,A) with `lags=12`), where backcasting could return wildly wrong initials and a large in-sample penalty. Supports every additive single-source-of-error model — ETS, additive ARIMA, and the standalone `ces()`/`gum()`/`ssarima()`/`sparma()` (see the dedicated entry below) — plus multiplicative/mixed ETS via Gauss-Newton; xreg and custom-loss specifications fall back to the backcasting fit. Because the initials are genuinely estimated (by least squares), `initial="gradient"` counts them as degrees of freedom, the same as `initial="optimal"`, so its information criteria are comparable; `initial="backcasting"` is unchanged.
+* Removed the internal `refineHead` argument from the C++ fitter (`fit`), reapply (`reapply`) and general-occurrence fitter (`omfitGeneral`) methods, and from every R and Python caller. On those three paths the flag was always `TRUE` at every live call site (only speculative commented-out `FALSE` branches remained). Head refinement is now implicit and always applied when `lagsModelMax > 1`. The simulator (`simulate`) keeps a `refineHead` argument because it legitimately has two distinct modes — `TRUE` for `sim.es()` / `simulate.adam()` (raw initialiser + walk the head), `FALSE` for the forecast-interval simulator in `forecast.adam()` (already-fitted state tail, no walk needed). Not a user-visible API change.
+* `om()`'s reported log-likelihood and loss value are now cleanly separated. `logLik` is always the Bernoulli likelihood of the fitted probabilities, for every loss — previously, for the fit-only losses (`MSE`/`MAE`/`HAM`) it was taken as `-lossValue` (minus the MSE/MAE itself), which is not a likelihood, so the information criteria for those fits were meaningless. It is now computed from the fitted probabilities in `omFinalFit()` regardless of the fitting loss, with the `pmax(., 1e-15)` floor removed (an infeasible fitted probability surfaces as `NaN`/`-Inf` rather than being clipped). And `lossValue` now always reports the fitting loss evaluated on the final fitted probabilities — e.g. `mean(abs(ot - p))` for `MAE` — computed *ungated*: the infeasibility guard inside the cost (which returns `1e300` when a probability leaves `[0, 1]`) exists only to steer the optimiser and no longer leaks into the reported loss when the loss optimum itself is infeasible. So `initial="gradient"` with a fit-only loss reports the loss it actually minimised, while `logLik` stays the (possibly `NaN`) Bernoulli — the two are allowed to be misaligned. `loss="likelihood"` fits are unchanged; `LASSO`/`RIDGE`/custom keep the optimiser's value.
+* `initial="gradient"` now works for the single-model occurrence function `om()` (all occurrence types: `"direct"`, `"odds-ratio"`, `"inverse-odds-ratio"`). Previously it was a silent no-op — the cost function gated the backcast flag on `c("complete","backcasting")` only, so a gradient om fit neither backcast nor solved and left the initials at the creator seed (measurably worse than backcasting). Now the om cost profiles the occurrence loss over the initials via the shared C++ solve: the Bernoulli likelihood reduces to `-log(1-|r|)` in the probability residual `r = o - p` (a new separable rho), and MSE/MAE/HAM reuse the standard rho family on `r`. The solve runs the occurrence recursion (`occurrenceError`) forward while propagating the state sensitivities analytically through the link and error channels — a new occurrence Jacobian pass. Result: om gradient reaches optimal-quality likelihood at backcasting cost (e.g. MNN odds-ratio on a 120-obs series, logLik −75.00 gradient vs −75.00 optimal vs −80.26 backcasting). Occurrence `"fixed"` has no estimated initials and is unaffected; om with ARIMA/xreg or a custom loss falls back to backcasting. The two-model `omg()` is not yet covered (its coupled solve is separate).
+* `initial="gradient"` now profiles the actual estimation loss over the initial states instead of the one-step SSE surrogate. At fixed persistence every supported loss reduces to a sum of per-observation rho functions of the residuals, mapped to the C++ solve: MAE / `dlaplace` (|e|), HAM / `ds` (sqrt|e|), `dgnorm` (|e|^beta), and — for multiplicative-error models — the exact `dlnorm`, `dgamma` and `dinvgauss` likelihood rho with the scale concentrated out. For additive ETS the robust losses are solved by IRLS sweeps on the affine surrogate (each sweep is one weighted QR, no extra model passes; exact-zero residuals are dropped from the sweep — no epsilon floors), and the multistep losses (`MSEh`, `TMSE`, `MSCE` one-shot; `GTMSE`, `GPL` by monotone majorise-minimise sweeps) are solved on the affine multistep design replicated from the same recursion the cost function evaluates. For multiplicative/mixed models the Gauss-Newton step becomes loss-aware (IRLS weights for the power losses, Newton weights for the likelihood ones), which fixes the remaining objective mismatch — e.g. ETS(M,A,M) with the default Gamma likelihood now beats backcasting on the likelihood itself. `loss="likelihood"` with `dnorm`, `MSE` and everything else without a matching rho keep the previous (exact for `dnorm`) SSE profile; custom loss functions cannot cross into C++, so `initial="gradient"` falls back to backcasting with a one-time message. Multiplicative multistep is out of scope and keeps the one-step profile.
+* `omg()`'s reported `fitted`/`residuals` and `logLik` are now mutually consistent. The fitted probability is taken from the **coupled** recursion the optimiser minimised (re-running the joint cost at the final parameters) instead of re-combining the two standalone per-side refits, which only approximate it; and `logLik` is the Bernoulli of that same coupled probability, so `sum(o·log p + (1−o)·log(1−p))` now equals the reported `logLik` exactly. Previously the reported `fitted` (standalone-combined) and `logLik` (coupled cost) disagreed. This changes the numeric `fitted`/`residuals` of every `omg()` fit; for `loss="likelihood"` the `logLik`/IC are unchanged, and for the fit-only losses `logLik` is now a proper Bernoulli (as in `om()`). The sub-model objects `modelA`/`modelB` are unchanged (still standalone fits, for parameter diagnostics).
+* `initial="gradient"` now works for the occurrence models `om()` and `omg()` with ARIMA and/or xreg components, not just pure ETS. The analytic Jacobian companions cover ETS only, so on the occurrence path the Gauss-Newton solve drops to its finite-difference Jacobian when ARIMA / xreg / a constant is present — the FD pass runs the fully general occurrence recursion, so the initials (including the regression coefficients) are still profiled by the occurrence loss. The two-model `omg()`, previously not covered at all, gains a coupled solve (`adamCore::gradientSolveGeneral`): its two sub-models share one fitted probability `p = aFit/(aFit+bFit)`, so their initial profiles are solved *jointly* over the shared probability residual by Gauss-Newton (finite-difference Jacobian, line search + Levenberg-Marquardt). At fixed dynamics the gradient fit reaches optimal-quality likelihood and beats backcasting (e.g. an `omg()` ARIMA fit on a 120-obs series, logLik −44.5 gradient vs −46.8 backcasting). The `"direct"` occurrence link can saturate the probability at the seed (`|r|=1`), in which case the solve correctly falls back to backcasting; custom losses fall back as before.
+* `initial="gradient"` now extends beyond ETS to every additive single-source-of-error engine: additive ARIMA in `adam()` (`orders=...`), and the standalone `ces()`, `gum()`, `ssarima()` and `sparma()`. For these models the in-sample residuals are also affine in the initial state, so the same analytic-design pivoted-QR least-squares solve applies — one C++ forward pass, no backward pass — with each state's lag slots treated as free initial parameters (the rank-revealing solve drops redundant directions). At fixed dynamics the gradient fit matches the optimal-initials SSE and beats backcasting, and it is often more robust than optimising the initials directly (e.g. a `gum()` fit whose optimal-initials SSE diverged to ~9700 solves cleanly to ~370 by gradient). Multiplicative-error ARIMA still takes the ETS Gauss-Newton path and falls back to backcasting; xreg and custom-loss specifications fall back as before.
+* `initial="gradient"` now solves the **xreg (regression) initial coefficients** for additive-error models, instead of falling back to backcasting. The coefficients are additional affine directions in the initial-state design (their measurement is linear, `ŷ += a·x`), so the same one-pass least-squares solve recovers them — jointly with the ETS/ARIMA initials — matching `initial="optimal"` to numerical precision and beating backcasting. Both static (`regressors="use"`) and adaptive (`regressors="adapt"`, where only the initial coefficient is solved and the adaptive persistence stays in the optimiser) are covered. Fixes a bug where the gradient dispatcher was never told the number of regressors, so the xreg cells were silently dropped from the solved design. Multiplicative-error xreg (which would need the finite-difference Gauss-Newton path, whose noise can converge poorly) still falls back to backcasting, as does multiplicative-error ARIMA. Degrees of freedom are unchanged (the xreg coefficients are counted once, as before).
+* `vcov()`, `confint()`, `summary()`, `reapply()` and `reforecast()` gain a `type` argument — `"opg"` (**the new default**), `"hessian"` or `"bootstrap"` — selecting how the parameter covariance is computed. `type="opg"` computes the OPG/BHHH covariance `J = sum_t s_t s_t'` (the outer product of the per-observation scores) instead of inverting the observed Fisher Information (`type="hessian"`, the previous default). Because `J` is positive semi-definite by construction, it returns finite standard errors at boundary estimates — where a smoothing parameter is pinned at a bound and the numerical Hessian is indefinite (the usual cause of the "Observed Fisher Information is not positive semi-definite" warning). It covers every engine: `adam()` (ETS/ARIMA/xreg, with the initials scored only under `initial="optimal"` and re-derived otherwise), `ssarima()`, `ces()`, `gum()`, `sparma()`, and the occurrence models `om()` / `omg()` (Bernoulli / coupled-Bernoulli score). Each re-fit is checked to reproduce the fitted log-likelihood before its scores are used, falling back to the Hessian if it cannot. Central differences drop to a one-sided difference at a bound where the feasible region is left (a negative persistence gives `NaN` under the occurrence link); a parameter the data cannot identify (an initial that washes out at a boundary smoothing parameter) gets an infinite OPG variance, and `reapply()`/`reforecast()` hold such parameters at their estimate for the refit. The new `pointLik.om` per-observation likelihood underpins the occurrence path. **The `bootstrap=TRUE` switch is deprecated** in favour of `type="bootstrap"`; it still works but warns. (See Berndt, Hall, Hall & Hausman, 1974, for the OPG/BHHH estimator.)
+* `sparma()` now honours a supplied `arma=` argument by **holding** those coefficients fixed (previously providing them silently re-estimated from a PACF/ACF start, ignoring the supplied values), and a numeric `initial=` now holds the provided ARIMA state initials (front-padded to the dense companion length), so a fitted `sparma` object's coefficients round-trip exactly when supplied back. This is what lets `vcov(..., opg=TRUE)` re-fit a `sparma` model.
+
+Bugfixes:
+* The ARIMA order selection tested IMA(d,d) candidates that exceeded the requested MA orders. These candidates set the MA order equal to the differencing one, so a combination is only usable when d fits under `maMax` at every lag, but the filter assigned each lag's verdict instead of accumulating it (`modelsLeft[] <- (...)` where it needed `modelsLeft & (...)`), so only the last lag's condition survived and every non-seasonal one was discarded. With `orders=list(ar=0, i=c(2,1), ma=c(1,1))` and `lags=c(1,4)` the search fitted IMA orders (2,0) and (2,1) -- MA order 2 at lag 1, twice what was asked for -- and (2,0) scored better than every legal candidate, so it would have been selected. Now only (1,0), (0,1) and (1,1) are tested. The defaults hide this (`ma=c(3,3)` is never below `i=c(2,1)`), so it needs an explicit `ma` lower than `i`, and at least two lags. Correcting the filter can leave a single row, so the loop over the candidates is guarded accordingly.
+* The small-sample model pool could contain multiplicative-error models on data that does not admit them. When the sample is too short for the full pool, `parametersChecker()` builds an explicit pool; `MNN` was correctly added only when `allowMultiplicative`, but `MAN`, `MAdN` and `MNA` were added unconditionally alongside their additive counterparts. On a series containing a zero or a negative value those three were still offered to the selection. They are now gated on `allowMultiplicative` like the rest, so such a series gets a purely additive pool (`ANN, AAN, AAdN, ANA`).
+* The optimised ARIMA initial state was silently discarded for a **pure MA** model — no AR terms and no differencing, e.g. `orders=list(ar=0,i=0,ma=1)` — under `initial="optimal"`/`"two-stage"`. `filler()` writes the initial states with `matVt[componentsNumberETS+nonZeroARI[,2], ...] <- ...`, and `nonZeroARI` is built from the ARI polynomial with its leading term dropped (`adamGeneral.R:421`); for a pure MA that polynomial is just `1`, so `nonZeroARI` has zero rows and the indexed assignment writes **nothing**. The counter `j` still advanced, so the initial state consumed a degree of freedom and was handed to the optimiser while having no effect on the likelihood at all — it drifted to arbitrary values (1364.36 from one starting point, 3639.02 from another, both reporting exactly the same log-likelihood) while the fit silently used the creator seed throughout. On M3 N250, `ARIMA(0,0,1)`: the reported `logLik` of -158.028341 is the likelihood at the *seed* 4317.0588, not at the reported `ARIMAState1` of 1364.36 (which is -156.566). With the polynomial equal to 1 the general expression degenerates to the parameter itself, which is now written into the state the initialiser read it from; the same series reaches -154.934813, matching Python exactly. Models with any AR order or any differencing were never affected, since their ARI polynomial has non-zero lagged terms.
+* The same empty-`nonZeroARI` no-op appeared a second time, in `creator()`: the step that debiases the ARIMA initial states by the constant is indexed the same way, so for a pure MA it debiased nothing. The state was left seeded at `mean(y)` while the constant was *also* seeded at `mean(y)`, making the first fitted value double count the level (`yhat[1] = 2 * mean(y)`). It now falls back to every ARIMA row, which is what the ARI rows amount to whenever they exist. Together with the `filler()` fix above this closes the last R/Python gap on ARIMA: across 528 configurations (6 M3 series x 11 order sets x constant x ETS/no-ETS x `initial="optimal"`/`"backcasting"`) the two implementations now agree **bit-for-bit on 528 of 528**, up from 513. Note that the debiased seed is the principled one but is not always the luckier one: on M3 N250 `ARIMA(0,0,1)` with a constant the old seed happened to reach -118.664 within the default `length(B)*40` evaluations while the corrected seed reaches -124.121 there. Both converge to the same optimum (-118.6641) once the budget is raised, so this is a starting point, not an optimum, that changed.
+* The ARIMA order selection used by `auto.adam()`, `auto.msarima()`, `auto.ssarima()` and `auto.om()` refitted the winning specification from a **warm start**, carrying the parameter vector of the search's best trial into the final fit. The selected model therefore did not reproduce: `auto.msarima(M3[[220]]$x, initial="optimal")` returned `ARIMA(0,2,2)` with a log-likelihood of -137.828, while asking for that very model directly — `msarima(x, orders=list(ar=0,i=2,ma=2), lags=1, initial="optimal")` — gave -138.366. Both fits stop on `NLOPT_MAXEVAL_REACHED` at the same budget, so the warm start was not finding a better optimum, only moving where the optimisation was truncated. It also left `bestIC` — taken from the cold trial fit — describing a different fit than the `bestModel` returned beside it. The winner is now refitted cold, exactly as a direct call with those orders would be, so a selected ARIMA(p,d,q) and an explicitly requested one agree. Across 43 yearly M-competition series the two now match on 43/43 (8 differed before, by up to 1.63 log-likelihood units). Selection itself is unchanged: the trial fits inside the search were always cold, so the information criteria driving the choice are the same. The optimiser budget is untouched.
+* `vcov(ces(...), type="opg")` silently fell back to the Hessian-based covariance for every **seasonal** CES with backcast or complete initials — 6 of the 16 seasonality x initialisation combinations — warning "The OPG covariance could not be computed for this model" and returning a matrix of the right shape, so the fallback was easy to miss. The OPG path re-fits the model through `ces(model=object)` and checks that the re-fit reproduces the fitted log-likelihood before it trusts the scores; that re-fit could not. It hands the backward pass `t(object$states)`, whose head is the *refined* head for `lagsModelMax > 1`, not the creator seed the original fit backcast from, so it landed on different initials (e.g. `seasonality="partial"` on M3 N2217: -470.0079 reproduced against the fit's -470.0920). The re-derived-initials branch now reseeds the state head from `creator()`. All 16 combinations return a genuine OPG covariance with no warning. `seasonality="none"` was never affected — with `lagsModelMax == 1` there is no head to refine — and `initial="optimal"`/`"two-stage"` were immune because their initials travel in `B` and overwrite the head at every evaluation.
+* `ces()`'s reported log-likelihood was `-lossValue` for every non-likelihood loss — `loss="MAE"` on M3 N2217 reported `logLik = -63.90` (minus the MAE itself) against the likelihood fit's `-468.79`, so the AIC/AICc/BIC/BICc of any fit-only-loss CES were meaningless and could not be compared with anything. This is the same defect already fixed for `om()` and `adam()`. It is now a concentrated likelihood in every case. For the single-step losses that is the **Normal** likelihood re-evaluated at the fitted parameters: CES is a Normal-error model throughout — its scale, its density and its prediction intervals are all Normal — so there is no loss-implied distribution to switch to, exactly as in `es()`, which pins `distribution="dnorm"` for the same reason (`adam()` follows the loss only because it has a `distribution` argument to follow). For the multistep losses (`MSEh`, `TMSE`, `GTMSE`, `MSCE`, `GPL`) it is the predictive likelihood of the GPL paper, rescaled from `T-h` to `T`, matching `adam()`. `loss="likelihood"` is unchanged. `CF()` gains a `CFgeneric()` inner form taking `loss`/`bounds` as arguments so the likelihood can be re-evaluated on the very same fit — `nloptr` validates its objective's formals, so the optimiser keeps the fixed-arity wrapper. `vcov()`/`summary()` benefit too, since the observed information is now taken on the likelihood surface rather than on an arbitrarily scaled loss.
+* `ces()` accepted a `b` of the wrong shape for the seasonality. `seasonality="full"` needs a complex second smoothing parameter, but a real one was passed straight through and surfaced only as a `1e+300` penalty masquerading as a fit (`logLik` of `-1.1e+100` and a meaningless `a`); `seasonality="partial"` needs a real one, and a complex value had its imaginary part silently discarded while `$parameters$b` echoed the full complex number back. Both are now errors naming the expected shape. `"none"` and `"simple"` have no second smoothing parameter, so a `b` supplied there is dropped with a warning instead of being stored on the fitted model.
+* `ces()` errored with "non-numeric matrix extent" whenever the smoothing parameters were supplied (`a=`, and `b=` for seasonal models) together with backcast or complete initials — the branch that skips estimation called the internal `creator()` with two positional arguments missing (`lagsModelSeasonal`, `nSeasonal`), so every later argument bound one slot early and `xregNames` ended up as a matrix dimension. The documented `a=` / `b=` arguments were therefore unusable on that path. Handing a model back its own fitted `a` now reproduces its log-likelihood exactly, and provided parameters correctly drop out of `nparam()`.
+* `ces(seasonality="simple")` did not count its complex smoothing coefficients. The "simple" branch assigns `a0+ia1` per seasonal frequency but never added them to the parameters table, so `nparam()` was two short of the value `logLik()` carries as its degrees of freedom (25 vs 27 for a monthly series) — and under `initial="optimal"` `nparam()` came out *below* `length(coef())`, which cannot be right. `AIC(model)` (which goes through `nparam()`) therefore disagreed with `AIC(model$logLik)` by 4. Because `auto.ces()` selects with `sapply(CESModel, IC)`, CES(simple) was given a free two-parameter head start: on 94 M3 quarterly series the selection changed on two of them (N0865 now picks `partial` over `simple`, N1177 `none` over `simple`). Only `seasonality="simple"` was affected; `none`/`partial`/`full` already counted correctly.
+* `vcov(ces(..., seasonality="partial"), type="opg")` errored with "subscript out of bounds". `covarOPGces()` counted the smoothing coefficients with a `^(alpha|beta)_[01]$` pattern, but the partial-seasonality `b` is real and named plainly `beta`, so it was not counted and the initial-state coefficients were indexed from an offset one too low. The count now matches on the prefix, and the real `b` is perturbed like the complex one. `none`/`simple`/`full` were unaffected.
+* `vcov(model, type="opg")` scored the ETS seasonal initial states along an unconstrained direction. Only the first `m-1` seasonal initials are free — the last is fixed by the normalisation (sum = 0 additive, product = 1 multiplicative), which is exactly how the estimator parameterises them — but `covarOPG()` perturbed one seasonal initial and left the last untouched, stepping off the constraint surface. The observed-Fisher path (`type="hessian"`) always differentiated in the constrained B space, so the two covariances disagreed for every seasonal model with `initial="optimal"`. The perturbation now lets the last slot absorb the change. Non-seasonal models, and any model whose initials are not estimated, are unaffected.
+* `vcov()` on an `adam` model where nothing is estimated directly — e.g. `adam(y, "AAA", initial="backcasting", persistence=p)`, where the persistence is provided and the initials are backcast — now returns an empty (0x0) matrix instead of a full matrix of `Inf` over the provided persistence and the backcast initial seeds. `vcov()` spans exactly `coef()`, so the initial-state columns appear only when the initials are genuinely estimated (`initial="optimal"`, and `"two-stage"` which optimises them); they are never present for backcasting / complete / gradient / provided initials. `summary()` and `confint()` on such a model no longer error. (`om()`/`omg()` and the Python side already behaved this way.)
+* Degrees of freedom are now counted correctly when nothing is optimised — the "use" path taken when the persistence (and/or the ARMA / smoothing parameters) are supplied together with a non-optimal initialisation. `adam(y, "AAA", initial="backcasting", persistence=p)` reported `logLik(df=1)`; it now reports the identifiable count of the backcast/complete/gradient initial states (13 for a monthly AAA) plus the distribution scale, matching the estimated-persistence fit minus the provided smoothing parameters. The same class of bug is fixed on every estimator-free path: `om()` (Bernoulli, no scale), the standalone `ces()`, `gum()` and `ssarima()` (their "use provided values" branches hardcoded `df=1`), and `omg()`, whose joint df additionally never counted the two sides' backcast initials at all — even with estimated persistence — so an `omg("AAA","AAA")` backcasting fit went from `df=6` (persistence only) to `df=32` (persistence + both sides' initials). The ETS/ARIMA/xreg counting is now centralised in a shared `dfInitialsBackcast()` helper, and the `omg()` sub-model objects report the same per-side df a standalone `om()` would. A reused fitted model (`adam(data, model)`) is excluded from this count: its initials come straight from the provided model (`profilesRecentProvided`) rather than being backcast, so `nparam()` of a reused model stays at 1 (the scale) as before.
+* `vcov(model, type="hessian")` (and `summary()`/`confint()`) on a **sparse-order** `sparma()` fit — e.g. `orders=list(ar=2, ma=1)`, where a lower-order AR/MA coefficient is absent — no longer errors. The observed-Fisher path re-fitted the model through `adam(model=object)`, whose dense ARIMA-polynomial reconstruction produced an `NA` for the sparse structure (`"missing value where TRUE/FALSE needed"`). `sparma` now computes its observed Fisher Information natively, by a numerical Hessian of its own log-likelihood at the estimate, so `type="hessian"` returns a finite covariance for every order combination. `type="opg"` (the default) was already unaffected.
+* `vcov()` on an `omg()` object (and therefore `confint()`/`summary()`) was computed at a mis-reconstructed re-fit: the covariance path re-supplied each sub-model's persistence/phi/arma as fixed values, which flips their estimate flags off so the filler stops consuming those slots from the joint parameter vector and shifts it — a boundary `alpha=0` pushed a level initial to 0 and the re-fit log-likelihood drifted from the original (e.g. −83.91 vs −83.03). The A/B split of the joint vector also used the initialiser's reduced parameter count instead of the fitted-object count, leaking one side's parameters into the other. The re-entry now keeps every coefficient estimated and fed back from the joint vector, so `omg(model=object)` reproduces the original fit exactly, correcting the reported standard errors.
+
+smooth v4.5.0 (Release date: 2026-06-19)
 =======
 
 Changes:
@@ -9,10 +59,12 @@ Changes:
 NOTE: any user code calling `oes_old()` / `oesg_old()` / `is.oes()` / `is.oesg()` directly, or relying on deserialising stored `"oes"`-classed objects, will need updating. The recommended replacement is `oes()` / `oesg()` for fresh fits.
 
 Bugfixes:
+* Backcasting with ARIMA models that include a constant now flips the sign of the drift during the backward pass whenever the total order of differencing (`d + D` across all lags) is odd — the direct ARIMA analog of the ETS trend reversal (`b -> -b`), since time reversal changes the drift of an integrated series by `(-1)^(d+D)`. Previously the drift pushed the backward pass in the wrong direction, biasing the backcast initial states of drifted I(1)-type models; e.g. `adam(BJsales, "NNN", orders=c(0,1,1), constant=TRUE, initial="backcasting")` now estimates the constant at ~0.419 (sample mean of differences: 0.420) with an improved likelihood. Models with even `d + D` (e.g. SARIMA(0,1,1)(0,1,1)[12] with constant) are unaffected by construction.
+* `sim.es()`, `simulate.adam()`, `simulate.om()` and `simulate.omg()` now apply the same seasonal-head trend refinement that `adam()` / `es()` do at fit time. Previously, simulations from trended-seasonal models (e.g. ETS(A,A,A) with `lags = 12`) started from an un-walked initial level, so the first `lagsModelMax` simulated observations were offset by roughly `(lagsModelMax - 1) * trend` relative to the fitter's fitted values. Simulated series drawn from a *fitted* trended-seasonal model will now be numerically different from those drawn on prior versions — this is a correctness fix, not a behaviour break.
 * `om(y, occurrence="general", silent=FALSE)` (and `omg(y, silent=FALSE)`) with the default `h=0` no longer error out in the diagnostic plot. Previously `omg()` left `$forecast=NULL` on the result, and `plot.smooth` would then strip the slot from its `do.call(graphmaker, ...)` call, causing `argument "forecast" is missing, with no default`. Now mirrors `om()`'s convention: when `h=0`, `$forecast` is a one-element `ts(NA)` / `zoo(NA)` placeholder.
 
 
-smooth v4.4.5 (Release data: 2026-05-27)
+smooth v4.4.5 (Release date: 2026-05-27)
 =======
 
 Change:
@@ -32,7 +84,7 @@ Bugfixes:
 * forecast.adam() would not do the correct row repetition for explanatory variables when the new values are not provided.
 
 
-smooth v4.4.1 (Release data: 2026-02-26)
+smooth v4.4.1 (Release date: 2026-02-26)
 =======
 
 Changes:
@@ -43,7 +95,7 @@ Bugfixes:
 * A failsafe for models with lb>B or ub<B.
 
 
-smooth v4.4.0 (Release data: 2026-02-05)
+smooth v4.4.0 (Release date: 2026-02-05)
 =======
 
 Changes:
@@ -67,7 +119,7 @@ Bugfixes:
 * RIDGE/LASSO would not work with X because of the wrong calculation of the denominator.
 
 
-smooth v4.3.2 (Release data: 2025-12-23)
+smooth v4.3.2 (Release date: 2025-12-23)
 =======
 
 Changes:
@@ -85,7 +137,7 @@ Bugfixes:
 * Fixed the issue with reusing the initials in gum, ces, msarima and ssarima.
 
 
-smooth v4.3.1 (Release data: 2025-10-05)
+smooth v4.3.1 (Release date: 2025-10-05)
 =======
 
 Changes:
@@ -106,7 +158,7 @@ Bugfixes:
 * SARIMA(0,1,0) now works on small data, producing Seasonal Naive in adam().
 
 
-smooth v4.3.0 (Release data: 2025-06-30)
+smooth v4.3.0 (Release date: 2025-06-30)
 =======
 
 Changes:
@@ -129,7 +181,7 @@ Bugfixes:
 * Fixes of bugs in adam() with explanatory variables, which are dropped by alm().
 
 
-smooth v4.2.0 (Release data: 2025-04-02)
+smooth v4.2.0 (Release date: 2025-04-02)
 =======
 
 Changes:
@@ -140,7 +192,7 @@ Changes:
 * adamFitter() now has a refineHead parameter, which explicitly says whether the head of the state vector should be refined or not. This is an internal thing, but it is needed by several functions (adam(), ces(), gum()).
 
 
-smooth v4.1.1 (Release data: 2025-02-03)
+smooth v4.1.1 (Release date: 2025-02-03)
 =======
 
 Changes:
@@ -155,7 +207,7 @@ Bugfixes:
 * Tried to fix the issue with UBSAN, but not sure whether it worked, because it is not possible to reproduce it on my PC or github Actions... Just praying that it works.
 
 
-smooth v4.1.0 (Release data: 2024-10-01)
+smooth v4.1.0 (Release date: 2024-10-01)
 =======
 
 Changes:
@@ -168,7 +220,7 @@ Bugfixes:
 * Fix in reapply() for ARIMA.
 
 
-smooth v4.0.2 (Release data: 2024-06-18)
+smooth v4.0.2 (Release date: 2024-06-18)
 =======
 
 Changes:
@@ -181,7 +233,7 @@ Bugfixes:
 * Transition matrix was not correctly set for ARIMA with drift. It is now.
 
 
-smooth v4.0.1 (Release data: 2024-04-01)
+smooth v4.0.1 (Release date: 2024-04-01)
 =======
 
 Changes:
@@ -200,14 +252,14 @@ Bugfixes:
 * Another bugfix in es() and xreg: resolved the issue with the simulated data.
 
 
-smooth v4.0.0 (Release data: 2023-09-15)
+smooth v4.0.0 (Release date: 2023-09-15)
 =======
 
 Changes:
-* Starting from v4.0.0, the smooth package for R will be released under the LGPLv2.1 license. The source of the older version of the software under the GPL(>=2) is available here: https://github.com/config-i1/smooth/releases/tag/v3.2.2
+* Starting from v4.0.0, the smooth package for R will be released under the LGPLv2.1 license. The source of the older version of the software under the GPL(>=2) is available here: https://github.com/openforecast-org/smooth/releases/tag/v3.2.2
 
 
-smooth v3.2.2 (Release data: 2023-09-15)
+smooth v3.2.2 (Release date: 2023-09-15)
 =======
 
 Changes:
@@ -223,7 +275,7 @@ Bugfixes:
 * A fix for adam() with LASSO/RIDGE, where "lambdaOriginal was not found".
 
 
-smooth v3.2.1 (Release data: 2023-06-01)
+smooth v3.2.1 (Release date: 2023-06-01)
 =======
 
 Changes:
@@ -245,7 +297,7 @@ Bugfixes:
 * Fixed a bug with ARIMA(0,d,0) with drift and an initial B becoming outside of bounds.
 
 
-smooth v3.2.0 (Release data: 2023-01-18)
+smooth v3.2.0 (Release date: 2023-01-18)
 =======
 
 Changes:
@@ -279,7 +331,7 @@ Bugfixes:
 * A fix in adam() for provided occurrence and multiplicative models with positive distributions.
 
 
-smooth v3.1.7 (Release data: 2022-05-20)
+smooth v3.1.7 (Release date: 2022-05-20)
 =======
 
 Changes:
@@ -296,7 +348,7 @@ Bugfixes:
 * interval="prediction" would not produce analytical intervals in case of pure additive models. This is now fixed.
 
 
-smooth v3.1.6 (Release data: 2022-03-30)
+smooth v3.1.6 (Release date: 2022-03-30)
 =======
 
 Changes:
@@ -320,7 +372,7 @@ Bugfixes:
 * A fix in case of rbind() of data.frame, when one of variables is ts.
 
 
-smooth v3.1.5 (Release data: 2022-01-26)
+smooth v3.1.5 (Release date: 2022-01-26)
 =======
 
 Changes:
@@ -329,7 +381,7 @@ Changes:
 * Removed Mcomp from suggests.
 
 
-smooth v3.1.4 (Release data: 2021-12-01)
+smooth v3.1.4 (Release date: 2021-12-01)
 =======
 
 Changes:
@@ -340,7 +392,7 @@ Bugfixes:
 * Fixed a bug in the pre-initialisation of parameters of a model with constant.
 
 
-smooth v3.1.3 (Release data: 2021-09-22)
+smooth v3.1.3 (Release date: 2021-09-22)
 =======
 
 Changes:
@@ -366,7 +418,7 @@ Bugfixes:
 * Make sure that the conventional functions (es, ssarima, sma etc) return y as ts.
 
 
-smooth v3.1.2 (Release data: 2021-06-14)
+smooth v3.1.2 (Release date: 2021-06-14)
 =======
 
 Changes:
@@ -403,7 +455,7 @@ Bugfixes:
 * Fix in auto.adam() and ARIMA selection with non-default distributions.
 
 
-smooth v3.1.1 (Release data: 2021-04-16)
+smooth v3.1.1 (Release date: 2021-04-16)
 =======
 
 Changes:
@@ -435,7 +487,7 @@ Bugfixes:
 * A fix for vcov.adam() in case, when Fisher Information contains NaNs.
 
 
-smooth v3.1.0 (Release data: 2021-02-19)
+smooth v3.1.0 (Release date: 2021-02-19)
 =======
 
 Changes:
@@ -455,7 +507,7 @@ Bugfixes:
 * A fix in coefbootstrap and lags variable, when M3 data is used.
 
 
-smooth v3.0.2 (Release data: 2021-01-27)
+smooth v3.0.2 (Release date: 2021-01-27)
 =======
 
 Changes:
@@ -483,7 +535,7 @@ Bugfixes:
 * A bugfix for vcov.adam() in case of regression and is.matrix(data).
 
 
-smooth v3.0.1 (Release data: 2021-01-12)
+smooth v3.0.1 (Release date: 2021-01-12)
 =======
 
 Changes:
@@ -517,7 +569,7 @@ Bugfixes:
 * A bugfix for xreg, Etype="M" and distribution="dnorm".
 
 
-smooth v3.0.0 (Release data: 2020-12-07)
+smooth v3.0.0 (Release date: 2020-12-07)
 =======
 
 Changes:
@@ -556,7 +608,7 @@ Bugfixes:
 * The models checked in branch-and-bound for es() now have aligned types of errors and seasonal components.
 
 
-smooth v2.6.1 (Release data: 2020-07-17)
+smooth v2.6.1 (Release date: 2020-07-17)
 =======
 
 Changes:
@@ -569,7 +621,7 @@ Bugfix:
 * A bugfix in forecast() for oes(), where B would not be found.
 
 
-smooth v2.6.0 (Release data: 2020-06-16)
+smooth v2.6.0 (Release date: 2020-06-16)
 =======
 
 Changes:
@@ -590,14 +642,14 @@ Bugfixes:
 * A fix for auto.ces(), which did not work on zeroes data.
 
 
-smooth v2.5.7 (Release data: 2020-04-06)
+smooth v2.5.7 (Release date: 2020-04-06)
 ==============
 
 Changes:
 * plot.smooth() now also produces standardised and studentised residuals over time.
 
 
-smooth v2.5.6 (Release data: 2020-03-31)
+smooth v2.5.6 (Release date: 2020-03-31)
 ==============
 
 Changes:
@@ -621,7 +673,7 @@ Bugfix:
 * A crude fix for the msdecompose(), when type="multiplicative" and there are zeroes in the data.
 
 
-smooth v2.5.5 (Release data: 2020-01-25)
+smooth v2.5.5 (Release date: 2020-01-25)
 ==============
 
 Changes:
@@ -639,7 +691,7 @@ Bugfix:
 * es() with multiplicative models would fail sometimes in case of bounds="a" because of the negative values. We now restrict the bounds with positive values only.
 
 
-smooth v2.5.4 (Release data: 2019-10-22)
+smooth v2.5.4 (Release date: 2019-10-22)
 ==============
 
 Changes:
@@ -649,7 +701,7 @@ Changes:
 * Updated the description of the bounds parameter in ves().
 
 
-smooth v2.5.3 (Release data: 2019-08-19)
+smooth v2.5.3 (Release date: 2019-08-19)
 ==============
 
 Changes:
@@ -669,7 +721,7 @@ Bugdixes:
 * A bugfix in the calculation of the likelihoods based on GTMSE and aGTMSE losses.
 
 
-smooth v2.5.2 (Release data: 2019-07-24)
+smooth v2.5.2 (Release date: 2019-07-24)
 ==============
 
 Changes:
@@ -692,7 +744,7 @@ Bugfixes:
 * Corrected the names of the columns for errors and fitted values of ves().
 
 
-smooth v2.5.1 (Release data: 2019-06-13)
+smooth v2.5.1 (Release date: 2019-06-13)
 ==============
 
 Changes:
@@ -715,7 +767,7 @@ Bugfixes:
 * A bugfix in the model selection mechanism for oes() (the forecast was set to 10 instead of h).
 
 
-smooth v2.5.0 (Release data: 2019-04-25)
+smooth v2.5.0 (Release date: 2019-04-25)
 ==============
 
 Changes:
@@ -740,7 +792,7 @@ Bugfixes:
 * Fixed a bug in backcasting fitter with "Mat::col(): index out of bounds".
 
 
-smooth v2.4.8 (Release data: 2019-03-10)
+smooth v2.4.8 (Release date: 2019-03-10)
 ==============
 
 Changes:
@@ -760,7 +812,7 @@ Bugfixes:
 * es() would kill R in cases of "MAN" model and small samples. Now it does not do that.
 
 
-smooth v2.4.7 (Release data: 2018-11-30)
+smooth v2.4.7 (Release date: 2018-11-30)
 ==============
 
 Changes:
@@ -781,7 +833,7 @@ Bugfixes
 * Found bug due to which the exogenous variables wer ignored for the forecasts from ETS(M,Z,Z) models.
 
 
-smooth v2.4.6 (Release data: 2018-08-25)
+smooth v2.4.6 (Release date: 2018-08-25)
 ==============
 
 Changes:
@@ -813,7 +865,7 @@ Bugfixes
 * nParam sometimes contained negative values for the "Provided" row.
 
 
-smooth v2.4.5 (Release data: 2018-07-03)
+smooth v2.4.5 (Release date: 2018-07-03)
 ==============
 
 Changes:
@@ -843,7 +895,7 @@ Bugfixes:
 * When a model is reused the nuber of parameters in AIC should be equal to 1 (because only variance is estimated, the rest is provided).
 
 
-smooth v2.4.4 (Release data: 2018-05-31)
+smooth v2.4.4 (Release date: 2018-05-31)
 ==============
 
 Changes:
@@ -867,7 +919,7 @@ Bugfixes:
 * ves() calculated number of parameters incorrectly in some cases.
 
 
-smooth v2.4.3 (Release data: 2018-05-03)
+smooth v2.4.3 (Release date: 2018-05-03)
 ==============
 
 Changes:
@@ -886,7 +938,7 @@ Bugfixes:
 * ges(), ces(), ssarima() had problems with model selection for intermittent because of the ic parameter.
 
 
-smooth v2.4.2 (Release data: 2018-04-03)
+smooth v2.4.2 (Release date: 2018-04-03)
 ==============
 
 Changes:
@@ -905,7 +957,7 @@ Bugfixes:
 * Fix in iss() for the cases when intermittent model is applied to non-intermittent data.
 
 
-smooth v2.4.1 (Release data: 2018-03-04)
+smooth v2.4.1 (Release date: 2018-03-04)
 ==============
 
 Bugfixes:
@@ -916,7 +968,7 @@ Bugfixes:
 * When xreg is invalid and set to NULL, change xregDo to "use".
 
 
-smooth v2.4.0 (Release data: 2018-02-10)
+smooth v2.4.0 (Release date: 2018-02-10)
 ==============
 
 Changes:
@@ -934,7 +986,7 @@ Bugfixes:
 * stepwise() now ignores NAs in the provided data.
 
 
-smooth v2.3.2 (Release data: 2018-01-18)
+smooth v2.3.2 (Release date: 2018-01-18)
 ==============
 
 Changes:
@@ -948,7 +1000,7 @@ Bugfixes:
 * ges() added an array to a vector, which caused dozens of warnings. Fixed.
 
 
-smooth v2.3.1 (Release data: 2018-01-13)
+smooth v2.3.1 (Release date: 2018-01-13)
 ==============
 
 Changes:
@@ -963,7 +1015,7 @@ Bugfixes:
 * stepwise() now has a more userfriendly Call in the output.
 
 
-smooth v2.3.0 (Release data: 2017-12-23)
+smooth v2.3.0 (Release date: 2017-12-23)
 ==============
 
 Changes:
@@ -977,7 +1029,7 @@ Bugfixes:
 * Number of parameters in case of xregDo="select" was incorrect.
 
 
-smooth v2.2.2 (Release data: 2017-12-15)
+smooth v2.2.2 (Release date: 2017-12-15)
 ==============
 
 Changes:
@@ -994,7 +1046,7 @@ Bugfixes:
 * Fixed Likelihood calculation for TSB probability model.
 
 
-smooth v2.2.1 (Release data: 2017-11-15)
+smooth v2.2.1 (Release date: 2017-11-15)
 ==============
 
 Changes:
@@ -1006,7 +1058,7 @@ Bugfixes:
 * Corrected a bug in auto functions with intermittent data.
 
 
-smooth v2.2.0 (Release data: 2017-10-26)
+smooth v2.2.0 (Release date: 2017-10-26)
 ==============
 
 Changes:
@@ -1019,7 +1071,7 @@ Bugfixes:
 * es() sometimes returned smoothing parameters values that did not satisfy the usual constrains.
 * New initialisation of smoothing parameters in es() in case of cfType="HAM".
 
-smooth v2.1.2 (Release data: 2017-09-21)
+smooth v2.1.2 (Release date: 2017-09-21)
 ==============
 
 Changes:
@@ -1032,7 +1084,7 @@ Bugfixes:
 * Check of initials when model is not selected in es().
 * sim.ssarima() did not take correctly into account the provided initials.
 
-smooth v2.1.1 (Release data: 2017-09-04)
+smooth v2.1.1 (Release date: 2017-09-04)
 ==============
 
 Changes:
@@ -1054,7 +1106,7 @@ Bugfixes:
 * Cumulative variance was calculated incorrectly. Now the non-seasonal case is fixed. SEASONAL MODELS STILL HAVE THIS PROBLEM!
 * Found bug in variance calculation for some seasonal models, which caused intervals for SSARIMA, GES and CES to be narrower than needed.
 
-smooth v2.1.0 (Release data: 2017-08-01)
+smooth v2.1.0 (Release date: 2017-08-01)
 ==============
 
 Changes:
@@ -1083,7 +1135,7 @@ Bugfixes:
 * Number of parameters returned by models was not correct, missing exogenous variables and intermittent model.
 
 
-smooth v2.0.1 (Release data: 2017-07-05)
+smooth v2.0.1 (Release date: 2017-07-05)
 ==============
 
 Changes:
@@ -1099,7 +1151,7 @@ Bugfixes:
 * PLS could not be calculated for some cases, when ts object was used.
 
 
-smooth v2.0.0 (Release data: 2017-07-01)
+smooth v2.0.0 (Release date: 2017-07-01)
 ==============
 
 Changes:
@@ -1126,7 +1178,7 @@ Bugfixes:
 * Corrected a problem with initials of iETSX models.
 
 
-smooth v1.9.9 (Release data: 2017-05-03)
+smooth v1.9.9 (Release date: 2017-05-03)
 ==============
 
 Changes:
@@ -1144,7 +1196,7 @@ Bugfixes:
 * datafreq is now used in all the functions.
 
 
-smooth v1.9.1 (Release data: 2017-03-28)
+smooth v1.9.1 (Release date: 2017-03-28)
 ==============
 
 Changes:
@@ -1157,7 +1209,7 @@ Bugfixes:
 * Fixed a problem with prediction intervals construction for binary variables.
 
 
-smooth v1.9.0 (Release data: 2017-03-18)
+smooth v1.9.0 (Release date: 2017-03-18)
 ==============
 
 Changes:
@@ -1167,7 +1219,7 @@ Bugfixes:
 * Fixed bug with cfType="MSTFE" in case of multiplicative errors.
 
 
-smooth v1.8.0 (Release data: 2017-03-12)
+smooth v1.8.0 (Release date: 2017-03-12)
 ==============
 
 Changes:
@@ -1422,7 +1474,7 @@ Changes:
 * Removed "TFL" as a cost function type and "asymmetric" as intervals type. The functions still accept these parameters, but the parameters are now hidden, because currently they are not ready for wide audience.
 * Changed how number of parameters is calculated when initials are provided. They should be counted in. Only backcasting now excludes initials in calculation of number of parameters.
 * Prepared vignette for es(), ces(), ssarima(), ges(), sma() and sim.es(). This now includes examples with some comments.
-* Uploaded documentation for the package to github (https://github.com/config-i1/smooth/smooth.pdf). This will be published as working paper and will be available via ResearchGate.
+* Uploaded documentation for the package to github (https://github.com/openforecast-org/smooth/smooth.pdf). This will be published as working paper and will be available via ResearchGate.
 
 Bugfixes:
 

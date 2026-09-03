@@ -1,198 +1,55 @@
 #### Helper functions used by adam() and others
 
-#### Functions calculating the efficient number of estimated parameters of ADAM in case of backcasting ####
-# This function is used internally by adam() et al. to calculate the fractional df
-# This is needed for debiasing sigma in case of adam with backcasted initials
-calculateBackcastingDF <- function(profilesRecentTable, lagsModelAll,
-                                   etsModel, Stype, componentsNumberETSNonSeasonal,
-                                   componentsNumberETSSeasonal, vecG, matF,
-                                   obsInSample, lagsModelMax, indexLookupTable,
-                                   adamCpp, dfForBack=TRUE){
+# Resolve the covariance `type` for the vcov()/confint()/summary()/reapply()/
+# reforecast() methods, honouring the deprecated `bootstrap=TRUE` switch for one
+# release cycle. `type` is one of "opg" (OPG / BHHH, the default), "hessian"
+# (the observed Fisher Information) or "bootstrap". A logical `bootstrap=TRUE`
+# maps to "bootstrap" with a deprecation warning.
+covarTypeResolver <- function(type, bootstrap=FALSE){
+    if(isTRUE(bootstrap)){
+        warning("`bootstrap=TRUE` is deprecated; use `type=\"bootstrap\"` instead.",
+                call.=FALSE);
+        return("bootstrap");
+    }
+    return(match.arg(type, c("opg","hessian","bootstrap")));
+}
 
-    # Switch off if this was not required
-    if(!dfForBack){
+#### Identifiable degrees of freedom of ETS initial states ####
+# Greatest common divisor (Euclid) -- base R has none.
+dfGCD <- function(a, b){
+    while(b != 0){
+        t <- b;
+        b <- a %% b;
+        a <- t;
+    }
+    return(a);
+}
+
+# Identifiable degrees of freedom of the ETS level + seasonal initial states.
+# A period-m seasonal component spans the frequencies {0, 1/m, ..., (m-1)/m}, and
+# two blocks share the gcd(m_i, m_j) of them; the dimension of the sum of these
+# cyclic subspaces is the inclusion-exclusion over gcd of every non-empty subset.
+# The level enters as a period-1 block. For a single seasonal m this returns
+# m (= level + (m-1)); for coprime periods the naive sum(m_i-1)+level; for
+# non-coprime periods it drops by the shared-frequency overlap. seasonalLags are
+# the periods whose initials are estimated; levelEstimated adds the level block.
+dfInitialsETSLevelSeasonal <- function(seasonalLags, levelEstimated){
+    blocks <- numeric(0);
+    if(levelEstimated){
+        blocks <- c(blocks, 1);
+    }
+    blocks <- c(blocks, seasonalLags);
+    if(length(blocks) == 0){
         return(0);
     }
-
-    # The code below creates dummy states with 1 where the value was supposed to be estimated
-    # Then it propagates the states to the end of sample and back
-    # After that we compare it with the deterministic and get the fraction of the original df
-    # that is in the final state.
-    # Create a new profile, which has 1 for the initial states
-    profilesRecentTableBack <- profilesRecentTable;
-    for(i in 1:nrow(profilesRecentTableBack)){
-        profilesRecentTableBack[i,1:lagsModelAll[i]] <- 1;
+    total <- 0;
+    for(k in 1:length(blocks)){
+        combsK <- combn(blocks, k, simplify=FALSE);
+        gcdsK <- vapply(combsK, function(s){ Reduce(dfGCD, s); }, numeric(1));
+        total <- total + (-1)^(k+1) * sum(gcdsK);
     }
-    # For the deterministic, everything should be one
-    # This way, the maths with seasonality adds up
-    # i.e., we can do (profile/deterministic profile) and get sensible df
-    # Otherwise due to fractional seasonal dfs, this would result in 1 more df than needed
-    profilesRecentTableBackDeterministic <- profilesRecentTableBack;
-    # Seasonality needs to be treated differently, because we estimate m-1 initials
-    # We spread m-1 to the m elements to reflect the idea that we estimated only m-1
-    # If we estimated all m, we would have 1 in every cell
-    if(etsModel && Stype!="N"){
-        for(k in 1:componentsNumberETSSeasonal){
-            profilesRecentTableBack[componentsNumberETSNonSeasonal+k,
-                                    1:lagsModelAll[componentsNumberETSNonSeasonal+k]] <-
-                (lagsModelAll[componentsNumberETSNonSeasonal+k]-1)/lagsModelAll[componentsNumberETSNonSeasonal+k];
-        }
-    }
-    # Record the final profile to see how states evolved
-    dfs1 <- dfDiscounterFit(vecG, matF, obsInSample, lagsModelMax,
-                            indexLookupTable, profilesRecentTableBack,
-                            etsModel, adamCpp);
-    # Record what would have happened if we had a deterministic stuff
-    vecGZero <- vecG;
-    vecGZero[] <- 0;
-    dfs2 <- dfDiscounterFit(vecGZero, matF, obsInSample, lagsModelMax,
-                            indexLookupTable, profilesRecentTableBackDeterministic,
-                            etsModel, adamCpp);
-    #### Calculate df
-    # Record the states that are way off from the (0,1) region. They evolved enough
-    discountedStates <- (dfs1$profileRecent>dfs2$profileRecent | dfs1$profileRecent<0);
-    # Those states have no impact on the final df
-    dfs1$profileRecent[discountedStates] <- 0;
-    # For the others, take a proportion from the original ones to see how much they evolved
-    dfs1$profileRecent[] <- dfs1$profileRecent/dfs2$profileRecent;
-    # Finally, take the sum to get the df estimate
-    # na.rm is needed to avoid NaNs due to 0/0
-    nStatesBackcasting <- sum(dfs1$profileRecent, na.rm=TRUE);
-
-    return(nStatesBackcasting);
+    return(total);
 }
-
-# The function calculates the discounted number of degrees of freedom for the model
-# This is the same as calculateBackcastingDF, but works for adam objects
-dfDiscounter <- function(object){
-    lagsModelAll <- modelLags(object);
-    lagsModelMax <- max(lagsModelAll);
-    obsInSample <- nobs(object);
-    components <- componentsDefiner(object);
-    vecG <- matrix(object$persistence);
-    matF <- object$transition;
-    xregNumber <- 0
-    if(is.list(object$initial) && !is.null(object$initial$xreg)){
-        xregNumber[] <- length(object$initial$xreg);
-    }
-
-    etsModel <- etsChecker(object);
-
-    Etype <- errorType(object);
-    Ttype <- trendType(object);
-    Stype <- seasonType(object);
-
-    componentsNumberETSSeasonal <- components$componentsNumberETSSeasonal;
-    componentsNumberETSNonSeasonal <- components$componentsNumberETSNonSeasonal;
-    componentsNumberETS <- components$componentsNumberETS;
-    componentsNumberARIMA <- components$componentsNumberARIMA;
-
-    constantRequired <- !is.null(object$constant);
-    adamETS <- adamETSChecker(object);
-
-    # Create C++ adam class, which will then use fit, forecast etc methods
-    adamCpp <- new(adamCore,
-                   lagsModelAll, Etype, Ttype, Stype,
-                   componentsNumberETSNonSeasonal,
-                   componentsNumberETSSeasonal,
-                   componentsNumberETS, componentsNumberARIMA,
-                   xregNumber, length(lagsModelAll),
-                   constantRequired, adamETS);
-
-    adamProfileCreated <- adamProfileCreator(lagsModelAll, lagsModelMax, obsInSample);
-    indexLookupTable <- adamProfileCreated$lookup;
-    profilesRecentTableBack <- adamProfileCreated$recent;
-
-
-    # Create a new profile, which has 1 for the initial states
-    # profilesRecentTableBack <- matrix(0, nStates, lagsModelMax);
-    for(i in 1:nrow(profilesRecentTableBack)){
-        profilesRecentTableBack[i,1:lagsModelAll[i]] <- 1;
-    }
-
-    # Seasonality needs to be treated differently, because we estimate m-1 initials
-    # We spread m-1 to the m elements to reflect the idea that we estimated only m-1
-    # If we estimated all m, we would have 1 in every cell
-    if(etsModel && Stype!="N"){
-        for(k in 1:componentsNumberETSSeasonal){
-            profilesRecentTableBack[componentsNumberETSNonSeasonal+k,
-                                    1:lagsModelAll[componentsNumberETSNonSeasonal+k]] <-
-                (lagsModelAll[componentsNumberETSNonSeasonal+k]-1)/lagsModelAll[componentsNumberETSNonSeasonal+k];
-        }
-    }
-
-    # Record the final profile to see how states evolved
-    dfs1 <- dfDiscounterFit(vecG, matF,
-                            obsInSample, lagsModelMax,
-                            indexLookupTable, profilesRecentTableBack,
-                            etsModel, adamCpp);
-
-    # Record what would have happened if we had a deterministic stuff
-    vecG[] <- 0;
-    # For the deterministic, everything should be one
-    # This way, the maths with seasonality adds up
-    # i.e., we can do (profile/deterministic profile) and get sensible df
-    # Otherwise due to fractional seasonal dfs, this would result in 1 more df than needed
-    profilesRecentTableBackDeterministic <- profilesRecentTableBack;
-    profilesRecentTableBackDeterministic[profilesRecentTableBackDeterministic!=0] <- 1;
-    dfs2 <- dfDiscounterFit(vecG, matF,
-                            obsInSample, lagsModelMax,
-                            indexLookupTable, profilesRecentTableBackDeterministic,
-                            etsModel, adamCpp);
-
-    #### Calculate df
-    # Record the states that are way off from the (0,1) region. They evolved enough
-    discountedStates <- (dfs1$profileRecent>dfs2$profileRecent | dfs1$profileRecent<0);
-    profileRecent <- dfs1$profileRecent;
-    # Those states have no impact on the final df
-    profileRecent[discountedStates] <- 0;
-    # For the others, take a proportion from the original ones to see how much they evolved
-    profileRecent[] <- profileRecent/dfs2$profileRecent;
-    # Finally, take the sum to get the df estimate
-    # na.rm is needed to avoid 0/0
-    df <- sum(profileRecent, na.rm=TRUE);
-
-    return(list(profile1=t(dfs1$profileRecent), profileInitial=t(profilesRecentTableBack),
-                profile2=t(dfs2$profileRecent), df=df));
-    # return(df);
-}
-
-# Te function fits a simple adam with unit states to the zero data to see how they propagate over time
-dfDiscounterFit <- function(persistence, transition,
-                            obsInSample, lagsModelMax,
-                            indexLookupTable, profilesRecentTableBack,
-                            etsModel, adamCpp){
-
-    # This is the sample to model to reflect the backcasted period (back and forth)
-    # lagsModelMax appears because we have "refineHead"
-    obsInSampleBackcasting <- obsInSample*2+lagsModelMax-1;
-    nStates <- ncol(transition);
-    # State matrix that has columns similar to obsStates
-    matVtBack <- matrix(1, nStates, obsInSampleBackcasting + lagsModelMax);
-    # Measurement matrix with the new sample
-    matWtBack <- matrix(1, obsInSampleBackcasting, nStates);
-    # indexLookupTable for the new data. This is similar to doing forth and back pass
-    indexLookupTableBack <- cbind(indexLookupTable,indexLookupTable[,(ncol(indexLookupTable)-1):1, drop=FALSE]);
-
-    # The new data. This is just zeroes to see how the df effect evaporates
-    # But it's not exactly zero, because otherwise multiplicative models won't work
-    yInSampleBack <- matrix(1e-100, obsInSampleBackcasting, 1);
-    # New occurrence, which is 1 everywhere
-    otBack <- matrix(1, obsInSampleBackcasting, 1);
-
-    # Fit the model to the data
-    adamFittedBack <- adamCpp$fit(matVtBack, matWtBack,
-                                  transition, persistence,
-                                  indexLookupTableBack, profilesRecentTableBack,
-                                  yInSampleBack, otBack,
-                                  FALSE, 1,
-                                  FALSE, "n");
-
-    # Get the final profile. It now contains the discounted df for the start of the data
-    return(list(profileRecent=adamFittedBack$profile));
-                # states=tail(t(adamFittedBack$states), lagsModelMax)));
-}
-
 
 #### Small technical functions returning types of models and components ####
 # Function defines number of components based on the model type
@@ -322,3 +179,648 @@ smoothEigens <- function(persistence, transition, measurement,
     # return(eigenValues);
 }
 
+
+# Internal: OPG / BHHH covariance of the parameters. The observed Fisher
+# Information (numerical Hessian of the log-likelihood) can be indefinite when a
+# parameter sits at an active bound (e.g. a smoothing parameter estimated at 0),
+# so its inverse is not a valid covariance. The OPG estimator J = sum_t s_t s_t'
+# of the per-observation scores s_t = d(logLik_t)/d(theta) is PSD by
+# construction and gives finite standard errors for boundary-but-identified
+# parameters. Scores are obtained by central-differencing pointLik() (the
+# per-observation log-density, which already dispatches over every distribution
+# and model type) at parameter values perturbed via the model's own call, so the
+# selected ETS/ARIMA structure and lags are preserved. Returns the covariance
+# matrix, or NULL to signal the caller to fall back to the Hessian.
+# Shared OPG assembly. Central-differences the per-observation log-likelihood
+# over the estimated parameters, forms J = sum_t s_t s_t' (PSD by construction)
+# and inverts it, dropping directions with (near-)zero information (the
+# brokenVariables logic of the Hessian path). `perturbedPointLik(j, delta)` is an
+# engine-specific closure that returns the per-observation log-likelihood vector
+# for the model rebuilt with the j-th parameter perturbed by delta -- with
+# j=NULL, delta=0 giving the base fit -- or NULL on failure. Indexing by position
+# (not name) supports engines whose coefficients share names (seasonal CES).
+# `parameterValues` is the named coefficient vector (for the step sizes and the
+# result dimnames). A reproduction guard requires the base fit to reproduce the
+# object's likelihood, so a refit that cannot rebuild the model falls back.
+covarOPGCore <- function(object, parameterValues, perturbedPointLik,
+                         stepSize=.Machine$double.eps^(1/4)){
+    parametersNames <- names(parameterValues);
+    nParam <- length(parameterValues);
+    if(nParam==0 || object$loss!="likelihood"){
+        return(NULL);
+    }
+    obsInSample <- nobs(object);
+
+    baseLik <- perturbedPointLik(NULL, 0);
+    if(is.null(baseLik) || length(baseLik)!=obsInSample ||
+       !isTRUE(all.equal(sum(baseLik), as.numeric(logLik(object)), tolerance=1e-4))){
+        return(NULL);
+    }
+
+    sideOK <- function(lik){
+        return(!is.null(lik) && length(lik)==obsInSample && all(is.finite(lik)));
+    }
+    scores <- matrix(NA_real_, obsInSample, nParam);
+    for(j in seq_len(nParam)){
+        hStep <- stepSize*max(1, abs(parameterValues[j]));
+        likUp <- perturbedPointLik(j, hStep);
+        likDown <- perturbedPointLik(j, -hStep);
+        upOK <- sideOK(likUp);
+        downOK <- sideOK(likDown);
+        # Central difference when both sides are valid; at an active bound one
+        # side steps out of the feasible region (e.g. a negative persistence in
+        # an occurrence link) and returns NaN, so fall back to the one-sided
+        # difference against the reproduced base likelihood there.
+        if(upOK && downOK){
+            scores[,j] <- (likUp-likDown)/(2*hStep);
+        }
+        else if(upOK){
+            scores[,j] <- (likUp-baseLik)/hStep;
+        }
+        else if(downOK){
+            scores[,j] <- (baseLik-likDown)/hStep;
+        }
+        else{
+            return(NULL);
+        }
+    }
+    if(any(!is.finite(scores))){
+        return(NULL);
+    }
+
+    J <- crossprod(scores);
+    diagJ <- diag(J);
+    # Drop parameters whose per-observation scores carry (near-)zero information
+    # relative to the best-identified one: at a boundary MLE such a parameter is
+    # only weakly identified (its OPG score is tiny at the optimum even though it
+    # still enters the likelihood), so its OPG variance is enormous. Reporting an
+    # infinite variance flags it as effectively unidentified -- a clearer signal
+    # than a huge finite number, and it makes reapply()/reforecast() hold the
+    # parameter at its estimate rather than inject nonsense-wide draws. Use
+    # type="hessian" for a finite (still large) standard error there.
+    keep <- diagJ > max(diagJ)*1e-10 & is.finite(diagJ);
+    vcovMatrix <- matrix(Inf, nParam, nParam, dimnames=list(parametersNames, parametersNames));
+    if(any(keep)){
+        Jkeep <- J[keep,keep,drop=FALSE];
+        vcovKeep <- try(solve(Jkeep), silent=TRUE);
+        if(inherits(vcovKeep,"try-error")){
+            # Ill-conditioned (collinear parameters): the plain inverse fails, so
+            # use the Moore-Penrose pseudo-inverse via the symmetric eigen-
+            # decomposition, dropping the (near-)zero-eigenvalue directions. Still
+            # PSD; the parameters spanning the collinear null space get a pooled
+            # variance rather than a spurious solve() failure.
+            eigenJ <- eigen(Jkeep, symmetric=TRUE);
+            positive <- eigenJ$values > max(eigenJ$values)*1e-10;
+            if(!any(positive)){
+                return(NULL);
+            }
+            vectorsKeep <- eigenJ$vectors[,positive,drop=FALSE];
+            vcovKeep <- vectorsKeep %*% (t(vectorsKeep)/eigenJ$values[positive]);
+        }
+        vcovMatrix[keep,keep] <- vcovKeep;
+    }
+    return(vcovMatrix);
+}
+
+# OPG covariance for the ETS / ARIMA family (adam and the state-space ARIMA
+# engine ssarima). Initial states are estimated parameters ONLY for
+# initial="optimal"; for backcasting / gradient / complete they are derived, so
+# the score spans the dynamics (persistence / phi / arma) only and the initials
+# are re-derived (via the model's own initialType) at each perturbed evaluation.
+# CES / GUM / sparma have their own parameterisations and dedicated functions
+# (covarOPGces / covarOPGgum / covarOPGsparma).
+covarOPG <- function(object, stepSize=.Machine$double.eps^(1/4)){
+    engine <- if(ssarimaChecker(object)){ "ssarima"; } else { "adam"; }
+
+    initialType <- object$initialType;
+    initialsEstimated <- identical(initialType, "optimal");
+    persistenceNames <- names(object$persistence);
+    armaAr <- object$arma$ar;
+    armaMa <- object$arma$ma;
+    initialList <- object$initial;
+    xregInitNames <- names(initialList$xreg);
+
+    modelLags <- object$lags;
+    modelString <- modelType(object);
+    seasonalTypeOPG <- substr(modelString, nchar(modelString), nchar(modelString));
+    modelOrders <- if(!is.null(object$orders)){ object$orders; } else { NULL; }
+    regressorsMode <- object$regressors;
+    baseArma <- if(length(c(names(armaAr), names(armaMa)))>0){ object$arma; } else { list(); }
+    baseInitialArg <- if(initialsEstimated){ initialList; } else { initialType; }
+
+    refit <- function(persistence, phi, arma, initialArg){
+        if(engine=="adam"){
+            args <- list(data=object$data, model=modelString, lags=modelLags,
+                         persistence=persistence, phi=phi, initial=initialArg,
+                         h=0, FI=FALSE, silent=TRUE);
+            if(!is.null(regressorsMode)){ args$regressors <- regressorsMode; }
+        }
+        else{
+            # ssarima: data argument is named `y`.
+            args <- list(y=object$data, lags=modelLags, initial=initialArg,
+                         h=0, FI=FALSE, silent=TRUE);
+        }
+        if(!is.null(modelOrders)){ args$orders <- modelOrders; }
+        if(length(arma)>0){ args$arma <- arma; }
+        modelLocal <- try(suppressWarnings(do.call(engine, args)), silent=TRUE);
+        if(inherits(modelLocal,"try-error")){
+            return(NULL);
+        }
+        return(as.numeric(pointLik(modelLocal)));
+    }
+
+    parametersNames <- names(coef(object));
+    perturbedPointLik <- function(j, delta){
+        persistence <- object$persistence;
+        phi <- object$phi;
+        arma <- baseArma;
+        initialArg <- baseInitialArg;
+        if(!is.null(j)){
+            nameJ <- parametersNames[j];
+            if(nameJ %in% persistenceNames){
+                persistence[nameJ] <- persistence[nameJ]+delta;
+            }
+            else if(nameJ=="phi"){
+                phi <- phi+delta;
+            }
+            else if(nameJ %in% names(armaAr)){
+                arma$ar[nameJ] <- arma$ar[nameJ]+delta;
+            }
+            else if(nameJ %in% names(armaMa)){
+                arma$ma[nameJ] <- arma$ma[nameJ]+delta;
+            }
+            else if(initialsEstimated){
+                if(nameJ=="level"){
+                    initialArg$level <- initialArg$level+delta;
+                }
+                else if(nameJ=="trend"){
+                    initialArg$trend <- initialArg$trend+delta;
+                }
+                else if(substr(nameJ,1,8)=="seasonal"){
+                    idx <- as.integer(sub("^seasonal_?","",nameJ));
+                    # Only the first m-1 seasonal indices are free: the last one
+                    # is determined by the normalisation (sum = 0 additive,
+                    # product = 1 multiplicative), which is exactly how the
+                    # estimator parameterises them. The score must therefore be
+                    # taken along the constrained direction (bump index idx, let
+                    # the last slot absorb it), matching the Hessian, which
+                    # differentiates in B space with the filler applied.
+                    seasonalRenormalise <- function(seasonalValues){
+                        seasonalValues[idx] <- seasonalValues[idx]+delta;
+                        m <- length(seasonalValues);
+                        if(seasonalTypeOPG=="M"){
+                            seasonalValues[m] <- 1/prod(seasonalValues[-m]);
+                        }
+                        else{
+                            seasonalValues[m] <- -sum(seasonalValues[-m]);
+                        }
+                        return(seasonalValues);
+                    }
+                    if(is.list(initialArg$seasonal)){
+                        initialArg$seasonal[[1]] <- seasonalRenormalise(initialArg$seasonal[[1]]);
+                    }
+                    else{
+                        initialArg$seasonal <- seasonalRenormalise(initialArg$seasonal);
+                    }
+                }
+                else if(substr(nameJ,1,10)=="ARIMAState"){
+                    idx <- as.integer(sub("^ARIMAState","",nameJ));
+                    initialArg$arima[idx] <- initialArg$arima[idx]+delta;
+                }
+                else if(nameJ %in% xregInitNames){
+                    initialArg$xreg[nameJ] <- initialArg$xreg[nameJ]+delta;
+                }
+                else{
+                    return(NULL);
+                }
+            }
+            else{
+                return(NULL);
+            }
+        }
+        return(refit(persistence, phi, arma, initialArg));
+    }
+
+    return(covarOPGCore(object, coef(object), perturbedPointLik, stepSize));
+}
+
+# OPG covariance for CES. CES has its own parameterisation: the smoothing
+# parameters are complex (a, and b for seasonal models) with the coefficients
+# alpha_0 / alpha_1 = Re(a) / Im(a) (and beta_0 / beta_1 = Re(b) / Im(b)); the
+# remaining coefficients are the initial states, stored in `profileInitial`.
+# ces() re-fitted with model=<perturbed clone> holds all of them (it reads
+# parameters$a, parameters$b and profileInitial), so the clone is perturbed
+# directly. Mirrors how the CES Hessian FI is computed (via model=object).
+covarOPGces <- function(object, stepSize=.Machine$double.eps^(1/4)){
+    parameterValues <- coef(object);
+    parametersNames <- names(parameterValues);
+    aValue <- object$parameters$a;
+    bValue <- object$parameters$b;
+    seasonalityType <- object$seasonality;
+
+    # The smoothing coefficients (alpha_0/alpha_1 = Re/Im of a, beta_0/beta_1 =
+    # Re/Im of b) come first; the rest are initial states in profileInitial
+    # (states x head lags). The seasonal initial coefficients are unnamed, so the
+    # initials are mapped BY POSITION: the non-seasonal states (level, potential;
+    # absent for seasonality="simple") are a single free value each, repeated
+    # across the head columns -- perturbing one perturbs the whole row; the
+    # seasonal states fill their rows across the head columns in column-major
+    # order (verified against coef()).
+    # seasonality="partial" carries a REAL b named "beta" (no _0/_1 suffix), so
+    # match the prefix rather than the complex-pair suffix -- otherwise the
+    # initial-state coefficients are indexed from the wrong offset and the
+    # profileInitial lookup runs off the end.
+    nSmoothing <- sum(grepl("^(alpha|beta)", parametersNames));
+    profile <- object$profileInitial;
+    nCol <- ncol(profile);
+    nNonSeasonalRows <- if(identical(seasonalityType, "simple")){ 0L } else { 2L };
+    seasonalRows <- if(nrow(profile)>nNonSeasonalRows){
+                        (nNonSeasonalRows+1):nrow(profile);
+                    } else { integer(0); }
+    nSeasonalRows <- length(seasonalRows);
+
+    # The profileInitial cells perturbed by the k-th initial coefficient.
+    initialCells <- function(k){
+        if(k<=nNonSeasonalRows){
+            return(list(rows=k, cols=seq_len(nCol)));   # constant state -> whole row
+        }
+        ks <- k-nNonSeasonalRows;
+        list(rows=seasonalRows[((ks-1) %% nSeasonalRows)+1],
+             cols=((ks-1) %/% nSeasonalRows)+1);
+    }
+
+    perturbedPointLik <- function(j, delta){
+        clone <- object;
+        if(!is.null(j)){
+            nameJ <- parametersNames[j];
+            if(nameJ=="alpha_0"){
+                clone$parameters$a <- complex(real=Re(aValue)+delta, imaginary=Im(aValue));
+            }
+            else if(nameJ=="alpha_1"){
+                clone$parameters$a <- complex(real=Re(aValue), imaginary=Im(aValue)+delta);
+            }
+            else if(nameJ=="beta_0"){
+                clone$parameters$b <- complex(real=Re(bValue)+delta, imaginary=Im(bValue));
+            }
+            else if(nameJ=="beta_1"){
+                clone$parameters$b <- complex(real=Re(bValue), imaginary=Im(bValue)+delta);
+            }
+            else if(substr(nameJ,1,4)=="beta"){
+                # seasonality="partial": b is real, one value per seasonal lag
+                idx <- if(length(bValue)>1){ match(nameJ, parametersNames[grepl("^beta", parametersNames)]); } else { 1L; }
+                bNew <- bValue;
+                bNew[idx] <- bNew[idx]+delta;
+                clone$parameters$b <- bNew;
+            }
+            else{
+                cell <- initialCells(j-nSmoothing);
+                clone$profileInitial[cell$rows, cell$cols] <-
+                    clone$profileInitial[cell$rows, cell$cols]+delta;
+            }
+        }
+        modelLocal <- try(suppressWarnings(
+            ces(object$data, seasonality=seasonalityType, lags=object$lags,
+                model=clone, h=0)), silent=TRUE);
+        if(inherits(modelLocal,"try-error")){
+            return(NULL);
+        }
+        return(as.numeric(pointLik(modelLocal)));
+    }
+
+    return(covarOPGCore(object, parameterValues, perturbedPointLik, stepSize));
+}
+
+# OPG covariance for GUM. Its coefficients are the persistence g1..gK, the free
+# transition matrix F<row><col> (row-major) and the initial states vt1..vtK
+# (estimated only under initial="optimal"). Initials are perturbed as free
+# parameters only for optimal, where the model is re-fitted from a perturbed
+# clone (gum() reads persistence, transition and -- for the initials -- the
+# coefficient vector B, the same mechanism the GUM Hessian FI uses). For
+# backcasting / gradient / complete the initials are derived, so the score spans
+# g / F only and the initials are re-derived by re-fitting with the perturbed
+# persistence / transition provided and the model's own initialType.
+covarOPGgum <- function(object, stepSize=.Machine$double.eps^(1/4)){
+    parameterValues <- coef(object);
+    parametersNames <- names(parameterValues);
+    persistenceNames <- names(object$persistence);
+    transitionDim <- ncol(object$transition);
+    transitionNames <- grep("^F", parametersNames, value=TRUE);   # row-major order
+    initialsEstimated <- identical(object$initialType, "optimal");
+
+    perturbTransitionCell <- function(transition, nameJ, delta){
+        k <- match(nameJ, transitionNames);
+        row <- ((k-1) %/% transitionDim)+1;
+        col <- ((k-1) %% transitionDim)+1;
+        transition[row,col] <- transition[row,col]+delta;
+        return(transition);
+    }
+
+    perturbedPointLik <- function(j, delta){
+        if(initialsEstimated){
+            clone <- object;
+            if(!is.null(j)){
+                nameJ <- parametersNames[j];
+                if(nameJ %in% persistenceNames){
+                    clone$persistence[nameJ] <- clone$persistence[nameJ]+delta;
+                }
+                else if(substr(nameJ,1,1)=="F"){
+                    clone$transition <- perturbTransitionCell(clone$transition, nameJ, delta);
+                }
+                else{
+                    # Initial state (vt): held through the coefficient vector B.
+                    clone$B[nameJ] <- clone$B[nameJ]+delta;
+                }
+            }
+            modelLocal <- try(suppressWarnings(
+                gum(object$data, orders=object$orders, lags=object$lags,
+                    model=clone, h=0)), silent=TRUE);
+        }
+        else{
+            # Re-derive the initials: perturb only the provided dynamics.
+            persistence <- object$persistence;
+            transition <- object$transition;
+            if(!is.null(j)){
+                nameJ <- parametersNames[j];
+                if(nameJ %in% persistenceNames){
+                    persistence[nameJ] <- persistence[nameJ]+delta;
+                }
+                else if(substr(nameJ,1,1)=="F"){
+                    transition <- perturbTransitionCell(transition, nameJ, delta);
+                }
+                else{
+                    return(NULL);
+                }
+            }
+            modelLocal <- try(suppressWarnings(
+                gum(object$data, orders=object$orders, lags=object$lags,
+                    persistence=persistence, transition=transition,
+                    initial=object$initialType, h=0)), silent=TRUE);
+        }
+        if(inherits(modelLocal,"try-error")){
+            return(NULL);
+        }
+        return(as.numeric(pointLik(modelLocal)));
+    }
+
+    return(covarOPGCore(object, parameterValues, perturbedPointLik, stepSize));
+}
+
+# OPG covariance for the sparse ARMA engine. The coefficients are the free AR
+# (phi<k>) and MA (theta<k>) parameters and, under initial="optimal", the ARIMA
+# state initials (initial1..initialN). sparma() holds provided arma coefficients
+# (arEstimate=FALSE fills matF / vecG from them) and, for the initials, accepts
+# the free state values directly (front-padded to the dense companion length
+# internally), so the model is re-fitted with the perturbed arma / initials
+# supplied. For backcasting / gradient / complete the initials are derived, so
+# the score spans the arma parameters only and the initials are re-derived.
+covarOPGsparma <- function(object, stepSize=.Machine$double.eps^(1/4)){
+    parameterValues <- coef(object);
+    parametersNames <- names(parameterValues);
+    armaArNames <- names(object$arma$ar);
+    armaMaNames <- names(object$arma$ma);
+    initialsEstimated <- identical(object$initialType, "optimal");
+    freeInitial <- parameterValues[grepl("^initial", parametersNames)];
+
+    perturbedPointLik <- function(j, delta){
+        arma <- object$arma;
+        initialArg <- if(initialsEstimated){ as.numeric(freeInitial); } else { object$initialType; }
+        if(!is.null(j)){
+            nameJ <- parametersNames[j];
+            if(nameJ %in% armaArNames){
+                arma$ar[nameJ] <- arma$ar[nameJ]+delta;
+            }
+            else if(nameJ %in% armaMaNames){
+                arma$ma[nameJ] <- arma$ma[nameJ]+delta;
+            }
+            else if(initialsEstimated && grepl("^initial", nameJ)){
+                idx <- as.integer(sub("^initial", "", nameJ));
+                initialArg[idx] <- initialArg[idx]+delta;
+            }
+            else{
+                return(NULL);
+            }
+        }
+        modelLocal <- try(suppressWarnings(
+            sparma(object$data, orders=object$orders, arma=arma,
+                   initial=initialArg, h=0)), silent=TRUE);
+        if(inherits(modelLocal,"try-error")){
+            return(NULL);
+        }
+        return(as.numeric(pointLik(modelLocal)));
+    }
+
+    return(covarOPGCore(object, parameterValues, perturbedPointLik, stepSize));
+}
+
+# Re-fit a sparma model with its free coefficients set to `pars` (the arma
+# phi/theta and, under initial="optimal", the ARIMA state initials), returning
+# the fitted object or NULL on failure. sparma() holds the supplied arma and
+# initials (see covarOPGsparma), so this reproduces the fit at `pars`.
+sparmaModelAtParams <- function(object, pars){
+    parametersNames <- names(coef(object));
+    armaArNames <- names(object$arma$ar);
+    armaMaNames <- names(object$arma$ma);
+    initialsEstimated <- identical(object$initialType, "optimal");
+    freeInitial <- coef(object)[grepl("^initial", parametersNames)];
+    arma <- object$arma;
+    initialArg <- if(initialsEstimated){ as.numeric(freeInitial); } else { object$initialType; }
+    for(k in seq_along(pars)){
+        nameJ <- parametersNames[k];
+        if(nameJ %in% armaArNames){
+            arma$ar[nameJ] <- pars[k];
+        }
+        else if(nameJ %in% armaMaNames){
+            arma$ma[nameJ] <- pars[k];
+        }
+        else if(initialsEstimated && grepl("^initial", nameJ)){
+            idx <- as.integer(sub("^initial", "", nameJ));
+            initialArg[idx] <- pars[k];
+        }
+    }
+    modelLocal <- try(suppressWarnings(
+        sparma(object$data, orders=object$orders, arma=arma,
+               initial=initialArg, h=0)), silent=TRUE);
+    if(inherits(modelLocal,"try-error")){
+        return(NULL);
+    }
+    return(modelLocal);
+}
+
+# Observed Fisher Information covariance for sparma. adam(model=<sparma>) chokes
+# on the sparse-order ARIMA polynomial reconstruction (utils-adam.R ariPolynomial
+# tail is NA), so the FI is built natively here: a central-difference numerical
+# Hessian of the log-likelihood at the estimate, negated (the observed FI) and
+# inverted. Reuses the same coefficient->refit map as the OPG path. Returns NULL
+# (so vcov falls back) if any refit fails or the FI is singular.
+covarFIsparma <- function(object, stepSize=.Machine$double.eps^(1/4)){
+    parameterValues <- coef(object);
+    parametersNames <- names(parameterValues);
+    nParam <- length(parameterValues);
+    if(nParam==0 || object$loss!="likelihood"){
+        return(NULL);
+    }
+    logLikAt <- function(pars){
+        modelLocal <- sparmaModelAtParams(object, pars);
+        if(is.null(modelLocal)){
+            return(NA_real_);
+        }
+        return(as.numeric(logLik(modelLocal)));
+    }
+
+    hStep <- stepSize*pmax(1, abs(parameterValues));
+    f0 <- logLikAt(parameterValues);
+    hessian <- matrix(NA_real_, nParam, nParam,
+                      dimnames=list(parametersNames, parametersNames));
+    for(i in seq_len(nParam)){
+        pUp <- pDown <- parameterValues;
+        pUp[i] <- pUp[i]+hStep[i];
+        pDown[i] <- pDown[i]-hStep[i];
+        hessian[i,i] <- (logLikAt(pUp)-2*f0+logLikAt(pDown))/(hStep[i]^2);
+    }
+    if(nParam>1){
+        for(i in seq_len(nParam-1)){
+            for(j in (i+1):nParam){
+                pUU <- pUD <- pDU <- pDD <- parameterValues;
+                pUU[i] <- pUU[i]+hStep[i]; pUU[j] <- pUU[j]+hStep[j];
+                pUD[i] <- pUD[i]+hStep[i]; pUD[j] <- pUD[j]-hStep[j];
+                pDU[i] <- pDU[i]-hStep[i]; pDU[j] <- pDU[j]+hStep[j];
+                pDD[i] <- pDD[i]-hStep[i]; pDD[j] <- pDD[j]-hStep[j];
+                value <- (logLikAt(pUU)-logLikAt(pUD)-logLikAt(pDU)+logLikAt(pDD))/
+                    (4*hStep[i]*hStep[j]);
+                hessian[i,j] <- hessian[j,i] <- value;
+            }
+        }
+    }
+    if(any(!is.finite(hessian))){
+        return(NULL);
+    }
+    # Observed Fisher Information is the negative Hessian of the log-likelihood.
+    vcovMatrix <- try(solve(-hessian), silent=TRUE);
+    if(inherits(vcovMatrix,"try-error")){
+        return(NULL);
+    }
+    dimnames(vcovMatrix) <- list(parametersNames, parametersNames);
+    return(vcovMatrix);
+}
+
+# Mutate a fitted adam-family clone's structured parameter slot named nameJ by
+# delta: the persistence (alpha/beta/gamma...), phi, arma (ar/ma) and -- only
+# when the initials are estimated (initialType=="optimal") -- the initial states
+# (level, trend, seasonal, ARIMAState, xreg). Returns the mutated clone, or NULL
+# if nameJ is not a recognised free slot (e.g. an initial under a derived
+# initialType, where the states are re-derived rather than held). Shared by the
+# om / omg OPG, whose engines re-enter via model=<clone> reading these slots.
+perturbAdamClone <- function(clone, nameJ, delta, initialsEstimated){
+    persistenceNames <- names(clone$persistence);
+    armaArNames <- names(clone$arma$ar);
+    armaMaNames <- names(clone$arma$ma);
+    xregInitNames <- names(clone$initial$xreg);
+    if(nameJ %in% persistenceNames){
+        clone$persistence[nameJ] <- clone$persistence[nameJ]+delta;
+    }
+    else if(nameJ=="phi"){
+        clone$phi <- clone$phi+delta;
+    }
+    else if(nameJ %in% armaArNames){
+        clone$arma$ar[nameJ] <- clone$arma$ar[nameJ]+delta;
+    }
+    else if(nameJ %in% armaMaNames){
+        clone$arma$ma[nameJ] <- clone$arma$ma[nameJ]+delta;
+    }
+    else if(initialsEstimated){
+        if(nameJ=="level"){
+            clone$initial$level <- clone$initial$level+delta;
+        }
+        else if(nameJ=="trend"){
+            clone$initial$trend <- clone$initial$trend+delta;
+        }
+        else if(substr(nameJ,1,8)=="seasonal"){
+            idx <- as.integer(sub("^seasonal_?","",nameJ));
+            if(is.list(clone$initial$seasonal)){
+                clone$initial$seasonal[[1]][idx] <- clone$initial$seasonal[[1]][idx]+delta;
+            }
+            else{
+                clone$initial$seasonal[idx] <- clone$initial$seasonal[idx]+delta;
+            }
+        }
+        else if(substr(nameJ,1,10)=="ARIMAState"){
+            idx <- as.integer(sub("^ARIMAState","",nameJ));
+            clone$initial$arima[idx] <- clone$initial$arima[idx]+delta;
+        }
+        else if(nameJ %in% xregInitNames){
+            clone$initial$xreg[nameJ] <- clone$initial$xreg[nameJ]+delta;
+        }
+        else{
+            return(NULL);
+        }
+    }
+    else{
+        return(NULL);
+    }
+    return(clone);
+}
+
+# OPG covariance for the occurrence model om(). om is an adam occurrence model
+# (Bernoulli pointLik: log p when o_t=1, log(1-p) otherwise) that re-enters via
+# model=<fitted object>, reading its structured persistence / phi / arma /
+# initial slots and skipping the optimiser. The clone is perturbed one slot at a
+# time and re-fitted; under initial="optimal" the held initials are perturbed as
+# free parameters, while for backcasting / complete / gradient they are absent
+# from coef() and re-derived, so the score spans the dynamics only.
+covarOPGom <- function(object, stepSize=.Machine$double.eps^(1/4)){
+    parameterValues <- coef(object);
+    parametersNames <- names(parameterValues);
+    initialsEstimated <- identical(object$initialType, "optimal");
+
+    perturbedPointLik <- function(j, delta){
+        clone <- object;
+        if(!is.null(j)){
+            clone <- perturbAdamClone(clone, parametersNames[j], delta, initialsEstimated);
+            if(is.null(clone)){
+                return(NULL);
+            }
+        }
+        modelLocal <- try(suppressWarnings(
+            om(object$data, model=clone, h=0, formula=formula(object))), silent=TRUE);
+        if(inherits(modelLocal,"try-error")){
+            return(NULL);
+        }
+        return(as.numeric(pointLik(modelLocal)));
+    }
+
+    return(covarOPGCore(object, parameterValues, perturbedPointLik, stepSize));
+}
+
+# OPG covariance for the coupled general occurrence model omg(). The two ETS
+# occurrence sub-models A and B are estimated jointly against a single coupled
+# Bernoulli probability, so the parameter vector is the concatenation of the
+# sub-model coefficient vectors c(modelA$B, modelB$B) and the per-observation
+# score is of that shared coupled likelihood. omg re-enters via model=<clone>,
+# reading each sub-model's B, so the joint vector is perturbed one coefficient
+# at a time (routed to modelA$B or modelB$B by the A/B split) and re-fitted.
+covarOPGomg <- function(object, stepSize=.Machine$double.eps^(1/4)){
+    bA <- object$modelA$B;
+    bB <- object$modelB$B;
+    nA <- length(bA);
+    parameterValues <- c(bA, bB);
+    yData <- object$modelA$data;
+
+    perturbedPointLik <- function(j, delta){
+        clone <- object;
+        if(!is.null(j)){
+            if(j<=nA){
+                clone$modelA$B[j] <- clone$modelA$B[j]+delta;
+            }
+            else{
+                clone$modelB$B[j-nA] <- clone$modelB$B[j-nA]+delta;
+            }
+        }
+        modelLocal <- try(suppressWarnings(omg(yData, model=clone, h=0)), silent=TRUE);
+        if(inherits(modelLocal,"try-error")){
+            return(NULL);
+        }
+        return(as.numeric(pointLik(modelLocal)));
+    }
+
+    return(covarOPGCore(object, parameterValues, perturbedPointLik, stepSize));
+}

@@ -109,7 +109,7 @@
 #' @export
 ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(y)),
                     constant=FALSE, arma=NULL, model=NULL,
-                    initial=c("backcasting","optimal","two-stage","complete"),
+                    initial=c("backcasting","optimal","two-stage","complete","gradient"),
                     loss=c("likelihood","MSE","MAE","HAM","MSEh","TMSE","GTMSE","MSCE","GPL"),
                     h=0, holdout=FALSE, bounds=c("admissible","usual","none"), silent=TRUE,
                     xreg=NULL, regressors=c("use","select","adapt"), initialX=NULL,
@@ -244,10 +244,6 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
 
     # A fix to make sure that usual bounds are possible
     bounds <- boundsOriginal;
-
-    # This is the variable needed for the C++ code to determine whether the head of data needs to be
-    # refined. In case of SSARIMA this only creates a mess
-    refineHead <- TRUE;
 
     ##### Elements of SSARIMA #####
     filler <- function(B, matVt, matF, vecG, matWt, arRequired=TRUE, maRequired=TRUE, arEstimate=TRUE, maEstimate=TRUE){
@@ -436,12 +432,17 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
         # Write down the initials in the recent profile
         matVt[,1] <- profilesRecentTable[] <- elements$matVt[,1, drop=FALSE];
 
-        adamFitted <- adamCpp$fit(matVt, elements$matWt,
-                                  elements$matF, elements$vecG,
-                                  indexLookupTable, profilesRecentTable,
-                                  yInSample, ot,
-                                  any(initialType==c("complete","backcasting")), nIterations,
-                                  refineHead, "n");
+        # Additive SSOE: initial="gradient" profiles the ARIMA initials by
+        # least squares (residuals affine in the initial profile); otherwise the
+        # ordinary fit with the backcast flag.
+        adamFitted <- adam_fitOrGradient(matVt, elements$matWt,
+                                         elements$matF, elements$vecG,
+                                         indexLookupTable, profilesRecentTable,
+                                         yInSample, ot, initialType, nIterations, adamCpp,
+                                         FALSE, TRUE, xregModel, "A", "N", "N",
+                                         0, 0, 0, lagsModelAll, lagsModelMax,
+                                         obsInSample, loss, "dnorm", NULL, 0, FALSE, "n",
+                                         componentsNumberARIMA, lagsModelAll);
 
         if(!multisteps){
             if(loss=="likelihood"){
@@ -582,6 +583,9 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
                    componentsNumberETS, componentsNumberARIMA,
                    xregNumber, length(lagsModelAll),
                    constantRequired, FALSE);
+    # Drift flips sign in the backcasting backward pass when the total order
+    # of differencing is odd — the ARIMA analog of the ETS trend reversal
+    adamCpp$flipConstant <- constantRequired && (sum(iOrders) %% 2 == 1);
 
     if(!is.null(initialValueProvided)){
         initialType <- "provided";
@@ -720,7 +724,7 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
                                         # AR and MA values
                                         (arEstimate*sum(arOrders)+maEstimate*sum(maOrders)) +
                                         # initials of ARIMA
-                                        all(initialType!=c("complete","backcasting"))*initialArimaNumber*initialArimaEstimate +
+                                        all(initialType!=c("complete","backcasting","gradient"))*initialArimaNumber*initialArimaEstimate +
                                         # initials of xreg
                                         (initialType!="complete")*xregModel*initialXregEstimate*sum(xregParametersEstimated) +
                                         constantEstimate);
@@ -800,7 +804,7 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
             }
 
             # ARIMA initials
-            if(all(initialType!=c("complete","backcasting")) && initialArimaEstimate){
+            if(all(initialType!=c("complete","backcasting","gradient")) && initialArimaEstimate){
                 B[j+1:initialArimaNumber] <- matVt[1:initialArimaNumber,1];
                 names(B)[j+1:initialArimaNumber] <- paste0("ARIMAState",1:initialArimaNumber);
 
@@ -981,23 +985,18 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
         B[] <- res$solution;
         CFValue <- res$objective;
 
+        # Identifiable initial-state df of SSARIMA: the number of state initials
+        # (= sum of the component lags; xreg counted separately in [1,2]), the
+        # same whether optimised or backcast/complete/gradient. No multi-seasonal
+        # shared-frequency redundancy (structural = rank).
         nStatesBackcasting <- 0;
-        # Calculate the number of degrees of freedom coming from states in case of backcasting
-        if(any(initialType==c("backcasting","complete"))){
-            # Obtain the main elements
-            ssarimaFilled <- filler(B, matVt, matF, vecG, matWt,
-                                    arRequired=arRequired, maRequired=maRequired,
-                                    arEstimate=arEstimate, maEstimate=maEstimate);
-
-            nStatesBackcasting[] <- calculateBackcastingDF(profilesRecentTable, lagsModelAll,
-                                                           FALSE, Stype, componentsNumberETSNonSeasonal,
-                                                           componentsNumberETSSeasonal, ssarimaFilled$vecG, ssarimaFilled$matF,
-                                                           obsInSample, lagsModelMax, indexLookupTable,
-                                                           adamCpp, dfForBack);
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            nStatesBackcasting[] <- sum(lagsModelAll) - xregNumber;
         }
 
-        # Parameters estimated + variance
-        nParamEstimated <- length(B) + (loss=="likelihood")*1 + nStatesBackcasting;
+        # Parameters estimated + variance. The scale is always an estimated
+        # parameter (every reported logLik is a concentrated likelihood).
+        nParamEstimated <- length(B) + 1 + nStatesBackcasting;
 
         # Prepare for fitting
         elements <- filler(B, matVt, matF, vecG, matWt, arRequired=arRequired, maRequired=maRequired,
@@ -1053,8 +1052,15 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
                       arEstimate=arEstimate, maEstimate=maEstimate);
         res <- NULL;
 
-        # Only variance is estimated
-        nParamEstimated <- 1;
+        # Nothing is optimised, but backcast / complete / gradient initials are
+        # still determined from the data and consume df exactly as in the
+        # estimated branch above (line 992-999); the scale is always estimated.
+        nStatesBackcasting <- 0;
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            nStatesBackcasting[] <- sum(lagsModelAll) - xregNumber;
+        }
+        nParamEstimated <- nStatesBackcasting + 1;
+        parametersNumber[1,1] <- nStatesBackcasting;
 
         initialType <- initialOriginal;
         initialXregEstimate <- initialXregEstimateOriginal;
@@ -1128,12 +1134,14 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
                                             arEstimate=arEstimate, maEstimate=maEstimate),
                              nobs=obsInSample, df=nParamEstimated, class="logLik");
 
-    adamFitted <- adamCpp$fit(matVt, matWt,
-                              matF, vecG,
-                              indexLookupTable, profilesRecentTable,
-                              yInSample, ot,
-                              any(initialType==c("complete","backcasting")), nIterations,
-                              refineHead, "n");
+    adamFitted <- adam_fitOrGradient(matVt, matWt,
+                                     matF, vecG,
+                                     indexLookupTable, profilesRecentTable,
+                                     yInSample, ot, initialType, nIterations, adamCpp,
+                                     FALSE, TRUE, xregModel, "A", "N", "N",
+                                     0, 0, 0, lagsModelAll, lagsModelMax,
+                                     obsInSample, loss, "dnorm", NULL, 0, FALSE, "n",
+                                     componentsNumberARIMA, lagsModelAll);
 
     errors[] <- adamFitted$errors;
     yFitted[] <- adamFitted$fitted;
@@ -1142,7 +1150,7 @@ ssarima <- function(y, orders=list(ar=c(0),i=c(1),ma=c(1)), lags=c(1, frequency(
     matVt[] <- adamFitted$states;
 
     # Write down the initials in the recent profile
-    if(!any(initialType==c("complete","backcasting"))){
+    if(!any(initialType==c("complete","backcasting","gradient"))){
         profilesRecentInitial <- matVt[,1,drop=FALSE];
     }
 

@@ -1017,7 +1017,12 @@ commonParametersChecker <- function(data, model, lags, formulaToUse, orders, con
     initialType <- "backcasting"
     # initial type can be: "o" - optimal, "b" - backcasting, "p" - provided.
     if(any(is.character(initial))){
-        initialType[] <- match.arg(initial, c("backcasting","optimal","two-stage","complete"));
+        initialType[] <- match.arg(initial, c("backcasting","optimal","two-stage","complete","gradient"));
+        # The gradient solve profiles the loss in C++, which a user-provided
+        # loss function cannot cross; the fit falls back to backcasting.
+        if(initialType=="gradient" && loss=="custom" && !silent){
+            message("initial=\"gradient\" is not available for custom loss functions. Backcasting will be used instead.");
+        }
     }
     else if(is.null(initial)){
         if(!silent){
@@ -2477,7 +2482,12 @@ commonParametersChecker <- function(data, model, lags, formulaToUse, orders, con
                 # We have enough observations for trend model
                 if(obsNonzero > (5 + nParamExo)){
                     if(any(Ttype==c("Z","X","A"))){
-                        modelsPool <- c(modelsPool,"AAN","MAN");
+                        modelsPool <- c(modelsPool,"AAN");
+                        # MAN has an additive trend, so it belongs to this branch,
+                        # but its error is multiplicative and must be allowed.
+                        if(allowMultiplicative){
+                            modelsPool <- c(modelsPool,"MAN");
+                        }
                     }
                     if(allowMultiplicative && any(Ttype==c("Z","Y","M"))){
                         modelsPool <- c(modelsPool,"AMN","MMN");
@@ -2486,7 +2496,10 @@ commonParametersChecker <- function(data, model, lags, formulaToUse, orders, con
                 # We have enough observations for damped trend model
                 if(obsNonzero > (6 + nParamExo)){
                     if(any(Ttype==c("Z","X","A"))){
-                        modelsPool <- c(modelsPool,"AAdN","MAdN");
+                        modelsPool <- c(modelsPool,"AAdN");
+                        if(allowMultiplicative){
+                            modelsPool <- c(modelsPool,"MAdN");
+                        }
                     }
                     if(allowMultiplicative && any(Ttype==c("Z","Y","M"))){
                         modelsPool <- c(modelsPool,"AMdN","MMdN");
@@ -2495,7 +2508,10 @@ commonParametersChecker <- function(data, model, lags, formulaToUse, orders, con
                 # We have enough observations for seasonal model
                 if((obsNonzero > (lagsModelMax)) && lagsModelMax!=1){
                     if(any(Stype==c("Z","X","A"))){
-                        modelsPool <- c(modelsPool,"ANA","MNA");
+                        modelsPool <- c(modelsPool,"ANA");
+                        if(allowMultiplicative){
+                            modelsPool <- c(modelsPool,"MNA");
+                        }
                     }
                     if(allowMultiplicative && any(Stype==c("Z","Y","M"))){
                         modelsPool <- c(modelsPool,"ANM","MNM");
@@ -2815,11 +2831,11 @@ commonParametersChecker <- function(data, model, lags, formulaToUse, orders, con
     # See if the estimation of the model is not needed (do we estimate anything?)
     if(!any(c(etsModel & c(persistenceLevelEstimate, persistenceTrendEstimate,
                            persistenceSeasonalEstimate, phiEstimate,
-                           all(initialType!=c("complete","backcasting")) & c(initialLevelEstimate,
+                           all(initialType!=c("complete","backcasting","gradient")) & c(initialLevelEstimate,
                                                                              initialTrendEstimate,
                                                                              initialSeasonalEstimate)),
               arimaModel & c(arEstimate, maEstimate,
-                             all(initialType!=c("complete","backcasting")) & initialEstimate & initialArimaEstimate),
+                             all(initialType!=c("complete","backcasting","gradient")) & initialEstimate & initialArimaEstimate),
               xregModel & c(persistenceXregEstimate, (initialType!="complete") & initialXregEstimate),
               constantEstimate,
               otherParameterEstimate))){
@@ -2998,8 +3014,7 @@ commonParametersChecker <- function(data, model, lags, formulaToUse, orders, con
         nIterations = nIterations,
         smoother = smoother,
         FI = FI,
-        stepSize = stepSize,
-        dfForBack = dfForBack
+        stepSize = stepSize
     ));
 }
 

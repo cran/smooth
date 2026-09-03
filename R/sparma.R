@@ -62,7 +62,7 @@
 sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
                    loss=c("likelihood","MSE","MAE","HAM","LASSO","RIDGE","MSEh","TMSE","GTMSE","MSCE","GPL"),
                    h=0, holdout=FALSE, arma=NULL,
-                   initial=c("backcasting","optimal","two-stage","complete"),
+                   initial=c("backcasting","optimal","two-stage","complete","gradient"),
                    bounds=c("none","usual","admissible"), silent=TRUE, ...) {
 
     # Start timer
@@ -71,7 +71,11 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
 
     # ===== ARGUMENT VALIDATION =====
     loss <- match.arg(loss);
-    initial <- match.arg(initial);
+    # A numeric `initial` provides the initial states directly (held, not
+    # estimated); only match.arg the character initialisation methods.
+    if(is.character(initial)){
+        initial <- match.arg(initial);
+    }
     bounds <- match.arg(bounds);
 
     ellipsis <- list(...);
@@ -104,6 +108,19 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
     # Rerecord in case this was amended
     orders$ar <- p;
     orders$ma <- q;
+
+    # A numeric `initial` supplies the free ARIMA state initials (one per
+    # distinct lag, as coef() / profileInitial report them). The checker
+    # validates the length against the dense companion form (max order), so
+    # front-pad with zeros -- the filler only reads the leading free entries.
+    if(is.numeric(initial)){
+        arimaLagsSparse <- sort(unique(c(p[p>0], q[q>0])));
+        arimaNumberDense <- max(c(p, q));
+        if(length(initial)==length(arimaLagsSparse) &&
+           length(initial)<arimaNumberDense){
+            initial <- c(initial, rep(0, arimaNumberDense-length(initial)));
+        }
+    }
 
     if(any(p<0) || any(q<0)) {
         stop("Orders must be non-negative");
@@ -172,17 +189,20 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
         if(length(arma)==2){
             armaParameters <- arma;
 
+            # Providing arma coefficients HOLDS them (the creator fills matF /
+            # vecG from armaParameters when !arEstimate); a NULL side is
+            # estimated if the model requires it.
             if(is.null(armaParameters$ar)){
+                arEstimate <- arRequired;
+            }
+            else{
                 arEstimate <- FALSE;
             }
-            else{
-                arEstimate <- TRUE;
-            }
             if(is.null(armaParameters$ma)){
-                maEstimate <- FALSE;
+                maEstimate <- maRequired;
             }
             else{
-                maEstimate <- TRUE;
+                maEstimate <- FALSE;
             }
         }
         else{
@@ -205,7 +225,6 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
     lagsModelMax <- max(lagsModelAll);
     initialArimaNumber <- componentsNumberARIMA <- length(lagsModelAll);
     componentsNamesARIMA <- componentsNamesARIMA[lagsModelAll];
-    refineHead <- TRUE;
 
     # Fix the non-zero ARI/MA to have the sparse ones
     nonZeroARI <- nonZeroARI[nonZeroARI[,2] %in% p,, drop=FALSE];
@@ -343,6 +362,13 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
             # MA components are zero, so don't bother
             idx[] <- idx + componentsNumberARIMA;
         }
+        else if(initialType=="provided"){
+            # Provided initial states: place them directly (SPARMA collects the
+            # initials straight from matVt, so no transform is needed), so a
+            # fitted model's initials round-trip when supplied back.
+            matricesCreated$matVt[nonZeroARI[,1], 1:componentsNumberARIMA] <-
+                initialArima[1:componentsNumberARIMA];
+        }
 
         # Extract constant
         if(constantRequired){
@@ -399,12 +425,15 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
         profilesRecentTable[] <- matricesFilled$matVt[,1:lagsModelMax];
 
         # Fit using C++ function
-        adamFitted <- adamCpp$fit(matricesFilled$matVt, matricesFilled$matWt,
-                                  matricesFilled$matF, matricesFilled$vecG,
-                                  indexLookupTable, profilesRecentTable,
-                                  yInSample, ot,
-                                  any(initialType==c("complete","backcasting")), nIterations,
-                                  refineHead, "n");
+        # Additive SSOE: initial="gradient" profiles the initials by least squares.
+        adamFitted <- adam_fitOrGradient(matricesFilled$matVt, matricesFilled$matWt,
+                                         matricesFilled$matF, matricesFilled$vecG,
+                                         indexLookupTable, profilesRecentTable,
+                                         yInSample, ot, initialType, nIterations, adamCpp,
+                                         FALSE, TRUE, FALSE, "A", "N", "N",
+                                         0, 0, 0, lagsModelAll, lagsModelMax,
+                                         obsInSample, loss, "dnorm", NULL, 0, FALSE, "n",
+                                         componentsNumberARIMA, lagsModelAll);
 
         if(!multisteps){
             if(loss=="likelihood"){
@@ -527,28 +556,18 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
         }
     }
     else{
+        # Everything provided (held arma + provided initials): nothing to
+        # optimise, so evaluate the cost once and record no optimiser result.
         CFValue <- CF(B);
+        res <- NULL;
     }
 
+    # Identifiable initial-state df of SPARMA: the number of state initials
+    # (= sum of the component lags; xreg counted separately), the same whether
+    # optimised or backcast/complete/gradient. No multi-seasonal redundancy.
     nStatesBackcasting <- 0;
-    # Calculate the number of degrees of freedom coming from states in case of backcasting
-    if(any(initialType==c("backcasting","complete"))){
-        # Fill matrices with parameters from B
-        matricesFilled <- sparmaMatricesFiller(B, matricesCreated,
-                                               arRequired, maRequired, constantRequired,
-                                               arEstimate, maEstimate, constantEstimate,
-                                               arValue, maValue, constantValue,
-                                               lagsModelAll, lagsModelMax,
-                                               nonZeroARI, nonZeroMA,
-                                               componentsNumberARIMA,
-                                               p, q, pLength, qLength,
-                                               initialType);
-
-        nStatesBackcasting[] <- calculateBackcastingDF(profilesRecentTable, lagsModelAll,
-                                                       FALSE, Stype, componentsNumberETSNonSeasonal,
-                                                       componentsNumberETSSeasonal, matricesFilled$vecG, matricesFilled$matF,
-                                                       obsInSample, lagsModelMax, indexLookupTable,
-                                                       adamCpp);
+    if(any(initialType==c("backcasting","complete","gradient"))){
+        nStatesBackcasting[] <- sum(lagsModelAll) - xregNumber;
     }
 
     # Parameters estimated + variance
@@ -569,12 +588,14 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
     profilesRecentInitial[] <- profilesRecentTable[] <- matricesFinal$matVt[,1:lagsModelMax];
 
     # Fit using C++ function
-    adamFitted <- adamCpp$fit(matricesFinal$matVt, matricesFinal$matWt,
-                              matricesFinal$matF, matricesFinal$vecG,
-                              indexLookupTable, profilesRecentTable,
-                              yInSample, ot,
-                              any(initialType==c("complete","backcasting")), nIterations,
-                              refineHead, "n");
+    adamFitted <- adam_fitOrGradient(matricesFinal$matVt, matricesFinal$matWt,
+                                     matricesFinal$matF, matricesFinal$vecG,
+                                     indexLookupTable, profilesRecentTable,
+                                     yInSample, ot, initialType, nIterations, adamCpp,
+                                     FALSE, TRUE, FALSE, "A", "N", "N",
+                                     0, 0, 0, lagsModelAll, lagsModelMax,
+                                     obsInSample, loss, "dnorm", NULL, 0, FALSE, "n",
+                                     componentsNumberARIMA, lagsModelAll);
 
     # Prepare fitted and error with ts / zoo
     if(any(yClasses=="ts")){
@@ -661,7 +682,8 @@ sparma <- function(data, orders=list(ar=c(1), ma=c(1)), constant=FALSE,
         }
     }
 
-    parametersNumber[1,4] <- (loss=="likelihood")*1;
+    # The distribution scale is always estimated (concentrated likelihood).
+    parametersNumber[1,4] <- 1;
     parametersNumber[1,5] <- sum(parametersNumber[1,]);
 
     ##### Return values #####

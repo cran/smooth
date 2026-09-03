@@ -154,7 +154,17 @@
 #' explanatory variables are optimised. This is recommended for ETSX and ARIMAX
 #' models. Alternatively, you can set \code{initial="complete"} backcasting,
 #' which means that all states (including explanatory variables) are initialised
-#' via backcasting.
+#' via backcasting. Finally, \code{initial="gradient"} solves for the initial
+#' states by profiling the estimation loss at the current parameters: a single
+#' linear solve for additive ETS (exact, because the residuals are then affine
+#' in the initial state; robust and multistep losses are handled by weighted
+#' least squares sweeps on the same design) or a loss-aware Gauss-Newton
+#' iteration for multiplicative / mixed ETS. It avoids the divergence that
+#' backcasting can exhibit for additive seasonal models with a trend and a large
+#' seasonal smoothing parameter. This option currently supports ETS models (no
+#' ARIMA/xreg, single seasonality) and the built-in losses; other specifications
+#' (including custom loss functions, which cannot be profiled in C++) fall back
+#' to backcasting.
 #'
 #' If a use provides a list of values, it is recommended to use the named one and
 #' to provide the initial components that are available. For example:
@@ -187,6 +197,15 @@
 #' estimation. Can be either \code{admissible} - guaranteeing the stability of the
 #' model, \code{usual} - restricting the values with (0, 1) or \code{none} - no
 #' restrictions (potentially dangerous).
+#' @param smoother The smoother used by the \link[smooth]{msdecompose} function to
+#' obtain the initial states - the level and the trend, together with the initial
+#' seasonal indices (and the seasonal profiles in the case of multiple seasonal
+#' models). \code{smoother="default"} (the default) resolves to \code{"ma"} (the
+#' centred moving average) when \code{initial="optimal"} and to \code{"global"}
+#' (a global model fitted to the data) for every other initialisation method. The
+#' other values \code{"ma"}, \code{"lowess"} (\link[stats]{lowess}), \code{"supsmu"}
+#' (\link[stats]{supsmu}) and \code{"global"} force the respective smoother
+#' irrespective of the initialisation.
 #' @param ets Parameter determining, which ETS formulation to use. If \code{ets="conventional"},
 #' the one from Hyndman et al. (2008) is used. In case of \code{ets="adam"}, ADAM reformulation
 #' that updates multiplicative components differently is used. The latter is closer
@@ -230,10 +249,7 @@
 #' }
 #' You can read more about these parameters by running the function
 #' \link[nloptr]{nloptr.print.options}.
-#' It is also possible to regulate what smoother to use to get initial seasonal indices
-#' from the \link[smooth]{msdecompose} function via the \code{smoother} parameter. The default
-#' value is \code{smoother="lowess"}.
-#' Finally, the parameter \code{lambda} for LASSO / RIDGE, \code{alpha} for the Asymmetric
+#' The parameter \code{lambda} for LASSO / RIDGE, \code{alpha} for the Asymmetric
 #' Laplace, \code{shape} for the Generalised Normal and \code{nu} for Student's distributions
 #' can be provided here as well.
 #'
@@ -330,8 +346,10 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                  loss=c("likelihood","MSE","MAE","HAM","LASSO","RIDGE","MSEh","TMSE","GTMSE","MSCE","GPL"),
                  outliers=c("ignore","use","select"), level=0.99,
                  h=0, holdout=FALSE,
-                 persistence=NULL, phi=NULL, initial=c("backcasting","optimal","two-stage","complete"), arma=NULL,
+                 persistence=NULL, phi=NULL,
+                 initial=c("backcasting","optimal","two-stage","complete","gradient"), arma=NULL,
                  ic=c("AICc","AIC","BIC","BICc"), bounds=c("usual","admissible","none"),
+                 smoother=c("default","ma","lowess","supsmu","global"),
                  silent=TRUE, ets=c("conventional","adam"), ...){
     # Copyright (C) 2019 - Inf  Ivan Svetunkov
 
@@ -342,6 +360,12 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
     # Record the parental environment. Needed for ARIMA initialisation
     env <- parent.frame();
     ellipsis <- list(...);
+    # The smoother used by msdecompose() to obtain the initial states (level,
+    # trend and seasonal components). Passed via ellipsis so the internal
+    # adam_checkOptimizer() can resolve "default" once the initialisation type
+    # is known.
+    smoother <- match.arg(smoother);
+    ellipsis$smoother <- smoother;
     # Assume that the model is not provided
     profilesRecentProvided <- FALSE;
     profilesRecentTable <- NULL;
@@ -641,25 +665,14 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                                         ic=ic, bounds=bounds, silent=silent, ...)));
     }
 
-    # This is the variable needed for the C++ code to determine whether the head of data needs to be
-    # refined. Only needed for the ETS(*,Z,*) models
-    refineHead <- TRUE;
-    # if(arimaModel){
-    #     refineHead[] <- FALSE;
-    # }
-    # if(initialType!="backcasting" | componentsNumberARIMA==0){
-    #     refineHead[] <- TRUE;
-    # }
-    # if(initialType=="provided"){
-    #     refineHead[] <- FALSE;
-    # }
-
     #### Thin wrappers: top-level adam_* functions + adam() closure variables ####
     architector <- function(...){
         return(adam_architector(...,
                                 componentsNumberARIMA=componentsNumberARIMA,
                                 obsAll=obsAll, yIndexAll=yIndexAll, yClasses=yClasses,
-                                adamETS=adamETS));
+                                adamETS=adamETS,
+                                flipConstant=arimaModel && constantRequired &&
+                                    (sum(iOrders) %% 2 == 1)));
     }
     creator <- function(...){
         return(adam_creator(...,
@@ -768,12 +781,14 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         # print(profilesRecentTable)
 
         #### Fitter and the losses calculation ####
-        adamFitted <- adamCpp$fit(adamElements$matVt, adamElements$matWt,
-                                  adamElements$matF, adamElements$vecG,
-                                  indexLookupTable, profilesRecentTable,
-                                  yInSample, ot,
-                                  any(initialType==c("complete","backcasting")), nIterations,
-                                  refineHead, "n");
+        adamFitted <- adam_fitOrGradient(adamElements$matVt, adamElements$matWt,
+                                         adamElements$matF, adamElements$vecG,
+                                         indexLookupTable, profilesRecentTable,
+                                         yInSample, ot, initialType, nIterations, adamCpp,
+                                         etsModel, arimaModel, xregModel, Etype, Ttype, Stype,
+                                         componentsNumberETS, componentsNumberETSSeasonal,
+                                         componentsNumberETSNonSeasonal, lagsModel, lagsModelMax, obsInSample,
+                                         loss, distribution, other, horizon, multisteps, "n", componentsNumberARIMA, lagsModelAll, xregNumber);
 
         if(!multisteps){
             if(loss=="likelihood"){
@@ -1004,11 +1019,14 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                 return(0);
             }
             else{
-                distributionNew <- switch(loss,
-                                          "MSE"="dnorm",
-                                          "MAE"="dlaplace",
-                                          "HAM"="ds",
-                                          distribution);
+                # `distribution` here is already the resolved distributionNew:
+                # the user's explicit choice, or the loss-implied default
+                # (MSE->dnorm, MAE->dlaplace, HAM->ds) resolved upstream. Use it
+                # as-is so an explicitly-selected distribution is honoured for
+                # the reported logLik even when the fitting loss implies a
+                # different one; only the default falls back to the loss-implied
+                # distribution.
+                distributionNew <- distribution;
 
                 lossNew <- switch(loss,
                                   "MSE"=,"MAE"=,"HAM"="likelihood",
@@ -1142,12 +1160,14 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                 profilesRecentTable[] <- adamElements$matVt[,1:lagsModelMax];
 
                 # Fit the model again to extract the fitted values
-                adamFitted <- adamCpp$fit(adamElements$matVt, adamElements$matWt,
-                                          adamElements$matF, adamElements$vecG,
-                                          indexLookupTable, profilesRecentTable,
-                                          yInSample, ot,
-                                          any(initialType==c("complete","backcasting")), nIterations,
-                                          refineHead, "n");
+                adamFitted <- adam_fitOrGradient(adamElements$matVt, adamElements$matWt,
+                                                 adamElements$matF, adamElements$vecG,
+                                                 indexLookupTable, profilesRecentTable,
+                                                 yInSample, ot, initialType, nIterations, adamCpp,
+                                                 etsModel, arimaModel, xregModel, Etype, Ttype, Stype,
+                                                 componentsNumberETS, componentsNumberETSSeasonal,
+                                                 componentsNumberETSNonSeasonal, lagsModel, lagsModelMax, obsInSample,
+                                                 loss, distribution, other, horizon, multisteps, "n", componentsNumberARIMA, lagsModelAll, xregNumber);
                 logLikReturn[] <- logLikReturn - sum(log(abs(adamFitted$fitted)));
             }
 
@@ -1388,8 +1408,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         if(distribution=="default"){
             distributionNew <- switch(loss,
                                       "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dgamma"),
-                                      "MAEh"=, "MACE"=, "MAE"= "dlaplace",
-                                      "HAMh"=, "CHAM"=, "HAM"= "ds",
+                                      "MAEh"=, "TMAE"=, "GTMAE"=, "MACE"=, "MAE"= "dlaplace",
+                                      "HAMh"=, "THAM"=, "GTHAM"=, "CHAM"=, "HAM"= "ds",
                                       "MSEh"=, "MSCE"=, "MSE"=, "GPL"=, "dnorm");
         }
         else{
@@ -1532,38 +1552,47 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             CFValue[] <- 0;
         }
 
+        # Initial states consume the SAME degrees of freedom however they are
+        # obtained (optimised, backcast, complete-backcast or gradient-solved):
+        # the identifiable count of the initial-state design. Under "optimal"
+        # the initials sit in B (at the naive seasonal count), so only the ETS
+        # seasonal cross-block redundancy is SUBTRACTED; otherwise the identifiable
+        # count is ADDED (B carries no initials). See dfInitialsETSLevelSeasonal().
         nStatesBackcasting <- 0;
-        # Calculate the number of degrees of freedom coming from states in case of backcasting
-        if(any(initialType==c("backcasting","complete"))){
-            # Fill in the matrices. This is now needed for the correct calculation of the df
-            adamFilled <- filler(B,
-                                 etsModel, Etype, Ttype, Stype, modelIsTrendy, modelIsSeasonal,
-                                 componentsNumberETS, componentsNumberETSNonSeasonal,
-                                 componentsNumberETSSeasonal, componentsNumberARIMA,
-                                 lags, lagsModel, lagsModelMax,
-                                 adamCreated$matVt, adamCreated$matWt, adamCreated$matF, adamCreated$vecG,
-                                 persistenceEstimate, persistenceLevelEstimate, persistenceTrendEstimate,
-                                 persistenceSeasonalEstimate, persistenceXregEstimate,
-                                 phiEstimate,
-                                 initialType, initialEstimate,
-                                 initialLevelEstimate, initialTrendEstimate, initialSeasonalEstimate,
-                                 initialArimaEstimate, initialXregEstimate,
-                                 arimaModel, arEstimate, maEstimate, arOrders, iOrders, maOrders,
-                                 arRequired, maRequired, armaParameters,
-                                 nonZeroARI, nonZeroMA, adamCreated$arimaPolynomials,
-                                 xregModel, xregNumber,
-                                 xregParametersMissing, xregParametersIncluded,
-                                 xregParametersEstimated, xregParametersPersistence, constantEstimate,
-                                 adamCpp);
-
-            nStatesBackcasting[] <- calculateBackcastingDF(profilesRecentTable, lagsModelAll,
-                                                           etsModel, Stype, componentsNumberETSNonSeasonal,
-                                                           componentsNumberETSSeasonal, adamFilled$vecG, adamFilled$matF,
-                                                           obsInSample, lagsModelMax, indexLookupTable,
-                                                           adamCpp, dfForBack);
+        etsRedundancy <- 0;
+        dfInitials <- 0;
+        if(etsModel){
+            seasonalLagsEstimated <- if(modelIsSeasonal){
+                lagsModelSeasonal[as.logical(initialSeasonalEstimate)];
+            } else {
+                numeric(0);
+            }
+            dfLevelSeasonal <- dfInitialsETSLevelSeasonal(seasonalLagsEstimated,
+                                                          as.logical(initialLevelEstimate));
+            naiveLevelSeasonal <- initialLevelEstimate +
+                modelIsSeasonal*sum(initialSeasonalEstimate*(lagsModelSeasonal-1));
+            etsRedundancy <- naiveLevelSeasonal - dfLevelSeasonal;
+            dfInitials <- dfLevelSeasonal + modelIsTrendy*initialTrendEstimate;
+        }
+        if(arimaModel){
+            # The ARIMA initials estimated under "optimal" number initialArimaNumber
+            # (= max ARIMA lag); this equals the identifiable rank of the ARIMA
+            # initial-state design (the over-parameterised lower lags are redundant).
+            dfInitials <- dfInitials + initialArimaNumber*initialArimaEstimate;
+        }
+        # xreg initials are backcast (outside B) only under "complete"; for
+        # every other type -- including "gradient", where the affine solve
+        # overwrites the xreg cells but the B entry is retained as a no-op -- the
+        # xreg coefficients are in B and already counted in length(B).
+        if(xregModel && any(initialType=="complete")){
+            dfInitials <- dfInitials + xregNumber*initialXregEstimate;
+        }
+        if(any(initialType==c("backcasting","complete","gradient"))){
+            nStatesBackcasting <- dfInitials;
+            etsRedundancy <- 0;
         }
 
-        nParamEstimated <- length(B) + nStatesBackcasting;
+        nParamEstimated <- length(B) + nStatesBackcasting - etsRedundancy;
         # Return a proper logLik class
         logLikADAMValue <- structure(logLikADAM(B,
                                                 etsModel, Etype, Ttype, Stype, modelIsTrendy, modelIsSeasonal, yInSample,
@@ -1588,8 +1617,10 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                                                 bounds, loss, lossFunction, distributionNew, horizon, multisteps,
                                                 denominator, yDenominator, other, otherParameterEstimate, lambda,
                                                 arPolynomialMatrix, maPolynomialMatrix, adamCpp),
-                                     # In case of likelihood, we typically have one more parameter to estimate - scale.
-                                     nobs=obsInSample,df=nParamEstimated+(loss=="likelihood"),class="logLik");
+                                     # The distribution scale is always an estimated
+                                     # parameter: every reported logLik is a concentrated
+                                     # likelihood, so the scale counts for every loss.
+                                     nobs=obsInSample,df=nParamEstimated+1,class="logLik");
         xregIndex <- 1;
         #### If we do variables selection, do it here, then reestimate the model. ####
         if(regressors=="select"){
@@ -1643,12 +1674,14 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             profilesRecentTable[] <- adamCreated$matVt[,1:lagsModelMax];
 
             # Fit the model to the data
-            adamFitted <- adamCpp$fit(adamCreated$matVt, adamCreated$matWt,
-                                      adamCreated$matF, adamCreated$vecG,
-                                      indexLookupTable, profilesRecentTable,
-                                      yInSample, ot,
-                                      any(initialType==c("complete","backcasting")), nIterations,
-                                      refineHead, "n");
+            adamFitted <- adam_fitOrGradient(adamCreated$matVt, adamCreated$matWt,
+                                             adamCreated$matF, adamCreated$vecG,
+                                             indexLookupTable, profilesRecentTable,
+                                             yInSample, ot, initialType, nIterations, adamCpp,
+                                             etsModel, arimaModel, xregModel, Etype, Ttype, Stype,
+                                             componentsNumberETS, componentsNumberETSSeasonal,
+                                             componentsNumberETSNonSeasonal, lagsModel, lagsModelMax, obsInSample,
+                                             loss, distributionNew, other, horizon, multisteps, "n", componentsNumberARIMA, lagsModelAll, xregNumber);
 
             # Extract the errors correctly
             errors <- switch(distributionNew,
@@ -1887,7 +1920,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                            arEstimate, maEstimate, arOrders, iOrders, maOrders,
                            nonZeroARI, nonZeroMA,
                            arimaPolynomials, armaParameters,
-                           constantRequired, constantEstimate, adamCpp){
+                           constantRequired, constantEstimate,
+                           other, horizon, multisteps, adamCpp){
 
         if(modelDo!="use"){
             # Fill in the matrices
@@ -1922,13 +1956,20 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         profilesRecentTable[] <- matVt[,1:lagsModelMax];
         profilesRecentInitial <- matVt[,1:lagsModelMax, drop=FALSE];
 
+        # The gradient solve needs the current value of the distribution
+        # parameter (e.g. the dgnorm shape); extract it from B before the fit
+        if(otherParameterEstimate && any(distribution==c("dalaplace","dgnorm","dlgnorm","dt"))){
+            other <- abs(tail(B,1));
+        }
+
         # Fit the model to the data
-        adamFitted <- adamCpp$fit(matVt, matWt,
-                                  matF, vecG,
-                                  indexLookupTable, profilesRecentTable,
-                                  yInSample, ot,
-                                  any(initialType==c("complete","backcasting")), nIterations,
-                                  refineHead, "n");
+        adamFitted <- adam_fitOrGradient(matVt, matWt, matF, vecG,
+                                         indexLookupTable, profilesRecentTable,
+                                         yInSample, ot, initialType, nIterations, adamCpp,
+                                         etsModel, arimaModel, xregModel, Etype, Ttype, Stype,
+                                         componentsNumberETS, componentsNumberETSSeasonal,
+                                         componentsNumberETSNonSeasonal, lagsModel, lagsModelMax, obsInSample,
+                                         loss, distribution, other, horizon, multisteps, "n", componentsNumberARIMA, lagsModelAll, xregNumber);
 
         matVt[] <- adamFitted$states;
 
@@ -2018,8 +2059,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         if(distribution=="default"){
             distribution[] <- switch(loss,
                                      "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dgamma"),
-                                     "MAEh"=, "MACE"=, "MAE"= "dlaplace",
-                                     "HAMh"=, "CHAM"=, "HAM"= "ds",
+                                     "MAEh"=, "TMAE"=, "GTMAE"=, "MACE"=, "MAE"= "dlaplace",
+                                     "HAMh"=, "THAM"=, "GTHAM"=, "CHAM"=, "HAM"= "ds",
                                      "MSEh"=, "MSCE"=, "MSE"=, "GPL"=, "dnorm");
         }
 
@@ -2333,10 +2374,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                 max(xregParametersPersistence)*persistenceXregEstimate;
             parametersNumber[1,1] <- parametersNumber[1,1] - parametersNumber[1,2];
         }
-        # If we used likelihood, scale was estimated
-        if((loss=="likelihood")){
-            parametersNumber[1,4] <- 1;
-        }
+        # The distribution scale is always estimated (concentrated likelihood).
+        parametersNumber[1,4] <- 1;
         parametersNumber[1,5] <- sum(parametersNumber[1,1:4]);
         parametersNumber[2,5] <- sum(parametersNumber[2,1:4]);
     }
@@ -2410,10 +2449,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             parametersNumber[1,2] <- xregNumber*initialXregEstimate + xregNumber*persistenceXregEstimate;
             parametersNumber[1,1] <- parametersNumber[1,1] - parametersNumber[1,2];
         }
-        # If we used likelihood, scale was estimated
-        if((loss=="likelihood")){
-            parametersNumber[1,4] <- 1;
-        }
+        # The distribution scale is always estimated (concentrated likelihood).
+        parametersNumber[1,4] <- 1;
         parametersNumber[1,5] <- sum(parametersNumber[1,1:4]);
         parametersNumber[2,5] <- sum(parametersNumber[2,1:4]);
     }
@@ -2560,10 +2597,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
             if(xregModel){
                 parametersNumber[1,2] <- xregNumber*initialXregEstimate + xregNumber*persistenceXregEstimate;
             }
-            # If we used likelihood, scale was estimated
-            if((loss=="likelihood")){
-                parametersNumber[1,4] <- 1;
-            }
+            # The distribution scale is always estimated (concentrated likelihood).
+            parametersNumber[1,4] <- 1;
             parametersNumber[1,5] <- sum(parametersNumber[1,1:4]);
             parametersNumber[2,5] <- sum(parametersNumber[2,1:4]);
 
@@ -2579,8 +2614,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
         if(distribution=="default"){
             distributionNew <- switch(loss,
                                       "likelihood"= switch(Etype, "A"= "dnorm", "M"= "dgamma"),
-                                      "MAEh"=, "MACE"=, "MAE"= "dlaplace",
-                                      "HAMh"=, "CHAM"=, "HAM"= "ds",
+                                      "MAEh"=, "TMAE"=, "GTMAE"=, "MACE"=, "MAE"= "dlaplace",
+                                      "HAMh"=, "THAM"=, "GTHAM"=, "CHAM"=, "HAM"= "ds",
                                       "MSEh"=, "MSCE"=, "MSE"=, "GPL"=, "dnorm");
         }
         else{
@@ -2666,7 +2701,27 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                       arPolynomialMatrix=NULL, maPolynomialMatrix=NULL,
                       adamCpp);
 
-        parametersNumber[1,1] <- parametersNumber[1,5] <- 1;
+        # Degrees of freedom for the "use" path. Nothing is optimised, but the
+        # backcast / complete / gradient initial states are still determined from
+        # the data and consume df exactly as the optimised ones do, as does the
+        # always-estimated distribution scale. Provided persistence / initials
+        # contribute nothing. When a fitted model is reused (adam(data, model)),
+        # the initials come straight from that model (profilesRecentProvided),
+        # so they are provided too and count as zero.
+        if(profilesRecentProvided){
+            parametersNumber[1,1] <- 0;
+        }
+        else{
+            parametersNumber[1,1] <- dfInitialsBackcast(etsModel, modelIsSeasonal, modelIsTrendy,
+                                                        lagsModelSeasonal, initialLevelEstimate,
+                                                        initialTrendEstimate, initialSeasonalEstimate,
+                                                        arimaModel, initialArimaNumber, initialArimaEstimate,
+                                                        xregModel, xregNumber, initialXregEstimate,
+                                                        initialType);
+        }
+        # The distribution scale is always an estimated parameter.
+        parametersNumber[1,4] <- 1;
+        parametersNumber[1,5] <- sum(parametersNumber[1,1:4]);
         logLikADAMValue <- structure(logLikADAM(B=0,
                                                 etsModel, Etype, Ttype, Stype, modelIsTrendy, modelIsSeasonal, yInSample,
                                                 ot, otLogical, occurrenceModel, pFitted, obsInSample,
@@ -2885,7 +2940,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                                     arEstimate, maEstimate, arOrders, iOrders, maOrders,
                                     nonZeroARI, nonZeroMA,
                                     arimaPolynomials, armaParameters,
-                                    constantRequired, constantEstimate, adamCpp);
+                                    constantRequired, constantEstimate,
+                                    other, horizon, multisteps, adamCpp);
 
         # Prepare the name of the model
         modelName <- adam_model_name(etsModel, model, xregModel, arimaModel,
@@ -2964,7 +3020,8 @@ adam <- function(data, model="ZXZ", lags=c(frequency(data)), orders=list(ar=c(0)
                                                     arEstimate, maEstimate, arOrders, iOrders, maOrders,
                                                     nonZeroARI, nonZeroMA,
                                                     arimaPolynomials, armaParameters,
-                                                    constantRequired, constantEstimate, adamCpp);
+                                                    constantRequired, constantEstimate,
+                                                    other, horizon, multisteps, adamCpp);
             modelReturned$models[[i]]$fitted[is.na(modelReturned$models[[i]]$fitted)] <- 0;
             yFittedCombined[] <- yFittedCombined + modelReturned$models[[i]]$fitted * adamSelected$icWeights[i];
             if(h>0){
@@ -3125,17 +3182,20 @@ adamProfileCreator <- function(lagsModelAll, lagsModelMax, obsAll,
     # Create the matrix with profiles, based on provided lags
     profilesRecentTable <- matrix(0,length(lagsModelAll),lagsModelMax,
                                   dimnames=list(lagsModelAll,NULL));
-    # Create the lookup table
-    indexLookupTable <- matrix(1,length(lagsModelAll),obsAll+lagsModelMax,
+    # Create the lookup table. The extra lagsModelMax columns at the end form
+    # the "tail" — the cyclic continuation past the last observation used by
+    # the backcasting tail mirror in the C++ code.
+    indexLookupTable <- matrix(1,length(lagsModelAll),obsAll+2*lagsModelMax,
                                dimnames=list(lagsModelAll,NULL));
     # Modify the lookup table in order to get proper indices in C++
     profileIndices <- matrix(c(1:(lagsModelMax*length(lagsModelAll))),length(lagsModelAll));
 
+    obsAllTail <- obsAll+lagsModelMax;
     for(i in 1:length(lagsModelAll)){
         profilesRecentTable[i,1:lagsModelAll[i]] <- 1:lagsModelAll[i];
         # -1 is needed to align this with C++ code
-        indexLookupTable[i,lagsModelMax+c(1:obsAll)] <- rep(profileIndices[i,1:lagsModelAll[i]],
-                                                            ceiling(obsAll/lagsModelAll[i]))[1:obsAll] -1;
+        indexLookupTable[i,lagsModelMax+c(1:obsAllTail)] <- rep(profileIndices[i,1:lagsModelAll[i]],
+                                                                ceiling(obsAllTail/lagsModelAll[i]))[1:obsAllTail] -1;
         # Fix the head of the data, before the sample starts
         indexLookupTable[i,1:lagsModelMax] <- tail(rep(unique(indexLookupTable[i,lagsModelMax+c(1:obsAll)]),lagsModelMax),
                                                    lagsModelMax);
@@ -3285,7 +3345,7 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     }
 
     # Warn if the diagnostis will be done for scale
-    if(is.scale(x$scale) && any(which %in% c(2:6,8,9,13,14))){
+    if(is.scale(x$scale) && any(which %in% c(2:6,8,9,13:16))){
         message("Note that residuals diagnostics plots are produced for scale model");
     }
 
@@ -3838,6 +3898,14 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     plot7 <- function(x, type="acf", squared=FALSE, ...){
         ellipsis <- list(...);
 
+        # The squared-residual ACF/PACF exist to check for heteroscedasticity that
+        # is still unexplained, which is the question the scale model answers, so
+        # they belong on its standardised residuals. The plain ACF/PACF (which=10,
+        # 11) stay on the location model: scaling barely affects autocorrelation.
+        if(squared && is.scale(x$scale)){
+            x <- x$scale;
+        }
+
         if(!any(names(ellipsis)=="main")){
             if(type=="acf"){
                 if(squared){
@@ -3911,6 +3979,16 @@ plot.adam <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         parDefault <- par(no.readonly=TRUE);
         on.exit(par(parDefault), add=TRUE);
         if(smoothType(x)=="CES" || any(unlist(gregexpr("C",x$model))==-1)){
+            # Drop the initial-state rows so the states line up with the
+            # actuals. They carry no matching observation, and their values are
+            # the initialiser's seed rather than anything the fitter used -- for
+            # a backcast ETS(ANN) the level row holds mean(y), while the level
+            # the first fitted value came from is elsewhere. Plotting them put a
+            # spurious spike at the left edge of every states panel.
+            statesHead <- nrow(x$states) - nobs(x);
+            if(statesHead>0){
+                x$states <- x$states[-c(1:statesHead),,drop=FALSE];
+            }
             statesNames <- c("actuals",colnames(x$states),"residuals");
             x$states <- cbind(actuals(x),x$states,residuals(x));
             colnames(x$states) <- statesNames;
@@ -4417,12 +4495,14 @@ arPolinomialsBounds <- function(arPolynomialMatrix,arPolynomial,variableNumber){
 
 # Confidence intervals
 #' @export
-confint.adam <- function(object, parm, level=0.95, bootstrap=FALSE, ...){
+confint.adam <- function(object, parm, level=0.95,
+                         type=c("opg","hessian","bootstrap"), bootstrap=FALSE, ...){
+    type <- covarTypeResolver(type, bootstrap);
     parameters <- coef(object);
     confintNames <- c(paste0((1-level)/2*100,"%"),
                       paste0((1+level)/2*100,"%"));
 
-    if(bootstrap){
+    if(type=="bootstrap"){
         coefValues <- coefbootstrap(object, ...);
         adamReturn <- cbind(sqrt(diag(coefValues$vcov)),
                             apply(coefValues$coefficients,2,quantile,probs=(1-level)/2),
@@ -4430,7 +4510,7 @@ confint.adam <- function(object, parm, level=0.95, bootstrap=FALSE, ...){
         colnames(adamReturn) <- c("S.E.",confintNames);
     }
     else{
-        adamVcov <- vcov(object, ...);
+        adamVcov <- vcov(object, type=type, ...);
         adamSD <- sqrt(abs(diag(adamVcov)));
         parametersNames <- names(adamSD);
         nParam <- length(adamSD);
@@ -4538,17 +4618,19 @@ confint.adam <- function(object, parm, level=0.95, bootstrap=FALSE, ...){
             #     adamCoefBounds["level",2] <- max(-parameters["level"],adamCoefBounds["level",2]);
             # }
             adamModelType <- modelType(object);
+            # Only the lower bound needs the restriction: the upper one is above
+            # the lower, so it clears -parameters automatically once the lower does.
             # Trend
             if(substr(adamModelType,2,2)=="M" && any(parametersNames=="trend")){
                 adamCoefBounds["trend",1] <- max(-parameters["trend"],adamCoefBounds["trend",1]);
-                adamCoefBounds["trend",2] <- max(-parameters["trend"],adamCoefBounds["trend",2]);
             }
-            # Seasonality
+            # Seasonality. pmax(), not max(): these are vectors, one element per
+            # seasonal initial, and max() would collapse them to a single number
+            # that then gets recycled across every seasonal row.
             if(substr(adamModelType,nchar(adamModelType),nchar(adamModelType))=="M" &&
                any(substr(parametersNames,1,8)=="seasonal")){
                 seasonals <- which(substr(parametersNames,1,8)=="seasonal");
-                adamCoefBounds[seasonals,1] <- max(-parameters[seasonals],adamCoefBounds[seasonals,1]);
-                adamCoefBounds[seasonals,2] <- max(-parameters[seasonals],adamCoefBounds[seasonals,2]);
+                adamCoefBounds[seasonals,1] <- pmax(-parameters[seasonals],adamCoefBounds[seasonals,1]);
             }
         }
 
@@ -4658,7 +4740,9 @@ sigma.adam <- function(object, ...){
 }
 
 #' @export
-summary.adam <- function(object, level=0.95, bootstrap=FALSE, ...){
+summary.adam <- function(object, level=0.95,
+                         type=c("opg","hessian","bootstrap"), bootstrap=FALSE, ...){
+    type <- covarTypeResolver(type, bootstrap);
     ourReturn <- list(model=object$model,responseName=all.vars(formula(object))[1]);
 
     occurrence <- NULL;
@@ -4681,7 +4765,7 @@ summary.adam <- function(object, level=0.95, bootstrap=FALSE, ...){
     # Collect parameters and their standard errors
     parametersValues <- coef(object);
     if(!is.null(parametersValues)){
-        parametersConfint <- confint(object, level=level, bootstrap=bootstrap, ...);
+        parametersConfint <- confint(object, level=level, type=type, ...);
         # Record the type of bootstrap done
         ellipsis <- list(...);
         if(!is.null(ellipsis$method)){
@@ -5005,7 +5089,7 @@ coefbootstrap.adam <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
 
     # If this is backcasting, do sampling with moving origin
     changeOrigin <- FALSE;
-    if(any(object$initialType==c("backcasting","complete"))){
+    if(any(object$initialType==c("backcasting","complete","gradient"))){
         changeOrigin[] <- TRUE;
     }
 
@@ -5122,8 +5206,20 @@ coefbootstrap.adam <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
 }
 
 #' @export
-vcov.adam <- function(object, bootstrap=FALSE, heuristics=NULL, ...){
+vcov.adam <- function(object, type=c("opg","hessian","bootstrap"),
+                      bootstrap=FALSE, heuristics=NULL, ...){
     ellipsis <- list(...);
+    type <- covarTypeResolver(type, bootstrap);
+
+    # Nothing is estimated directly (e.g. provided persistence together with
+    # backcast / complete / gradient or provided initials): there are no free
+    # parameters, so the covariance is an empty matrix. Without this guard the
+    # FI fall-back reconstructs the provided/backcast values and returns a full
+    # matrix of Inf for them. vcov() must span exactly coef() - the initial
+    # seeds only appear when they are genuinely estimated (initial="optimal").
+    if(length(coef(object))==0){
+        return(matrix(numeric(0), 0, 0));
+    }
 
     # Heuristics is to set variance equal to sqrt(heuristics)% of values
     if(!is.null(heuristics)){
@@ -5132,10 +5228,49 @@ vcov.adam <- function(object, bootstrap=FALSE, heuristics=NULL, ...){
         }
     }
 
-    if(bootstrap){
+    if(type=="bootstrap"){
         return(coefbootstrap(object, ...)$vcov);
     }
-    else{
+    else if(type=="opg"){
+        # OPG / BHHH covariance: PSD by construction, so it returns finite
+        # standard errors for boundary-but-identified parameters where the
+        # observed Hessian is indefinite. Dispatched to the engine-specific
+        # implementation (CES has its own parameterisation); everything else
+        # (adam, ssarima) uses covarOPG. Falls back to the Hessian path (below)
+        # when the reconstruction cannot be reproduced or numerically fails.
+        opgStepSize <- if(is.null(ellipsis$stepSize)){
+                           .Machine$double.eps^(1/4);
+                       } else { ellipsis$stepSize; };
+        vcovOPG <- if(cesChecker(object)){
+                       covarOPGces(object, stepSize=opgStepSize);
+                   } else if(gumChecker(object)){
+                       covarOPGgum(object, stepSize=opgStepSize);
+                   } else if(sparmaChecker(object)){
+                       covarOPGsparma(object, stepSize=opgStepSize);
+                   } else {
+                       covarOPG(object, stepSize=opgStepSize);
+                   };
+        if(!is.null(vcovOPG)){
+            return(vcovOPG);
+        }
+        warning("The OPG covariance could not be computed for this model ",
+                "(unsupported parameter type or numerical failure); ",
+                "falling back to the Hessian-based covariance.", call.=FALSE);
+    }
+    # sparma stores a sparse-order ARIMA that adam(model=object) cannot rebuild
+    # (its ARIMA-polynomial reconstruction yields an NA), so the observed Fisher
+    # Information is computed natively via a numerical Hessian of the sparma
+    # log-likelihood rather than the adam FI path below.
+    if(sparmaChecker(object)){
+        fiStepSize <- if(is.null(ellipsis$stepSize)){
+                          .Machine$double.eps^(1/4);
+                      } else { ellipsis$stepSize; };
+        vcovSparmaFI <- covarFIsparma(object, stepSize=fiStepSize);
+        if(!is.null(vcovSparmaFI)){
+            return(vcovSparmaFI);
+        }
+    }
+    {
         # If the forecast is in numbers, then use its length as a horizon
         if(any(!is.na(object$forecast))){
             h <- length(object$forecast)
@@ -6328,7 +6463,7 @@ forecast.adam <- function(object, h=10, newdata=NULL, occurrence=NULL,
                                              c(componentsNumberETS+componentsNumberARIMA+xregNumber+constantRequired,
                                                lagsModelMax,
                                                nsim)),
-                                       EtypeModified)$data;
+                                       EtypeModified, FALSE)$data;
 
         #### Note that the cumulative doesn't work with oes at the moment!
         if(cumulative){
@@ -7093,7 +7228,25 @@ multicov.adam <- function(object, type=c("analytical","empirical","simulated"), 
     matF <- object$transition;
 
     if(type=="analytical"){
-        covarMat <- covarAnal(lagsModelAll, h, matWt[1,,drop=FALSE], matF, vecG, s2);
+        # A multiplicative-error ETS on a log / positive distribution has no
+        # usable closed form for the off-diagonal, so forecast.adam() takes the
+        # per-horizon variances from adamVarAnal() for those (R/adam.R, the
+        # "IG and Lnorm can use approximations" branch). Do the same here:
+        # multicov() and the prediction intervals should not disagree about
+        # what the model implies.
+        if(etsChecker(object) && errorType(object)=="M" &&
+           any(object$distribution==c("dinvgauss","dgamma","dlnorm","dllaplace","dls","dlgnorm"))){
+            varVector <- adamVarAnal(lagsModelAll, h, matWt[1,,drop=FALSE], matF, vecG, s2);
+            if(any(object$distribution==c("dlnorm","dls","dllaplace","dlgnorm"))){
+                varVector[] <- log(1+varVector);
+            }
+            # nrow= is needed: diag() of a length-one vector returns an
+            # identity matrix of that size instead of a 1x1 matrix.
+            covarMat <- diag(varVector, nrow=h);
+        }
+        else{
+            covarMat <- covarAnal(lagsModelAll, h, matWt[1,,drop=FALSE], matF, vecG, s2);
+        }
     }
     else if(type=="empirical"){
         adamErrors <- rmultistep(object, h=h);
@@ -7218,7 +7371,7 @@ multicov.adam <- function(object, type=c("analytical","empirical","simulated"), 
                                              c(componentsNumberETS+componentsNumberARIMA+xregNumber+constantRequired,
                                                lagsModelMax,
                                                nsim)),
-                                       EtypeModified)$data;
+                                       EtypeModified, FALSE)$data;
 
         yForecast <- vector("numeric", h);
         for(i in 1:h){
@@ -7393,22 +7546,21 @@ simulateADAMCore <- function(object, nsim=1, obs=nobs(object), ...){
     adamCpp <- object$adamCpp;
 
     #### Prepare the necessary matrices ####
-    # For ``adam`` objects, ``object$states`` already includes the
-    # ``lagsModelMax`` lag-head rows at the front; for ``om`` / ``omg``
-    # it doesn't, so prepend the lag head from ``object$profileInitial``
-    # before building the state cube.
+    # ``adamCpp$simulate`` now applies the same seasonal-head trend refinement
+    # as the fitter. Always feed it the *unrefined* head from
+    # ``object$profileInitial`` — for ``adam`` objects whose ``$states``
+    # already carries a walked head we strip those rows first so the simulator
+    # is not walking a head that was walked once already.
     expectedRows <- obsInSample + lagsModelMax;
+    lagHead <- t(object$profileInitial[, 1:lagsModelMax, drop=FALSE]);
+    colnames(lagHead) <- colnames(object$states);
     if(nrow(object$states) >= expectedRows){
-        statesFull <- object$states;
-    }
-    else if(nrow(object$states) == obsInSample){
-        lagHead <- t(object$profileInitial[, 1:lagsModelMax, drop=FALSE]);
-        colnames(lagHead) <- colnames(object$states);
-        statesFull <- rbind(lagHead, object$states);
+        obsRows <- object$states[-(1:lagsModelMax), , drop=FALSE];
     }
     else{
-        statesFull <- object$states;
+        obsRows <- object$states;
     }
+    statesFull <- rbind(lagHead, obsRows);
     arrVt <- array(t(statesFull),c(ncol(statesFull),nrow(statesFull)+obsInSample-nobs(object),nsim),
                    dimnames=list(colnames(object$states),NULL,paste0("nsim",c(1:nsim))));
 
@@ -7501,6 +7653,22 @@ simulateADAMCore <- function(object, nsim=1, obs=nobs(object), ...){
         EtypeModified[] <- "M";
     }
 
+    # A multiplicative error enters the model as (1 + e), so its support is
+    # e > -1: none of the distributions adam() samples from can produce anything
+    # below that. A supplied randomizer can, and the state recursion then takes
+    # a log of a negative number and returns NaN from that point on, which is
+    # easy to mistake for a defect in the kernel.
+    if(!is.null(ellipsis$randomizer) && EtypeModified=="M" &&
+       any(matErrors <= -1, na.rm=TRUE)){
+        warning(paste0("The supplied randomizer returned ",
+                       sum(matErrors <= -1, na.rm=TRUE),
+                       " error(s) of -1 or lower. A multiplicative error enters ",
+                       "the model as (1 + e), so it must stay above -1. The ",
+                       "simulated states will contain NaN. Rescale the errors, ",
+                       "or use a model with an additive error."),
+                call.=FALSE);
+    }
+
     matOt <- matrix(rbinom(obsInSample*nsim, 1, pt), obsInSample, nsim);
 
     ySimulated <- adamCpp$simulate(matErrors, matOt,
@@ -7511,7 +7679,7 @@ simulateADAMCore <- function(object, nsim=1, obs=nobs(object), ...){
                                          c(componentsNumberETS+componentsNumberARIMA+xregNumber+constantRequired,
                                            lagsModelMax,
                                            nsim)),
-                                   EtypeModified);
+                                   EtypeModified, TRUE);
 
     return(list(data        = ySimulated$data,
                 states      = ySimulated$states,

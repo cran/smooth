@@ -293,7 +293,7 @@ adam_checkOptimizer <- function(ellipsis, loss, distribution, initialType, lags,
 
     if(is.null(ellipsis$nIterations)){
         nIterations <- 1
-        if(any(initialType==c("complete","backcasting"))){
+        if(any(initialType==c("complete","backcasting","gradient"))){
             nIterations[] <- 2
         }
     }
@@ -301,10 +301,14 @@ adam_checkOptimizer <- function(ellipsis, loss, distribution, initialType, lags,
         nIterations <- ellipsis$nIterations
     }
 
-    smoother <- if(is.null(ellipsis$smoother)) "global" else ellipsis$smoother
+    smoother <- if(is.null(ellipsis$smoother)) "default" else ellipsis$smoother
+    # smoother="default" resolves to the centred moving average for the optimal
+    # initialisation and to the global model for every other initialisation.
+    if(smoother=="default"){
+        smoother <- if(initialType=="optimal") "ma" else "global"
+    }
     FI <- if(is.null(ellipsis$FI)) FALSE else ellipsis$FI
     stepSize <- if(is.null(ellipsis$stepSize)) .Machine$double.eps^(1/4) else ellipsis$stepSize
-    dfForBack <- if(is.null(ellipsis$dfForBack)) FALSE else ellipsis$dfForBack
 
     return(list(
         maxeval = maxeval,
@@ -324,9 +328,46 @@ adam_checkOptimizer <- function(ellipsis, loss, distribution, initialType, lags,
         nIterations = nIterations,
         smoother = smoother,
         FI = FI,
-        stepSize = stepSize,
-        dfForBack = dfForBack
+        stepSize = stepSize
     ))
+}
+
+#### Degrees of freedom of backcast / complete / gradient initial states ####
+# The identifiable count of the initial-state design when the initials are
+# obtained by backcasting, complete backcasting or the gradient solve. Those
+# initials are determined from the data, so they consume degrees of freedom
+# exactly as optimised ones do (see dfInitialsETSLevelSeasonal()). Returns 0
+# for initialType="optimal" (initials sit in B and are counted via length(B),
+# with the seasonal redundancy handled by the caller) and for "provided".
+# Shared by the estimator-free "use" paths of adam()/om() and by omg().
+#' @keywords internal
+dfInitialsBackcast <- function(etsModel, modelIsSeasonal, modelIsTrendy,
+                               lagsModelSeasonal, initialLevelEstimate,
+                               initialTrendEstimate, initialSeasonalEstimate,
+                               arimaModel, initialArimaNumber, initialArimaEstimate,
+                               xregModel, xregNumber, initialXregEstimate,
+                               initialType){
+    if(!any(initialType==c("backcasting","complete","gradient"))){
+        return(0);
+    }
+    dfInitials <- 0;
+    if(etsModel){
+        seasonalLagsEstimated <- if(modelIsSeasonal){
+            lagsModelSeasonal[as.logical(initialSeasonalEstimate)];
+        } else {
+            numeric(0);
+        }
+        dfInitials <- dfInitialsETSLevelSeasonal(seasonalLagsEstimated,
+                                                 as.logical(initialLevelEstimate)) +
+            modelIsTrendy*initialTrendEstimate;
+    }
+    if(arimaModel){
+        dfInitials <- dfInitials + initialArimaNumber*initialArimaEstimate;
+    }
+    if(xregModel && any(initialType=="complete")){
+        dfInitials <- dfInitials + xregNumber*initialXregEstimate;
+    }
+    return(dfInitials);
 }
 
 #### Model architecture and initial matrix creation ####
@@ -336,7 +377,8 @@ adam_architector <- function(etsModel, Etype, Ttype, Stype, lags, lagsModelSeaso
                              arimaModel, lagsModelARIMA, xregModel, constantRequired,
                              componentsNumberARIMA,
                              obsAll, yIndexAll, yClasses, adamETS,
-                             profilesRecentTable=NULL, profilesRecentProvided=FALSE){
+                             profilesRecentTable=NULL, profilesRecentProvided=FALSE,
+                             flipConstant=FALSE){
     if(etsModel){
         modelIsTrendy <- Ttype != "N"
         if(modelIsTrendy){
@@ -405,6 +447,10 @@ adam_architector <- function(etsModel, Etype, Ttype, Stype, lags, lagsModelSeaso
                    componentsNumberETS, componentsNumberARIMA,
                    xregNumber, length(lagsModelAll),
                    constantRequired, adamETS)
+    # Flip the drift sign in the backward pass of backcasting when the total
+    # order of ARIMA differencing is odd (time reversal changes the drift by
+    # (-1)^(d+D)) — the ARIMA analog of the ETS trend reversal
+    adamCpp$flipConstant <- flipConstant
 
     return(list(
         lagsModel = lagsModel,
@@ -735,8 +781,10 @@ adam_creator <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, modelIsSe
                 }
                 else{
                     yDecomposition <- switch(Etype,
-                                             "A"=mean(diff(yInSample[otLogical])),
-                                             "M"=exp(mean(diff(log(yInSample[otLogical])))))
+                                             "A"=mean(yInSample[otLogical]),
+                                             "M"=exp(mean(log(yInSample[otLogical]))));
+                                             # "A"=mean(diff(yInSample[otLogical])),
+                                             # "M"=exp(mean(diff(log(yInSample[otLogical])))))
                 }
                 matVt[componentsNumberETS+componentsNumberARIMA, 1:initialArimaNumber] <-
                     rep(yDecomposition, ceiling(initialArimaNumber/max(lags)))[1:initialArimaNumber]
@@ -744,8 +792,27 @@ adam_creator <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, modelIsSe
             else{
                 matVt[componentsNumberETS+1:componentsNumberARIMA, 1:initialArimaNumber] <-
                     switch(Etype, "A"=0, "M"=1)
-                matVt[componentsNumberETS+componentsNumberARIMA, 1:initialArimaNumber] <-
-                    initialArima[1:initialArimaNumber]
+                # Provided ARIMA initials must be placed the SAME way the
+                # estimated path does (adam_filler): spread
+                # ariPolynomial %*% initials across the ARI rows. The collector
+                # reports initial$arima by reading the last ARI row and dividing
+                # by tail(ariPolynomial), so placing the reported values raw in
+                # the last row (the previous behaviour) dropped that factor and
+                # produced a different state -> a different likelihood for the
+                # same reported parameters. This mirrors the filler exactly, so
+                # providing the collected initials now round-trips.
+                if(!is.null(arimaPolynomials) && nrow(nonZeroARI)>0){
+                    matVt[componentsNumberETS+nonZeroARI[,2], 1:initialArimaNumber] <-
+                        switch(Etype,
+                               "A"=arimaPolynomials$ariPolynomial[nonZeroARI[,1]] %*%
+                                   t(initialArima[1:initialArimaNumber]),
+                               "M"=exp(arimaPolynomials$ariPolynomial[nonZeroARI[,1]] %*%
+                                           t(log(initialArima[1:initialArimaNumber]))))
+                }
+                else{
+                    matVt[componentsNumberETS+componentsNumberARIMA, 1:initialArimaNumber] <-
+                        initialArima[1:initialArimaNumber]
+                }
             }
         }
 
@@ -789,14 +856,24 @@ adam_creator <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, modelIsSe
                 }
             }
             if(arimaModel && initialArimaEstimate){
+                # Rows carrying the level that the constant now accounts for. A
+                # pure MA has no ARI terms, so nonZeroARI is empty and indexing
+                # by it would debias nothing at all -- leaving the state seeded
+                # at mean(y) while the constant is also mean(y), so the first
+                # fitted value double counted the level. Fall back to every
+                # ARIMA row there; where ARI terms do exist the two sets
+                # coincide anyway.
+                arimaRows <- if(nrow(nonZeroARI)>0){
+                                 componentsNumberETS+nonZeroARI[,2];
+                             } else { componentsNumberETS+1:componentsNumberARIMA; }
                 if(Etype=="A"){
-                    matVt[componentsNumberETS+nonZeroARI[,2],1:initialArimaNumber] <-
-                        matVt[componentsNumberETS+nonZeroARI[,2],1:initialArimaNumber] -
+                    matVt[arimaRows,1:initialArimaNumber] <-
+                        matVt[arimaRows,1:initialArimaNumber] -
                         matVt[componentsNumberETS+componentsNumberARIMA+xregNumber+1,1]
                 }
                 else{
-                    matVt[componentsNumberETS+nonZeroARI[,2],1:initialArimaNumber] <-
-                        matVt[componentsNumberETS+nonZeroARI[,2],1:initialArimaNumber] /
+                    matVt[arimaRows,1:initialArimaNumber] <-
+                        matVt[arimaRows,1:initialArimaNumber] /
                         matVt[componentsNumberETS+componentsNumberARIMA+xregNumber+1,1]
                 }
             }
@@ -906,7 +983,7 @@ adam_filler <- function(B,
     }
 
     # Initials of ETS if something needs to be estimated
-    if(etsModel && all(initialType!=c("complete","backcasting")) && initialEstimate){
+    if(etsModel && all(initialType!=c("complete","backcasting","gradient")) && initialEstimate){
         i <- 1
         if(initialLevelEstimate){
             j[] <- j+1
@@ -937,13 +1014,26 @@ adam_filler <- function(B,
 
     # Initials of ARIMA
     if(arimaModel){
-        if(all(initialType!=c("complete","backcasting")) && initialArimaEstimate){
-            matVt[componentsNumberETS+nonZeroARI[,2], 1:initialArimaNumber] <-
-                switch(Etype,
-                       "A"=arimaPolynomials$ariPolynomial[nonZeroARI[,1]] %*%
-                           t(B[j+1:initialArimaNumber]),
-                       "M"=exp(arimaPolynomials$ariPolynomial[nonZeroARI[,1]] %*%
-                                   t(log(B[j+1:initialArimaNumber]))))
+        if(all(initialType!=c("complete","backcasting","gradient")) && initialArimaEstimate){
+            if(nrow(nonZeroARI)>0){
+                matVt[componentsNumberETS+nonZeroARI[,2], 1:initialArimaNumber] <-
+                    switch(Etype,
+                           "A"=arimaPolynomials$ariPolynomial[nonZeroARI[,1]] %*%
+                               t(B[j+1:initialArimaNumber]),
+                           "M"=exp(arimaPolynomials$ariPolynomial[nonZeroARI[,1]] %*%
+                                       t(log(B[j+1:initialArimaNumber]))))
+            }
+            else{
+                # A pure MA (no AR, no differencing) has an ARI polynomial of
+                # just 1, so nonZeroARI is empty and the indexed assignment
+                # above writes nothing at all: the initial state silently stayed
+                # at the creator seed while B still consumed a degree of freedom
+                # and drifted freely. With the polynomial equal to 1 the general
+                # expression degenerates to B itself, written into the state the
+                # initialiser read it from.
+                matVt[componentsNumberETS+componentsNumberARIMA, 1:initialArimaNumber] <-
+                    B[j+1:initialArimaNumber]
+            }
             j[] <- j+initialArimaNumber
         }
         # This is needed in order to propagate initials of ARIMA to all components
@@ -959,7 +1049,11 @@ adam_filler <- function(B,
         }
     }
 
-    # Initials of the xreg
+    # Initials of the xreg. Kept in B for every initial type except "complete"
+    # (backcast). Under "gradient" the affine / GN initial-state solve overwrites
+    # the xreg cells of matVt, so the B entry is a no-op there (mirrors how the
+    # occurrence path handles a gradient-solved xreg); it still counts once
+    # towards the parameter total via length(B).
     if(xregModel && (initialType!="complete") && initialEstimate && initialXregEstimate){
         xregNumberToEstimate <- sum(xregParametersEstimated)
         matVt[componentsNumberETS+componentsNumberARIMA+which(xregParametersEstimated==1),
@@ -1013,15 +1107,15 @@ adam_initialiser <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, model
                                 # AR and MA values
                                 arimaModel*(arEstimate*sum(arOrders)+maEstimate*sum(maOrders)) +
                                 # initials of ETS
-                                etsModel*all(initialType!=c("complete","backcasting"))*
+                                etsModel*all(initialType!=c("complete","backcasting","gradient"))*
                                 (initialLevelEstimate +
                                      (modelIsTrendy*initialTrendEstimate) +
                                      (modelIsSeasonal*
                                           sum(initialSeasonalEstimate*(lagsModelSeasonal-1)))) +
                                 # initials of ARIMA
-                                all(initialType!=c("complete","backcasting"))*
+                                all(initialType!=c("complete","backcasting","gradient"))*
                                 arimaModel*initialArimaNumber*initialArimaEstimate +
-                                # initials of xreg
+                                # initials of xreg (in B unless backcast under "complete")
                                 (initialType!="complete")*xregModel*initialXregEstimate*
                                 sum(xregParametersEstimated) +
                                 constantEstimate + otherParameterEstimate)
@@ -1034,7 +1128,7 @@ adam_initialiser <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, model
                 # A special type of model which is not safe: AAM, MAA, MAM
                 if((Etype=="A" && Ttype=="A" && Stype=="M") ||
                    (Etype=="A" && Ttype=="M" && Stype=="A") ||
-                   (any(initialType==c("complete","backcasting")) &&
+                   (any(initialType==c("complete","backcasting","gradient")) &&
                     ((Etype=="M" && Ttype=="A" && Stype=="A") ||
                      (Etype=="M" && Ttype=="A" && Stype=="M")))){
                     B[1:sum(persistenceEstimateVector)] <-
@@ -1048,7 +1142,7 @@ adam_initialiser <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, model
                             which(persistenceEstimateVector)]
                 }
                 else if(Etype=="M" && Ttype=="A"){
-                    if(any(initialType==c("complete","backcasting"))){
+                    if(any(initialType==c("complete","backcasting","gradient"))){
                         B[1:sum(persistenceEstimateVector)] <-
                             c(0.1,0.05,rep(0.3,componentsNumberETSSeasonal))[
                                 which(persistenceEstimateVector)]
@@ -1203,7 +1297,7 @@ adam_initialiser <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, model
     }
 
     # Initials
-    if(etsModel && all(initialType!=c("complete","backcasting")) && initialEstimate){
+    if(etsModel && all(initialType!=c("complete","backcasting","gradient")) && initialEstimate){
         if(initialLevelEstimate){
             j[] <- j+1
             B[j] <- matVt[1,1]
@@ -1271,7 +1365,7 @@ adam_initialiser <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, model
     }
 
     # ARIMA initials
-    if(arimaModel && all(initialType!=c("complete","backcasting")) && initialArimaEstimate){
+    if(arimaModel && all(initialType!=c("complete","backcasting","gradient")) && initialArimaEstimate){
         B[j+1:initialArimaNumber] <-
             head(matVt[componentsNumberETS+componentsNumberARIMA,1:lagsModelMax],
                  initialArimaNumber)
@@ -1296,8 +1390,8 @@ adam_initialiser <- function(etsModel, Etype, Ttype, Stype, modelIsTrendy, model
         j[] <- j+initialArimaNumber
     }
 
-    # Initials of the xreg
-    if(initialType!="complete" && initialXregEstimate){
+    # Initials of the xreg (excluded from B only under "complete")
+    if((initialType!="complete") && initialXregEstimate){
         xregNumberToEstimate <- sum(xregParametersEstimated)
         B[j+1:xregNumberToEstimate] <-
             matVt[componentsNumberETS+componentsNumberARIMA+
@@ -2179,7 +2273,6 @@ adam_arimaSelector <- function(data, model, lags, arMax, iMax, maMax,
 
     iOrdersICs <- vector("numeric",iCombinations*2);
     iOrdersICs[1] <- ICOriginal;
-    BValues <- vector("list",iCombinations*2);
 
     if(!silent){
         cat("\nSelecting differences... ");
@@ -2202,9 +2295,6 @@ adam_arimaSelector <- function(data, model, lags, arMax, iMax, maMax,
                          silent=TRUE);
         if(!inherits(testModel,"try-error")){
             iOrdersICs[d] <- IC(testModel);
-            if(!is.null(testModel$B)){
-                BValues[[d]] <- testModel$B;
-            }
         }
         else{
             iOrdersICs[d] <- Inf;
@@ -2214,11 +2304,17 @@ adam_arimaSelector <- function(data, model, lags, arMax, iMax, maMax,
     iBest <- iOrders[d,1:ordersLength];
     constantValue <- iOrders[d,ordersLength+1]==1;
 
+    # The winner is refitted from a cold start, exactly as a direct call with
+    # these orders would be. Carrying the search's parameter vector over as a
+    # warm start made auto.msarima() report a different optimum than msarima()
+    # with the very same orders, which is confusing and not reproducible by the
+    # user. Both are truncated at the same maxeval, so the warm start only moved
+    # the truncation point. It also left bestIC (taken from the cold loop fit
+    # below) describing a different fit than the bestModel returned alongside it.
     bestModel <- testModel <- do.call(fitter,
                                       c(base_call,
                                         list(orders=list(ar=0, i=iBest, ma=0),
-                                             constant=constantValue,
-                                             B=BValues[[d]]),
+                                             constant=constantValue),
                                         dots));
     bestIC <- iOrdersICs[d];
 
@@ -2310,16 +2406,22 @@ adam_arimaSelector <- function(data, model, lags, arMax, iMax, maMax,
     additionalModels <- NULL;
     if(any(maMax!=0) && any(iMax!=0)){
         additionalModels <- iOrders[1:iCombinations,1:ordersLength,drop=FALSE];
+        # These are IMA(d,d) candidates: the MA order is set equal to the
+        # differencing one, so a row is only usable when d does not exceed maMax
+        # at EVERY lag. The conditions must accumulate -- assigning them in turn
+        # kept only the last lag's verdict and let through candidates asking for
+        # an MA order the user excluded.
         modelsLeft <- rep(TRUE,iCombinations);
         for(i in 1:ordersLength){
-            modelsLeft[] <- (additionalModels[,i] <= maMax[i]);
+            modelsLeft[] <- modelsLeft & (additionalModels[,i] <= maMax[i]);
         }
         additionalModels <- additionalModels[modelsLeft,,drop=FALSE];
     }
 
-    if(!is.null(additionalModels)){
-        BValues <- vector("list",iCombinations);
-        imaOrdersICs <- vector("numeric",iCombinations);
+    # Row 1 is the all-zero differencing case and always survives the filter, so
+    # a single row means there is nothing left to test.
+    if(!is.null(additionalModels) && nrow(additionalModels)>1){
+        imaOrdersICs <- vector("numeric",nrow(additionalModels));
         imaOrdersICs[] <- Inf;
         for(d in 2:nrow(additionalModels)){
             testModel <- try(do.call(fitter,
@@ -2333,9 +2435,6 @@ adam_arimaSelector <- function(data, model, lags, arMax, iMax, maMax,
 
             if(!inherits(testModel,"try-error")){
                 imaOrdersICs[d] <- IC(testModel);
-                if(!is.null(testModel$B)){
-                    BValues[[d]] <- testModel$B;
-                }
             }
             else{
                 imaOrdersICs[d] <- Inf;
@@ -2354,8 +2453,7 @@ adam_arimaSelector <- function(data, model, lags, arMax, iMax, maMax,
             bestModel <- do.call(fitter,
                                  c(base_call,
                                    list(orders=list(ar=0, i=iBest, ma=maBest),
-                                        constant=constantValue,
-                                        B=BValues[[d]]),
+                                        constant=constantValue),
                                    dots));
         }
     }

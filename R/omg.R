@@ -36,6 +36,11 @@
 #'   \code{FI=TRUE} alongside computes the observed Fisher information
 #'   over the joint parameter vector (the path used by
 #'   \code{vcov.omg}).
+#' @param smoother The smoother used by \link[smooth]{msdecompose} to obtain the
+#' initial level, trend and seasonal indices (and the seasonal profiles for
+#' multiple seasonal models). \code{"default"} (the default) uses \code{"ma"} for
+#' \code{initial="optimal"} and \code{"global"} otherwise; \code{"ma"},
+#' \code{"lowess"}, \code{"supsmu"} and \code{"global"} force the respective smoother.
 #' @param silent If \code{TRUE}, suppress output.
 #' @param ... Additional arguments passed to the optimiser.
 #'
@@ -64,11 +69,12 @@ omg <- function(data,
                 etsB = etsA,
                 lags = c(frequency(data)),
                 h = 0, holdout = FALSE,
-                initial = c("backcasting","optimal","two-stage","complete"),
+                initial = c("backcasting","optimal","two-stage","complete","gradient"),
                 loss = c("likelihood","MSE","MAE","HAM","LASSO","RIDGE"),
                 ic = c("AICc","AIC","BIC","BICc"),
                 bounds = c("usual","admissible","none"),
                 model = NULL,
+                smoother = c("default","ma","lowess","supsmu","global"),
                 silent = TRUE, ...) {
 
     startTime <- Sys.time()
@@ -77,6 +83,10 @@ omg <- function(data,
     # Capture ellipsis early so FI / stepSize / B / lb / ub passed via ...
     # are visible to the fitted-object intake below.
     ellipsis <- list(...)
+    # The msdecompose() smoother for the initial states, passed via ellipsis so
+    # the internal adam_checkOptimizer() resolves "default" once initialType is known.
+    smoother <- match.arg(smoother)
+    ellipsis$smoother <- smoother
 
     # If a fitted omg object is passed via `model`, lift its parameters out
     # of model$modelA / model$modelB and set modelDo_user="use" so the
@@ -84,20 +94,26 @@ omg <- function(data,
     # canonical entry for vcov(omg_obj): vcov re-calls omg(..., model=obj,
     # FI=TRUE, stepSize=...).
     if(is.omg(model)){
-        # A-side
+        # A-side. Persistence / phi / arma are NOT re-supplied as fixed values:
+        # the fitted joint B already carries every estimated coefficient, and
+        # providing a value flips its *Estimate flag off in the checker, which
+        # makes adam_filler stop consuming that slot from B and shifts the whole
+        # vector -- corrupting the initial-state seed (a boundary alpha=0 would
+        # push the level to 0 on the re-fit). Keeping them estimated lets B feed
+        # every value back 1:1, so vcov()'s re-fit reproduces the original fit.
         modelA       <- modelType(model$modelA)
-        persistenceA <- model$modelA$persistence
-        phiA         <- model$modelA$phi
-        armaA        <- model$modelA$arma
+        persistenceA <- NULL
+        phiA         <- NULL
+        armaA        <- NULL
         ordersA      <- model$modelA$orders
         regressorsA  <- model$modelA$regressors
         constantA    <- if(is.null(model$modelA$constant)) FALSE else model$modelA$constant
         if(is.null(formulaA)) { formulaA <- formula(model$modelA) }
         # B-side
         modelB       <- modelType(model$modelB)
-        persistenceB <- model$modelB$persistence
-        phiB         <- model$modelB$phi
-        armaB        <- model$modelB$arma
+        persistenceB <- NULL
+        phiB         <- NULL
+        armaB        <- NULL
         ordersB      <- model$modelB$orders
         regressorsB  <- model$modelB$regressors
         constantB    <- if(is.null(model$modelB$constant)) FALSE else model$modelB$constant
@@ -224,7 +240,6 @@ omg <- function(data,
 
     occurrenceModel <- FALSE
     yFitted         <- matrix(rep(mean(oInSample), obsInSample), ncol=1)
-    refineHead      <- TRUE
 
     #### Optimiser settings ####
     optimSettings <- adam_checkOptimizer(ellipsis=ellipsis, loss=loss,
@@ -651,9 +666,13 @@ omg <- function(data,
             # Shared
             bounds=bounds, regressors=regressorsA,
             ot=ot, otLogical=otLogical, obsInSample=obsInSample,
-            nIterations=nIterations, refineHead=refineHead,
+            nIterations=nIterations,
             nParamsA=nParamsA,
-            loss=loss, lossFunction=omgUserLossFunction, lambda=lambda)
+            loss=loss, lossFunction=omgUserLossFunction, lambda=lambda,
+            # nloptr's .checkfunargs requires every eval_f formal to be present;
+            # the optimiser passes FALSE (returns the loss). The final coupled
+            # fitted is obtained by re-calling omgCF_local with this overridden.
+            returnFitted=FALSE)
 
         # --------------------------------------------------------------
         # FI placeholder. Populated when modelDo=="use" and ellipsis$FI is
@@ -845,16 +864,54 @@ omg <- function(data,
         }
 
         B_joint <- res$solution
-        names(B_joint) <- c(names(BValuesA$B), names(BValuesB$B))
+        # On the use / re-entry path the joint B comes from ellipsis$B -- the
+        # full fitted parameter vector, which includes coefficients the
+        # initialiser drops when persistence / initials arrive as "provided"
+        # (e.g. a boundary alpha=0). Split it at the fitted-object A-count
+        # (nParamsA_use) with the injected names, not the reduced initialiser
+        # layout, or the two sides misalign (A loses a param, B gains it).
+        useReentry <- !is.null(nParamsA_use)
+        splitA <- if(useReentry){ nParamsA_use } else { nParamsA }
+        jointNames <- if(useReentry && length(names(ellipsis$B)) == length(B_joint)){
+                          names(ellipsis$B)
+                      } else {
+                          c(names(BValuesA$B), names(BValuesB$B))
+                      }
+        if(length(jointNames) == length(B_joint)){
+            names(B_joint) <- jointNames
+        }
         CFValue <- res$objective
 
+        # Degrees of freedom per side. nParamsA/nParamsB are the B-split lengths
+        # (optimised parameters) and MUST stay so — they index B_joint. The df
+        # counts additionally include the backcast / complete / gradient initial
+        # states, which are determined from the data and consume df exactly as
+        # optimised ones do (mirrors om(); the occurrence model is Bernoulli, so
+        # no scale). Provided persistence / initials contribute nothing.
+        dfInitialsA <- dfInitialsBackcast(checkerA$etsModel, checkerA$Stype!="N",
+                                          checkerA$Ttype!="N", checkerA$lagsModelSeasonal,
+                                          checkerA$initialLevelEstimate, checkerA$initialTrendEstimate,
+                                          checkerA$initialSeasonalEstimate, checkerA$arimaModel,
+                                          checkerA$initialArimaNumber, checkerA$initialArimaEstimate,
+                                          checkerA$xregModel, checkerA$xregNumber,
+                                          checkerA$initialXregEstimate, checkerA$initialType)
+        dfInitialsB <- dfInitialsBackcast(checkerB$etsModel, checkerB$Stype!="N",
+                                          checkerB$Ttype!="N", checkerB$lagsModelSeasonal,
+                                          checkerB$initialLevelEstimate, checkerB$initialTrendEstimate,
+                                          checkerB$initialSeasonalEstimate, checkerB$arimaModel,
+                                          checkerB$initialArimaNumber, checkerB$initialArimaEstimate,
+                                          checkerB$xregModel, checkerB$xregNumber,
+                                          checkerB$initialXregEstimate, checkerB$initialType)
+
         return(list(
-            B_A       = B_joint[seq_len(nParamsA)],
-            B_B       = B_joint[seq_len(length(B_joint) - nParamsA) + nParamsA],
+            B_A       = B_joint[seq_len(splitA)],
+            B_B       = B_joint[seq_len(length(B_joint) - splitA) + splitA],
             CFValue   = CFValue,
             logLikValue = -CFValue,
-            nParamsA  = nParamsA,
-            nParamsB  = length(B_joint) - nParamsA,
+            nParamsA  = splitA,
+            nParamsB  = length(B_joint) - splitA,
+            nParamEstimatedA = splitA + dfInitialsA,
+            nParamEstimatedB = (length(B_joint) - splitA) + dfInitialsB,
             adamArchitectA = adamArchitectA,
             adamArchitectB = adamArchitectB,
             adamCreatedA   = adamCreatedA,
@@ -906,12 +963,26 @@ omg <- function(data,
                                   checker$constantRequired, checker$initialArimaNumber)
 
         prof <- adamFilled$matVt[, seq_len(adamArchitect$lagsModelMax), drop=FALSE]
-        adamFitted <- adamArchitect$adamCpp$fit(
+        # Each side is reported as a standalone occurrence fit (as for
+        # backcasting/optimal); for initial="gradient" the dispatcher solves the
+        # side's initials by profiling its own occurrence loss. Non-gradient
+        # initials fall straight through to the ordinary fit with the same
+        # backcast flag, so backcasting/optimal are unchanged.
+        adamFitted <- adam_fitOrGradient(
             adamFilled$matVt, adamFilled$matWt, adamFilled$matF, adamFilled$vecG,
             adamArchitect$indexLookupTable, prof,
             as.numeric(ot), as.numeric(ot),
-            any(checker$initialType == c("complete","backcasting")),
-            nIterations, refineHead, occurrenceChar)
+            checker$initialType, nIterations, adamArchitect$adamCpp,
+            checker$etsModel, checker$arimaModel, checker$xregModel,
+            checker$Etype, checker$Ttype, checker$Stype,
+            adamArchitect$componentsNumberETS,
+            adamArchitect$componentsNumberETSSeasonal,
+            adamArchitect$componentsNumberETSNonSeasonal,
+            adamArchitect$lagsModel, adamArchitect$lagsModelMax,
+            obsInSample, loss, oType=occurrenceChar,
+            componentsNumberARIMA=checker$componentsNumberARIMA,
+            lagsModelAll=adamArchitect$lagsModelAll,
+            xregNumber=checker$xregNumber)
 
         yFitted <- adamFitted$fitted
 
@@ -1074,7 +1145,7 @@ omg <- function(data,
 
     resA <- list(
         B               = jointResult$B_A,
-        nParamEstimated = jointResult$nParamsA,
+        nParamEstimated = jointResult$nParamEstimatedA,
         logLikADAMValue = NULL,
         CFValue         = 0,
         FI              = NULL,
@@ -1088,7 +1159,7 @@ omg <- function(data,
 
     resB <- list(
         B               = jointResult$B_B,
-        nParamEstimated = jointResult$nParamsB,
+        nParamEstimated = jointResult$nParamEstimatedB,
         logLikADAMValue = NULL,
         CFValue         = 0,
         FI              = NULL,
@@ -1105,10 +1176,18 @@ omg <- function(data,
     EtypeA <- errorType(modelA)
     EtypeB <- errorType(modelB)
 
-    yFittedA  <- as.vector(modelA$fitted)
-    yFittedB  <- as.vector(modelB$fitted)
+    # The top-level fitted probability comes from the coupled recursion the
+    # optimiser minimised (re-run omgCF_local at the final B), not the standalone
+    # per-side refits. modelA/modelB are kept only for the sub-model diagnostics.
+    pCoupled  <- do.call(omgCF_local,
+                         c(list(B=c(jointResult$B_A, jointResult$B_B)),
+                           modifyList(jointResult$nloptrArgs, list(returnFitted=TRUE))))
     yFitted   <- modelA$fitted
-    yFitted[] <- omgLinkFunction(yFittedA, yFittedB, EtypeA, EtypeB)
+    yFitted[] <- pCoupled
+    # logLik is the Bernoulli of that same coupled probability, so $fitted and
+    # $logLik stay mutually consistent for every loss (mirrors om()).
+    otNumeric <- as.numeric(oInSample)
+    logLikOMG <- sum(otNumeric * log(pCoupled) + (1 - otNumeric) * log(1 - pCoupled))
 
     if(h > 0) {
         yForecast <- modelA$forecast;
@@ -1152,13 +1231,13 @@ omg <- function(data,
         occurrence  = "general",
         lags        = lags,
         lossValue   = jointResult$CFValue,
-        logLik      = jointResult$logLikValue,
+        logLik      = logLikOMG,
         nParam      = {
             nParamMat <- matrix(0, 2, 5,
                                 dimnames=list(c("Estimated","Provided"),
                                               c("nParamInternal","nParamXreg","nParamOccurrence",
                                                 "nParamScale","nParamAll")))
-            nParamMat[1,1] <- jointResult$nParamsA + jointResult$nParamsB
+            nParamMat[1,1] <- jointResult$nParamEstimatedA + jointResult$nParamEstimatedB
             nParamMat[1,5] <- nParamMat[1,1]
             nParamMat[2,1:4] <- modelA$nParam[2,1:4] + modelB$nParam[2,1:4]
             nParamMat[2,5]   <- sum(nParamMat[2,1:4])
@@ -1264,10 +1343,11 @@ omgCF_local <- function(B,
                         # Shared
                         bounds, regressors,
                         ot, otLogical, obsInSample,
-                        nIterations, refineHead, nParamsA,
+                        nIterations, nParamsA,
                         loss = "likelihood",
                         lossFunction = NULL,
-                        lambda = 0) {
+                        lambda = 0,
+                        returnFitted = FALSE) {
 
     B_A <- B[seq_len(nParamsA)]
     B_B <- B[seq_len(length(B) - nParamsA) + nParamsA]
@@ -1343,20 +1423,74 @@ omgCF_local <- function(B,
     profilesRecentTableA[] <- elemA$matVt[, seq_len(lagsModelMaxA)]
     profilesRecentTableB[] <- elemB$matVt[, seq_len(lagsModelMaxB)]
 
+    # initial="gradient": profile the two occurrence initials jointly by the
+    # coupled least-squares/Gauss-Newton solve (adamCppA$gradientSolveGeneral)
+    # over the shared probability residual, then run one forward pass from the
+    # solved profiles. Otherwise (or out of scope / custom loss) fall back to
+    # the ordinary coupled fit, with gradient joining the backcasting group.
+    useProfA <- profilesRecentTableA
+    useProfB <- profilesRecentTableB
+    gradBackcast <- any(initialTypeA == c("complete","backcasting","gradient"))
+    gradNIter <- nIterations
+    if(any(initialTypeA == "gradient")){
+        lossCode <- adam_gradientOmLossCode(loss)
+        pbA <- adam_gradientProbeBasis(etsModelA, arimaModelA, xregModelA,
+                                       EtypeA, TtypeA, StypeA,
+                                       componentsNumberETSSeasonalA,
+                                       componentsNumberETSNonSeasonalA,
+                                       componentsNumberETSA, componentsNumberARIMAA,
+                                       nrow(profilesRecentTableA), lagsModelAllA,
+                                       lagsModelMaxA, xregNumberA, "g")
+        pbB <- adam_gradientProbeBasis(etsModelB, arimaModelB, xregModelB,
+                                       EtypeB, TtypeB, StypeB,
+                                       componentsNumberETSSeasonalB,
+                                       componentsNumberETSNonSeasonalB,
+                                       componentsNumberETSB, componentsNumberARIMAB,
+                                       nrow(profilesRecentTableB), lagsModelAllB,
+                                       lagsModelMaxB, xregNumberB, "g")
+        if(!is.null(lossCode) && (!is.null(pbA) || !is.null(pbB))){
+            if(is.null(pbA)){ pbA <- matrix(0, nrow(profilesRecentTableA), 0) }
+            if(is.null(pbB)){ pbB <- matrix(0, nrow(profilesRecentTableB), 0) }
+            solved <- adamCppA$gradientSolveGeneral(
+                elemA$matVt, elemA$matWt, elemA$matF, elemA$vecG,
+                indexLookupTableA, profilesRecentTableA, pbA,
+                EtypeB, TtypeB, StypeB,
+                nNonSeasonalB, nSeasonalB, nETSB, nArimaB, nXregB, nComponentsB,
+                constantRequiredB, adamETSB_flag,
+                elemB$matVt, elemB$matWt, elemB$matF, elemB$vecG,
+                indexLookupTableB, profilesRecentTableB, pbB,
+                as.numeric(ot), 15L, lossCode$code)
+            if(length(solved$profileA) > 0 && length(solved$profileB) > 0){
+                useProfA <- solved$profileA
+                useProfB <- solved$profileB
+                gradBackcast <- FALSE
+                gradNIter <- 1
+            }
+        }
+    }
+
     res <- adamCppA$omfitGeneral(
         elemA$matVt, elemA$matWt, elemA$matF, elemA$vecG,
-        indexLookupTableA, profilesRecentTableA,
+        indexLookupTableA, useProfA,
         EtypeB, TtypeB, StypeB,
         nNonSeasonalB, nSeasonalB, nETSB,
         nArimaB, nXregB, nComponentsB,
         constantRequiredB, adamETSB_flag,
         elemB$matVt, elemB$matWt, elemB$matF, elemB$vecG,
-        indexLookupTableB, profilesRecentTableB,
+        indexLookupTableB, useProfB,
         as.numeric(ot),
-        any(initialTypeA == c("complete","backcasting")),
-        nIterations, refineHead)
+        gradBackcast,
+        gradNIter)
 
     pCombined <- omgLinkFunction(res$fittedA, res$fittedB, EtypeA, EtypeB)
+
+    # The coupled fitted probability. Returned directly for the final object so
+    # its $fitted (and the Bernoulli logLik computed from it) come from the same
+    # coupled recursion the optimiser minimised — not the standalone per-side
+    # refit, which only approximates it.
+    if(returnFitted){
+        return(pCombined)
+    }
 
     if(any(is.nan(pCombined)) || any(pCombined <= 0) || any(pCombined >= 1)) {
         return(1e+300)
@@ -1654,11 +1788,13 @@ coefbootstrap.omg <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
 }
 
 #' @export
-confint.omg <- function(object, parm, level=0.95, bootstrap=FALSE, ...){
+confint.omg <- function(object, parm, level=0.95,
+                        type=c("opg","hessian","bootstrap"), bootstrap=FALSE, ...){
+    type <- covarTypeResolver(type, bootstrap)
     confintNames <- c(paste0((1-level)/2*100,"%"),
                       paste0((1+level)/2*100,"%"))
 
-    if(bootstrap){
+    if(type=="bootstrap"){
         # Empirical bootstrap quantiles, mirroring confint.adam.
         coefValues <- coefbootstrap(object, ...)
         out <- cbind(sqrt(diag(coefValues$vcov)),
@@ -1667,7 +1803,7 @@ confint.omg <- function(object, parm, level=0.95, bootstrap=FALSE, ...){
         colnames(out) <- c("S.E.", confintNames)
     }
     else{
-        V  <- vcov(object, ...)               # JOINT covariance (vcov.omg)
+        V  <- vcov(object, type=type, ...)    # JOINT covariance (vcov.omg)
         SE <- sqrt(abs(diag(V)))
 
         coefJoint <- c(object$modelA$B, object$modelB$B)
@@ -1697,24 +1833,40 @@ confint.omg <- function(object, parm, level=0.95, bootstrap=FALSE, ...){
 }
 
 #' @export
-vcov.omg <- function(object, bootstrap=FALSE, heuristics=NULL, ...){
+vcov.omg <- function(object, type=c("opg","hessian","bootstrap"),
+                     bootstrap=FALSE, heuristics=NULL, ...){
     ellipsis <- list(...)
+    type <- covarTypeResolver(type, bootstrap)
 
     if(!is.null(heuristics) && is.numeric(heuristics)){
         # Heuristic shortcut over the joint coef vector
         return(diag(abs(c(object$modelA$B, object$modelB$B)) * heuristics))
     }
 
-    if(bootstrap){
+    if(type=="bootstrap"){
         return(coefbootstrap(object, ...)$vcov)
     }
 
-    h <- if(any(!is.na(object$forecast))) length(object$forecast) else 0
     stepSize <- if(is.null(ellipsis$stepSize)) {
         .Machine$double.eps^(1/4)
     } else {
         ellipsis$stepSize
     }
+
+    # OPG / BHHH covariance J = sum_t s_t s_t' over the coupled Bernoulli score.
+    # PSD by construction, so it returns finite standard errors at boundary
+    # estimates where the observed Fisher Information is indefinite. Falls back
+    # to the Hessian if the reproduction guard trips (covarOPGomg returns NULL).
+    if(type=="opg"){
+        vcovOPG <- covarOPGomg(object, stepSize=stepSize)
+        if(!is.null(vcovOPG)){
+            return(vcovOPG)
+        }
+        warning("The OPG covariance could not be computed for this omg model; ",
+                "falling back to the observed Fisher Information.", call.=FALSE)
+    }
+
+    h <- if(any(!is.na(object$forecast))) length(object$forecast) else 0
 
     # Data is stored on the sub-models, not at the omg top level.
     yData <- object$modelA$data
@@ -1850,8 +2002,10 @@ print.omg <- function(x, digits=4, ...) {
 }
 
 #' @export
-summary.omg <- function(object, level=0.95, bootstrap=FALSE, ...) {
-    ci <- confint(object, level=level, bootstrap=bootstrap, ...)   # joint table, A:/B: rows
+summary.omg <- function(object, level=0.95,
+                        type=c("opg","hessian","bootstrap"), bootstrap=FALSE, ...) {
+    type <- covarTypeResolver(type, bootstrap)
+    ci <- confint(object, level=level, type=type, ...)   # joint table, A:/B: rows
 
     nParamsA <- length(object$modelA$B)
     idxA <- seq_len(nParamsA)

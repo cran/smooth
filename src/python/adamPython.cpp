@@ -41,6 +41,11 @@ PYBIND11_MODULE(_adamCore, m) {
         .def_readonly("errorsB",  &OmFitGeneralResult::errorsB)
         .def_readonly("profileB", &OmFitGeneralResult::profileB);
 
+    // Bind GradientSolveGeneralResult struct
+    py::class_<GradientSolveGeneralResult>(m, "GradientSolveGeneralResult")
+        .def_readonly("profileA", &GradientSolveGeneralResult::profileA)
+        .def_readonly("profileB", &GradientSolveGeneralResult::profileB);
+
     // Bind ForecastResult struct
     py::class_<ForecastResult>(m, "ForecastResult")
         .def_readonly("forecast", &ForecastResult::forecast);
@@ -80,6 +85,7 @@ PYBIND11_MODULE(_adamCore, m) {
             py::arg("nComponents"),
             py::arg("constant"),
             py::arg("adamETS"))
+        .def_readwrite("flipConstant", &adamCore::flipConstant)
         .def("polynomialise", &adamCore::polynomialise,
             py::arg("B"),
             py::arg("arOrders"),
@@ -100,7 +106,6 @@ PYBIND11_MODULE(_adamCore, m) {
             py::arg("vectorOt"),
             py::arg("backcast"),
             py::arg("nIterations"),
-            py::arg("refineHead"),
             py::arg("O") = 'n')
         .def("omfitGeneral", &adamCore::omfitGeneral,
             py::arg("matrixVtA"),
@@ -128,8 +133,7 @@ PYBIND11_MODULE(_adamCore, m) {
             py::arg("profilesRecentB"),
             py::arg("vectorOt"),
             py::arg("backcast"),
-            py::arg("nIterations"),
-            py::arg("refineHead"))
+            py::arg("nIterations"))
         .def("forecast", &adamCore::forecast,
             py::arg("matrixWt"),
             py::arg("matrixF"),
@@ -153,7 +157,8 @@ PYBIND11_MODULE(_adamCore, m) {
             py::arg("matrixG"),
             py::arg("indexLookupTable"),
             py::arg("profilesRecent"),
-            py::arg("E"))
+            py::arg("E"),
+            py::arg("refineHead"))
         .def("reapply", &adamCore::reapply,
             py::arg("matrixYt"),
             py::arg("matrixOt"),
@@ -163,8 +168,50 @@ PYBIND11_MODULE(_adamCore, m) {
             py::arg("matrixG"),
             py::arg("indexLookupTable"),
             py::arg("arrayProfilesRecent"),
-            py::arg("backcast"),
-            py::arg("refineHead"))
+            py::arg("backcast"))
+        .def("gradientSolve", &adamCore::gradientSolve,
+            py::arg("matrixYt"),
+            py::arg("matrixOt"),
+            py::arg("matrixWt"),
+            py::arg("matrixF"),
+            py::arg("vectorG"),
+            py::arg("indexLookupTable"),
+            py::arg("profile"),
+            py::arg("probeBasis"),
+            py::arg("nIterations"),
+            py::arg("analytic"),
+            py::arg("lossType"),
+            py::arg("lossParams"),
+            py::arg("O"))
+        .def("gradientSolveGeneral", &adamCore::gradientSolveGeneral,
+            py::arg("matrixVtA"),
+            py::arg("matrixWtA"),
+            py::arg("matrixFA"),
+            py::arg("vectorGA"),
+            py::arg("indexLookupTableA"),
+            py::arg("profileA"),
+            py::arg("probeBasisA"),
+            py::arg("EB"),
+            py::arg("TB"),
+            py::arg("SB"),
+            py::arg("nNonSeasonalB"),
+            py::arg("nSeasonalB"),
+            py::arg("nETSB"),
+            py::arg("nArimaB"),
+            py::arg("nXregB"),
+            py::arg("nComponentsB"),
+            py::arg("constantB"),
+            py::arg("adamETSB"),
+            py::arg("matrixVtB"),
+            py::arg("matrixWtB"),
+            py::arg("matrixFB"),
+            py::arg("vectorGB"),
+            py::arg("indexLookupTableB"),
+            py::arg("profileB"),
+            py::arg("probeBasisB"),
+            py::arg("vectorOt"),
+            py::arg("nIterations"),
+            py::arg("lossType"))
         .def("reforecast", &adamCore::reforecast,
             py::arg("arrayErrors"),
             py::arg("arrayOt"),

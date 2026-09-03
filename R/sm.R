@@ -153,25 +153,25 @@ sm.adam <- function(object, model="YYY", lags=NULL,
                                               # "dfnorm" =,
                                               # "dbcnorm" =,
                                               # "dlogitnorm" =,
-                                              "dlnorm" = obsZero*(log(sqrt(2*pi)*fitted[!otLogical])+0.5),
+                                              "dlnorm" = (log(sqrt(2*pi)*fitted[!otLogical])+0.5),
                                               # "dlgnorm" =,
-                                              "dgnorm" =obsZero*(1/other-
+                                              "dgnorm" =(1/other-
                                                                       log(other /
                                                                               (2*fitted[!otLogical]*gamma(1/other)))),
-                                              "dinvgauss" = obsZero*(0.5*(log(pi/2)+1+suppressWarnings(log(fitted[!otLogical])))),
-                                              "dgamma" = obsZero*(1/fitted[!otLogical] + log(fitted[!otLogical]) +
+                                              "dinvgauss" = (0.5*(log(pi/2)+1+suppressWarnings(log(fitted[!otLogical])))),
+                                              "dgamma" = (1/fitted[!otLogical] + log(fitted[!otLogical]) +
                                                                       log(gamma(1/fitted[!otLogical])) +
                                                                       (1-1/fitted[!otLogical])*digamma(1/fitted[!otLogical])),
                                               # "dalaplace" =,
                                               # "dllaplace" =,
-                                              "dlaplace" = obsZero*(1 + log(2*fitted[!otLogical])),
+                                              "dlaplace" = (1 + log(2*fitted[!otLogical])),
                                               # "dls" =,
-                                              "ds" = obsZero*(2 + 2*log(2*fitted[!otLogical])),
+                                              "ds" = (2 + 2*log(2*fitted[!otLogical])),
                                               # "dlogis" = obsZero*2,
-                                              # "dt" = obsZero*((fitted[!otLogical]+1)/2 *
+                                              # "dt" = ((fitted[!otLogical]+1)/2 *
                                               #                     (digamma((fitted[!otLogical]+1)/2)-digamma(fitted[!otLogical]/2)) +
                                               #                     log(sqrt(fitted[!otLogical]) * beta(fitted[!otLogical]/2,0.5))),
-                                              # "dchisq" = obsZero*(log(2)*gamma(fitted[!otLogical]/2)-
+                                              # "dchisq" = (log(2)*gamma(fitted[!otLogical]/2)-
                                               #                         (1-fitted[!otLogical]/2)*digamma(fitted[!otLogical]/2)+
                                               #                         fitted[!otLogical]/2),
                                               0
@@ -186,7 +186,11 @@ sm.adam <- function(object, model="YYY", lags=NULL,
 
     # Transform residuals for the model fit
     # These should align with how the scale is calculated
-    et[] <- switch(distribution,
+    # Assign into the non-zero positions rather than over the whole vector: the
+    # right-hand side is only sum(otLogical) long for an occurrence model, so
+    # `et[] <- ...` recycled it across obsInSample slots and misaligned the
+    # scale response (and warned when the two are not multiples).
+    et[otLogical] <- switch(distribution,
                    "dnorm"=et[otLogical]^2,
                    "dlaplace"=,
                    "dalaplace"=abs(et[otLogical]),
@@ -298,9 +302,12 @@ sm.adam <- function(object, model="YYY", lags=NULL,
     adamModel <- do.call(adam, as.list(newCall));
 
     nVariables <- nparam(adamModel);
+    # Replace the logLik first: assigning the attribute before this line set it
+    # on the object that the next statement then discarded, so the df never
+    # reached the output and the ICs used nparam(scale) alone.
+    adamModel$logLik <- -adamModel$lossValue;
     # -1 is needed to remove the scale from the number of parameters
     attr(adamModel$logLik,"df") <- nVariables + nparam(object)-1;
-    adamModel$logLik <- -adamModel$lossValue
     # object$nParam[1,5] <- object$nParam[1,5]-1;
     # object$nParam[1,1] <- object$nParam[1,1]-1;
     # # Redo nParam table. Record scale parameters in the respective column
@@ -354,7 +361,9 @@ extractScale.smooth <- function(object, ...){
                       "dnorm"=,
                       "dlnorm"=sqrt(fitted(object$scale)),
                       "ds"=fitted(object$scale)^2,
-                      "dgnorm"=fitted(object$scale)^{1/object$scale$other},
+                      # $other is a list (list(shape=...)), so the shape has to
+                      # be named -- extractSigma.smooth below already does.
+                      "dgnorm"=fitted(object$scale)^{1/object$scale$other$shape},
                       fitted(object$scale)));
     }
     else{

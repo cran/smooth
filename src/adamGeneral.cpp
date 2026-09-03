@@ -47,6 +47,14 @@ namespace Rcpp {
         );
     }
 
+    // Wrapper for GradientSolveGeneralResult
+    template <> SEXP wrap(const GradientSolveGeneralResult& result) {
+        return List::create(
+            Named("profileA") = result.profileA,
+            Named("profileB") = result.profileB
+        );
+    }
+
     // Wrapper for ForecastResult
     template <> SEXP wrap(const ForecastResult& result) {
         return List::create(
@@ -94,6 +102,7 @@ namespace Rcpp {
 RCPP_MODULE(adamCore_module) {
     class_<adamCore>("adamCore")
     .constructor<arma::uvec, char, char, char, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, bool, bool>()
+    .field("flipConstant", &adamCore::flipConstant)
     .method("polynomialise", &adamCore::polynomialise)
     .method("fit", &adamCore::fit)
     .method("omfitGeneral", &adamCore::omfitGeneral)
@@ -101,5 +110,7 @@ RCPP_MODULE(adamCore_module) {
     .method("ferrors", &adamCore::ferrors)
     .method("simulate", &adamCore::simulate)
     .method("reapply", &adamCore::reapply)
+    .method("gradientSolve", &adamCore::gradientSolve)
+    .method("gradientSolveGeneral", &adamCore::gradientSolveGeneral)
     .method("reforecast", &adamCore::reforecast);
 }
