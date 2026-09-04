@@ -1,8 +1,8 @@
 Package: smooth
 Type: Package
 Title: Forecasting Using State Space Models
-Version: 4.5.1
-Date: 2026-09-03
+Version: 4.5.2
+Date: 2026-09-04
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.com", role = c("aut", "cre"),
                   comment = c("Director of the OpenForecast consultancy company, UK",
                               ORCID = "0000-0001-7826-0281"))
@@ -30,9 +30,9 @@ ByteCompile: true
 Config/roxygen2/version: 8.0.0
 RoxygenNote: 8.0.0
 NeedsCompilation: yes
-Packaged: 2026-09-03 09:01:40 UTC; config
+Packaged: 2026-09-04 10:02:53 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Director of the OpenForecast consultancy
     company, UK, ORCID: <https://orcid.org/0000-0001-7826-0281>)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.com>
 Repository: CRAN
-Date/Publication: 2026-09-03 10:10:02 UTC
+Date/Publication: 2026-09-04 12:30:02 UTC

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2026-09-03" />
+<meta name="date" content="2026-09-04" />
 
 <title>om() - ADAM-based occurrence model</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">om() - ADAM-based occurrence model</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2026-09-03</h4>
+<h4 class="date">2026-09-04</h4>
 
 
 
@@ -460,7 +460,7 @@ requires using <code>auto.om()</code> (see below) or passing
 <span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>              <span class="at">occurrence=</span><span class="st">&quot;odds-ratio&quot;</span>, <span class="at">h=</span><span class="dv">10</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>)</span>
 <span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>omARIMA</span></code></pre></div>
 <pre><code>## Occurrence model
-## Time elapsed: 0.03 seconds
+## Time elapsed: 0.02 seconds
 ## Model estimated using om() function: oARIMA(1,0,1)[O]
 ## With backcasting initialisation
 ## Distribution assumed in the model: Cumulative Logistic
@@ -528,7 +528,7 @@ which applies the same model to both sides, <code>omg()</code> lets you
 specify different model types for each:</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>omgModel <span class="ot">&lt;-</span> <span class="fu">omg</span>(y, <span class="at">modelA=</span><span class="st">&quot;MNN&quot;</span>, <span class="at">modelB=</span><span class="st">&quot;ANN&quot;</span>, <span class="at">h=</span><span class="dv">10</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>)</span>
 <span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>omgModel</span></code></pre></div>
-<pre><code>## Time elapsed: 0.03 seconds
+<pre><code>## Time elapsed: 0.02 seconds
 ## General occurrence model: oETS[G](MNN)(ANN)
 ## Model A: ETS(MNN)
 ## Model B: ETS(ANN)
@@ -556,7 +556,7 @@ information criterion. By default all five types are tested:</p>
 <div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>autoOmModel <span class="ot">&lt;-</span> <span class="fu">auto.om</span>(y, <span class="at">model=</span><span class="st">&quot;MNN&quot;</span>, <span class="at">h=</span><span class="dv">10</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>)</span>
 <span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>autoOmModel</span></code></pre></div>
 <pre><code>## Occurrence model
-## Time elapsed: 0.26 seconds
+## Time elapsed: 0.29 seconds
 ## Model estimated using auto.om() function: oETS(MNN)[D]
 ## With backcasting initialisation
 ## Distribution assumed in the model: Cumulative Logistic
@@ -583,7 +583,7 @@ ARIMA structure:</p>
 <span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a>                       <span class="at">h=</span><span class="dv">10</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>)</span>
 <span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a>autoOmARIMA</span></code></pre></div>
 <pre><code>## Occurrence model
-## Time elapsed: 0.21 seconds
+## Time elapsed: 0.23 seconds
 ## Model estimated using auto.om() function: oETS(MNN)[D]
 ## With backcasting initialisation
 ## Distribution assumed in the model: Cumulative Logistic
@@ -608,7 +608,7 @@ vector:</p>
 <span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a>                        <span class="at">h=</span><span class="dv">10</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>)</span>
 <span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a>autoOmSubset</span></code></pre></div>
 <pre><code>## Occurrence model
-## Time elapsed: 0.15 seconds
+## Time elapsed: 0.16 seconds
 ## Model estimated using auto.om() function: oETS(MNN)[O]
 ## With backcasting initialisation
 ## Distribution assumed in the model: Cumulative Logistic

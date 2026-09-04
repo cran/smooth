@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2026-09-03" />
+<meta name="date" content="2026-09-04" />
 
 <title>ces() - Complex Exponential Smoothing</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">ces() - Complex Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2026-09-03</h4>
+<h4 class="date">2026-09-04</h4>
 
 
 
@@ -386,7 +386,7 @@ parameter values which are printed out instead of persistence vector in
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">auto.ces</span>(AirPassengers, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">silent=</span><span class="cn">FALSE</span>)</span></code></pre></div>
 <pre><code>## Estimating CES with seasonality: &quot;none&quot; &quot;simple&quot; &quot;partial&quot; &quot;full&quot;  
 ## The best model is with seasonality = &quot;full&quot;</code></pre>
-<pre><code>## Time elapsed: 0.14 seconds
+<pre><code>## Time elapsed: 0.13 seconds
 ## Model estimated using ces() function: CES(full)
 ## With backcasting initialisation
 ## Distribution assumed in the model: Normal
@@ -411,7 +411,7 @@ parameter values which are printed out instead of persistence vector in
 <p>By default, the function optimises the initial values, but other
 options (“backcasting” and “complete”) are supported as well:</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">ces</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">initial=</span><span class="st">&quot;back&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.02 seconds
+<pre><code>## Time elapsed: 0.03 seconds
 ## Model estimated using ces() function: CES(none)
 ## With backcasting initialisation
 ## Distribution assumed in the model: Normal

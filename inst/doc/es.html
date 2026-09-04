@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2026-09-03" />
+<meta name="date" content="2026-09-04" />
 
 <title>es() - Exponential Smoothing</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">es() - Exponential Smoothing</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2026-09-03</h4>
+<h4 class="date">2026-09-04</h4>
 
 
 
@@ -511,7 +511,7 @@ construct the other one:</p>
 and forecasts (see discussion of the additional parameters in the <a href="https://openforecast.org/adam/">online textbook about
 ADAM</a>):</p>
 <div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="fu">es</span>(BJsales, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>, <span class="at">loss=</span><span class="st">&quot;MSEh&quot;</span>, <span class="at">bounds=</span><span class="st">&quot;a&quot;</span>, <span class="at">ic=</span><span class="st">&quot;BIC&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.14 seconds
+<pre><code>## Time elapsed: 0.16 seconds
 ## Model estimated using es() function: ETS(AAN)
 ## With backcasting initialisation
 ## Distribution assumed in the model: Normal
@@ -535,7 +535,7 @@ ADAM</a>):</p>
 their effect on the final model.</p>
 <p>In order to combine forecasts we need to use “C” letter:</p>
 <div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="fu">es</span>(BJsales, <span class="at">model=</span><span class="st">&quot;CCN&quot;</span>, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.2 seconds
+<pre><code>## Time elapsed: 0.22 seconds
 ## Model estimated: ETS(CCN)
 ## Loss function type: likelihood
 ## 
@@ -594,7 +594,7 @@ called using respectively:</p>
 <p>and fit an ETSX model with the exogenous variable first:</p>
 <div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="fu">es</span>(BJsales, <span class="at">model=</span><span class="st">&quot;ZZZ&quot;</span>, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>,</span>
 <span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>   <span class="at">xreg=</span>x)</span></code></pre></div>
-<pre><code>## Time elapsed: 0.53 seconds
+<pre><code>## Time elapsed: 0.52 seconds
 ## Model estimated using es() function: ETSX(AMdN)
 ## With backcasting initialisation
 ## Distribution assumed in the model: Normal
@@ -619,7 +619,7 @@ we can use <code>xregExpander()</code> function from
 <code>greybox</code> package:</p>
 <div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="fu">es</span>(BJsales, <span class="at">model=</span><span class="st">&quot;ZZZ&quot;</span>, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>,</span>
 <span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a>   <span class="at">xreg=</span><span class="fu">xregExpander</span>(x), <span class="at">regressors=</span><span class="st">&quot;use&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 1.62 seconds
+<pre><code>## Time elapsed: 1.57 seconds
 ## Model estimated using es() function: ETSX(AMdN)
 ## With backcasting initialisation
 ## Distribution assumed in the model: Normal
@@ -643,7 +643,7 @@ we can use <code>xregExpander()</code> function from
 IC):</p>
 <div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">es</span>(BJsales, <span class="at">model=</span><span class="st">&quot;ZZZ&quot;</span>, <span class="at">h=</span><span class="dv">12</span>, <span class="at">holdout=</span><span class="cn">TRUE</span>,</span>
 <span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>   <span class="at">xreg=</span><span class="fu">xregExpander</span>(x), <span class="at">regressors=</span><span class="st">&quot;select&quot;</span>)</span></code></pre></div>
-<pre><code>## Time elapsed: 1.08 seconds
+<pre><code>## Time elapsed: 1.1 seconds
 ## Model estimated using es() function: ETS(AMdN)
 ## With backcasting initialisation
 ## Distribution assumed in the model: Normal
